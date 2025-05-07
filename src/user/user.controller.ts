@@ -2,7 +2,7 @@ import { Controller, Post, Patch, Delete, Get, Body, Param, NotFoundException } 
 import { UserService } from './user.service';
 import { User } from './models/user.interface';
 import { map, Observable } from 'rxjs';
-import { UserEntity } from './models/user.entity';
+import { Users } from './models/user.entity';
 
 @Controller('api/user')
 export class UserController {
