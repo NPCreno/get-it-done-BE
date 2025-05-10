@@ -21,4 +21,17 @@ export class AuthService {
     comparePasswords(newPassword: string, passwordHash: string): Observable <any | boolean>{
         return from<any | boolean>(bcrypt.compare(newPassword, passwordHash)); 
     }
+
+      // Generate Refresh Token
+    generateRefreshToken(user: User): string {
+        const payload = { user }; // Same payload or different one based on your needs
+        return this.jwtService.sign(payload, { expiresIn: '1d' }); // 1 day for refresh token
+    }
+
+    // Validate the Refresh Token and issue new Access Token
+    async refreshAccessToken(refreshToken: string): Promise<any | string> { 
+        const decoded = this.jwtService.verify(refreshToken); // Verify refresh token
+        const user = decoded.user; // Get user info from payload (or look it up in DB)
+        return this.generateJWT(user); // Generate a new access token
+    }
 }
