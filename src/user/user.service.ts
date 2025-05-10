@@ -155,7 +155,7 @@ export class UserService {
             )
           }
           else{
-            return "Invalid credentials"
+            throw new UnauthorizedException('Invalid credentials');
           }
         })
       )}
@@ -174,7 +174,7 @@ export class UserService {
             )
           }
           else{
-            return "Invalid credentials"
+            throw new UnauthorizedException('Invalid credentials');
           }
         })
     )}
