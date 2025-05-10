@@ -1,7 +1,7 @@
 import { Controller, Post, Patch, Delete, Get, Body, Param, NotFoundException } from '@nestjs/common';
 import { UserService } from './user.service';
 import { User } from './models/user.interface';
-import { map, Observable } from 'rxjs';
+import { catchError, map, Observable, of } from 'rxjs';
 import { Users } from './models/user.entity';
 import { CreateUserDto } from './dto/create-user-dto';
 import { UpdateUserDto } from './dto/update-user-dto';
@@ -12,9 +12,25 @@ export class UserController {
     constructor(private userService: UserService){}
 
     @Post('create')
-    create(@Body()userDto: CreateUserDto): Observable<User>{
-        return this.userService.createUser(userDto);
+    create(@Body()userDto: CreateUserDto): Observable<User | Object>{
+        return this.userService.createUser(userDto).pipe(
+            map((user: User) => user), 
+            catchError(err => of({error: err.message}))
+
+        );
     }
+
+    @Post('login')
+    login(@Body()user: User): Observable<Object>{
+        return this.userService.loginUser(user).pipe(
+            map((jwt: string) => {
+                return{
+                    access_token: jwt
+                }
+            })
+        )
+    }
+    
 
     @Get('get/:id')
     findOne(@Param('id') id: string): Observable<User> {
