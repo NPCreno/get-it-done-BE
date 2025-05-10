@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryColumn, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, PrimaryColumn, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity()
 export class Users{
@@ -22,4 +22,16 @@ export class Users{
 
     @Column()
     tier: string;
+    
+    @CreateDateColumn({ type: 'timestamp' })
+    createdAt: Date;
+  
+    @UpdateDateColumn({ type: 'timestamp' })
+    updatedAt: Date;
+  
+    @DeleteDateColumn({ type: 'timestamp', nullable: true })
+    deletedAt: Date;
+
+    @Column({ type: 'timestamp', nullable: true })
+    premiumExpiry: Date;
 }

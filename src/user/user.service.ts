@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Users } from './models/user.entity';
 import { Repository } from 'typeorm';
-import { from, Observable } from 'rxjs';
+import { catchError, from, map, Observable, of, throwError } from 'rxjs';
 import { User } from './models/user.interface';
+import { CreateUserDto } from './dto/create-user-dto';
+import { UpdateUserDto } from './dto/update-user-dto';
 
 @Injectable()
 export class UserService {
@@ -11,10 +13,24 @@ export class UserService {
         @InjectRepository(Users) private readonly userRepository: Repository<Users>
     ){}
 
-    createUser(user: User): Observable<User>{
-        const newUser = this.userRepository.create(user);
-        return from(this.userRepository.save(newUser));
-    }
+    createUser(userDto: CreateUserDto): Observable<User> {
+        const newUser = this.userRepository.create(userDto);
+        return from(this.userRepository.save(newUser)).pipe(
+          catchError((error) => {
+            if (error.code === '23505') { // Postgres unique violation
+              const detail = error.detail || '';
+              if (detail.includes('username')) {
+                return throwError(() => new ConflictException('Username already exists.'));
+              }
+              if (detail.includes('email')) {
+                return throwError(() => new ConflictException('Email already exists.'));
+              }
+              return throwError(() => new ConflictException('Duplicate entry.'));
+            }
+            return throwError(() => new InternalServerErrorException('Failed to create user.'));
+          })
+        );
+      }
 
     findOne(userId: number): Observable<User | null> {
         return from(this.userRepository.findOne({ where: { id: userId } }));
@@ -24,11 +40,40 @@ export class UserService {
         return from(this.userRepository.find());
     }
 
-    deleteOne(id: number):  Observable<any>{
+    softDeleteOne(id: number): Observable<any> {
+        const timestamp = new Date(); // current timestamp
+      
+        return from(
+          this.userRepository.update(id, { deletedAt: timestamp })
+        ).pipe(
+          map(() => ({ message: 'User soft-deleted successfully', deletedAt: timestamp })),
+          catchError((error) => {
+            console.error('Soft delete failed:', error);
+            return of({ message: 'Failed to soft-delete user', error });
+          })
+        );
+      }
+
+    hardDeleteOne(id: number):  Observable<any>{
         return from(this.userRepository.delete(id));
     }
 
-    updateOne(id: number, user: User):  Observable<any>{
-        return from(this.userRepository.update(id, user));
+
+    updateOne(id: number, updateUserDto: UpdateUserDto):  Observable<any>{
+        return from(this.userRepository.update(id, updateUserDto)).pipe(
+            catchError((error) => {
+              if (error.code === '23505') { // Postgres unique violation
+                const detail = error.detail || '';
+                if (detail.includes('username')) {
+                  return throwError(() => new ConflictException('Username already exists.'));
+                }
+                if (detail.includes('email')) {
+                  return throwError(() => new ConflictException('Email already exists.'));
+                }
+                return throwError(() => new ConflictException('Duplicate entry.'));
+              }
+              return throwError(() => new InternalServerErrorException('Failed to update user.'));
+            })
+          );;
     }
 }
