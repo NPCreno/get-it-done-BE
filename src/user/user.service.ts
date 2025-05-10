@@ -110,32 +110,38 @@ export class UserService {
           );;
     }
 
-    validateUser(email: string, password: string): Observable<User>{
-      return this.findByMail(email).pipe(
+    validateUser(emailOrUsername: string, password: string): Observable<User> {
+      return this.findByEmailOrUsername(emailOrUsername).pipe(
         switchMap((user: User) => {
-          if (!user.password) {
+          if (!user || !user.password) {
             throw new Error('Password not found for user');
           }
+          
           return this.authService.comparePasswords(password, user.password).pipe(
             map((match: boolean) => {
               if (match) {
-                const { password, ...result } = user; //Don't include password in the response
+                const { password, ...result } = user; // Don't include password in the response
                 return result;
-              }
-              else {
+              } else {
                 throw new UnauthorizedException('Invalid credentials');
               }
             })
           );
         })
-      )
+      );
     }
 
-    findByMail(email: string): Observable<User | null>{
-      return from(this.userRepository.findOne({where: { email: email }}));
+    findByEmailOrUsername(emailOrUsername: string): Observable<User | null> {
+      const isEmail = /\S+@\S+\.\S+/.test(emailOrUsername);
+      
+      if (isEmail) {
+        return from(this.userRepository.findOne({ where: { email: emailOrUsername } }));
+      } else {
+        return  from(this.userRepository.findOne({ where: { username: emailOrUsername } }));
+      }
     }
 
-    loginUser(user: User): Observable<string>{
+    loginEmail(user: User): Observable<string>{
       const { email, password } = user;
 
       if (!email || !password) {
@@ -153,4 +159,23 @@ export class UserService {
           }
         })
       )}
+
+    loginUsername(user: User): Observable<string>{
+      const { username, password } = user;
+
+      if (!username || !password) {
+        throw new Error('username and password are required.');
+      }
+      return this.validateUser(username, password).pipe(
+        switchMap((user: User)=>{
+          if(user){
+            return this.authService.generateJWT(user).pipe(
+              map((jwt: string) => jwt)
+            )
+          }
+          else{
+            return "Invalid credentials"
+          }
+        })
+    )}
 }

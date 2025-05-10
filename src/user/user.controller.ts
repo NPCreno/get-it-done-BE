@@ -20,9 +20,9 @@ export class UserController {
         );
     }
 
-    @Post('login')
-    login(@Body()user: User): Observable<Object>{
-        return this.userService.loginUser(user).pipe(
+    @Post('loginEmail')
+    loginEmail(@Body()user: User): Observable<Object>{
+        return this.userService.loginEmail(user).pipe(
             map((jwt: string) => {
                 return{
                     access_token: jwt
@@ -30,7 +30,17 @@ export class UserController {
             })
         )
     }
-    
+
+    @Post('loginUsername')
+    loginUsername(@Body()user: User): Observable<Object>{
+        return this.userService.loginUsername(user).pipe(
+            map((jwt: string) => {
+                return{
+                    access_token: jwt
+                }
+            })
+        )
+    }
 
     @Get('get/:id')
     findOne(@Param('id') id: string): Observable<User> {
