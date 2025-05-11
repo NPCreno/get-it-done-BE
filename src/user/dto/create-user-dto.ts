@@ -4,5 +4,7 @@ export class CreateUserDto {
     email: string;
     password: string;
     tier: string;
+    role: string;
+    status: string;
   }
   
