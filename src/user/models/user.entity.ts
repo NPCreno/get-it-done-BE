@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, PrimaryColumn, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, PrimaryColumn, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity()
 export class Users{
@@ -6,16 +6,18 @@ export class Users{
     id: number;
     
     @Column()
-    firstname: string;
-
-    @Column()
-    lastname: string;
+    fullname: string;
 
     @Column({unique: true})
     username: string;
 
     @Column({unique: true})
     email: string;
+
+    @BeforeInsert()
+    emailToLowerCase() {
+        this.email = this.email.toLowerCase(); // Convert the email to lowercase before saving to the database
+    }
 
     @Column()
     password: string;
@@ -34,4 +36,5 @@ export class Users{
 
     @Column({ type: 'timestamp', nullable: true })
     premiumExpiry: Date;
+
 }
