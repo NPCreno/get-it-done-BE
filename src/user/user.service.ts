@@ -20,7 +20,9 @@ export class UserService {
         switchMap((passwordHash: string) => {
           const newUser = this.userRepository.create({  // Modify userDto to include the hashed password
             ...userDto, 
-            password: passwordHash  // Replace the plain password with the hashed one
+            password: passwordHash,  // Replace the plain password with the hashed one
+            role: 'standard',
+            status: 'active',
           });
 
         // Save the new user with the hashed password

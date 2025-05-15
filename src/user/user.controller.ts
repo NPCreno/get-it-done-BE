@@ -1,10 +1,11 @@
-import { Controller, Post, Patch, Delete, Get, Body, Param, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Patch, Delete, Get, Body, Param, NotFoundException, UseGuards } from '@nestjs/common';
 import { UserService } from './user.service';
 import { User } from './models/user.interface';
 import { catchError, map, Observable, of } from 'rxjs';
 import { Users } from './models/user.entity';
 import { CreateUserDto } from './dto/create-user-dto';
 import { UpdateUserDto } from './dto/update-user-dto';
+import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
 
 @Controller('api/user')
 export class UserController {
@@ -51,7 +52,8 @@ export class UserController {
             })
         );
     }
-
+    
+    @UseGuards(AuthorizeGuard)
     @Get('getAll')
     findAll(){
         return this.userService.findAll();
