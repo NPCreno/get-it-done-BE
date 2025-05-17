@@ -1,8 +1,8 @@
 export class UpdateUserDto{
-    firstname?: string;
-    lastname?: string;
+    fullname?: string;
     username?: string;
-    email?: string;
     password?: string;
-    tier?: string;
+    enableNotifications?: string;
+    theme?: string;
+    soundFx?: string;
 }

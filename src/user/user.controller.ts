@@ -1,10 +1,11 @@
-import { Controller, Post, Patch, Delete, Get, Body, Param, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Patch, Delete, Get, Body, Param, NotFoundException, UseGuards } from '@nestjs/common';
 import { UserService } from './user.service';
 import { User } from './models/user.interface';
 import { catchError, map, Observable, of } from 'rxjs';
 import { Users } from './models/user.entity';
 import { CreateUserDto } from './dto/create-user-dto';
 import { UpdateUserDto } from './dto/update-user-dto';
+import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
 
 @Controller('api/user')
 export class UserController {
@@ -42,16 +43,18 @@ export class UserController {
         )
     }
 
+    @UseGuards(AuthorizeGuard)
     @Get('get/:id')
-    findOne(@Param('id') id: string): Observable<User> {
-        return this.userService.findOne(+id).pipe(
-            map(user => {
-            if (!user) throw new NotFoundException(`User with ID ${id} not found`);
-            return user;
-            })
-        );
+    findOne(@Param('user_id') user_id: string): Observable<User> {
+    return this.userService.findOne(user_id).pipe(
+        map(user => {
+        if (!user) throw new NotFoundException(`User with user_id ${user_id} not found`);
+        return user;
+        })
+    );
     }
-
+    
+    @UseGuards(AuthorizeGuard)
     @Get('getAll')
     findAll(){
         return this.userService.findAll();
@@ -67,8 +70,11 @@ export class UserController {
         return this.userService.hardDeleteOne(Number(id));
     }
     
-    @Patch(':id')
-    updateOne(@Param('id')id: string, @Body() updateUserDto:UpdateUserDto):Observable<User>{
-        return this.userService.updateOne(Number(id), updateUserDto);
+    @UseGuards(AuthorizeGuard)
+    @Patch('update/:user_id')
+    update(@Param('user_id') user_id: string,
+    @Body() updateUserDto: UpdateUserDto
+    ): Observable<User> {
+    return this.userService.updateOne(user_id, updateUserDto);
     }
 }

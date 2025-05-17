@@ -9,6 +9,9 @@ export class Users{
     fullname: string;
 
     @Column({unique: true})
+    user_id: string;
+
+    @Column({unique: true})
     username: string;
 
     @Column({unique: true})
@@ -22,9 +25,27 @@ export class Users{
     @Column()
     password: string;
 
+    // Preferences
+    @Column({nullable: true})
+    enableNotifications: string;
+
+    @Column({nullable: true})
+    theme: string;
+
+    @Column({nullable: true})
+    soundFx: string;
+
+    //role & permissions
     @Column()
     tier: string;
-    
+
+    @Column({nullable: true})
+    role: string;
+
+    @Column({nullable: true})
+    status: string;
+
+    //dates
     @CreateDateColumn({ type: 'timestamp' })
     createdAt: Date;
   
@@ -37,4 +58,10 @@ export class Users{
     @Column({ type: 'timestamp', nullable: true })
     premiumExpiry: Date;
 
+    // security
+    @Column({ type: 'timestamp', nullable: true })
+    lastLoginAt: Date;
+
+    @Column({nullable: true})
+    loginAttempts: number;
 }
