@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Users } from './models/user.entity';
 import { Repository } from 'typeorm';
@@ -96,45 +96,36 @@ export class UserService {
     }
 
 
-    updateOne(user_id: string, updateUserDto: UpdateUserDto): Observable<any> {
-    const fieldsTriggeringUpdate = ['fullname', 'username', 'password'];
-    const shouldUpdateTimestamp = fieldsTriggeringUpdate.some(field => field in updateUserDto);
-
-    if (shouldUpdateTimestamp) {
-      (updateUserDto as any).updatedAt = new Date();
+  async updateOne(user_id: string, updateUserDto: UpdateUserDto): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { user_id } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${user_id} not found`);
     }
 
-    return from(this.userRepository.update({ user_id }, updateUserDto)).pipe(
-      switchMap(result => {
-        if (result.affected === 0) {
-          throw new NotFoundException(`User with ID ${user_id} not found`);
-        }
-        return from(this.userRepository.findOne({ where: { user_id } })).pipe(
-          map(user => {
-            if (!user) throw new NotFoundException(`User with ID ${user_id} not found`);
-            const { password, ...sanitizedUser } = user;
-            return {
-              status: 'success',
-              message: 'User updated successfully.',
-              data: sanitizedUser
-            };
-          })
-        );
-      }),
-      catchError((error) => {
-        if (error.code === '23505') {
-          const detail = error.detail || '';
-          if (detail.includes('username')) {
-            return throwError(() => new ConflictException('Username already exists.'));
-          }
-          if (detail.includes('email')) {
-            return throwError(() => new ConflictException('Email already exists.'));
-          }
-          return throwError(() => new ConflictException('Duplicate entry.'));
-        }
-        return throwError(() => new InternalServerErrorException('Failed to update user.'));
-      })
+    const fieldsTriggeringUpdate = ['fullname', 'username', 'password'] as const;
+    const isSensitiveFieldUpdated = fieldsTriggeringUpdate.some(
+      (field) => field in updateUserDto && updateUserDto[field] !== user[field]
     );
+
+    if (isSensitiveFieldUpdated) {  //go through this function if updates includes the array above
+      const now = new Date();
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(now.getMonth() - 6);
+
+      if (user.updatedAt && user.updatedAt > sixMonthsAgo) {
+        throw new BadRequestException(
+          `You can only update name, username, or password once every 6 months. Last update: ${user.updatedAt.toISOString()}`
+        );
+      }
+    }
+
+    await this.userRepository.update({ user_id }, updateUserDto);
+    
+    const updatedUser = await this.userRepository.findOne({ where: { user_id } });
+    if (!updatedUser) throw new NotFoundException(`Updated user not found`);
+
+    const { password, ...sanitizedUser } = updatedUser;
+    return sanitizedUser;
   }
 
     validateUser(emailOrUsername: string, password: string): Observable<User> {

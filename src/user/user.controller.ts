@@ -72,9 +72,10 @@ export class UserController {
     
     @UseGuards(AuthorizeGuard)
     @Patch('update/:user_id')
-    update(@Param('user_id') user_id: string,
+    async update(
+    @Param('user_id') user_id: string,
     @Body() updateUserDto: UpdateUserDto
-    ): Observable<User> {
+    ): Promise<User> {
     return this.userService.updateOne(user_id, updateUserDto);
     }
 }
