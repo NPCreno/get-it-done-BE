@@ -1,4 +1,5 @@
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, PrimaryColumn, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Projects } from "src/projects/models/projects.entity";
+import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryColumn, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity()
 export class Users{
@@ -64,4 +65,7 @@ export class Users{
 
     @Column({nullable: true})
     loginAttempts: number;
+
+    @OneToMany(() => Projects, (project) => project.user)
+    projects: Projects[];
 }
