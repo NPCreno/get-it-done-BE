@@ -28,7 +28,12 @@ export class ProjectsController {
 
     @UseGuards(AuthorizeGuard)
     @Post('create')
-    async create(@Body() dto: CreateProjectDto): Promise<Projects> {
+    async create(@Body() dto: CreateProjectDto): Promise<{
+    status: string;
+    message: string;
+    data?: Projects;
+    error?: any;
+    }> {
     return this.projectsService.createProject(dto);
     }
 
