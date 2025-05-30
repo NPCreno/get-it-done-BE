@@ -59,19 +59,39 @@ export class ProjectsService {
     return projects;
     }
 
-    async createProject(projectDto: CreateProjectDto): Promise<Projects> {
-    let project_id: string;
-    let exists = true;
-    do {
+    async createProject(projectDto: CreateProjectDto): Promise<{ status: string; message: string; data?: Projects; error?: any }> {
+    try {
+        let project_id: string;
+        let exists = true;
+
+        // Generate unique project_id
+        do {
         project_id = this.generateProjectId(); 
         const existing = await this.projectsRepository.findOne({ where: { project_id } }); 
         exists = !!existing;
-    } while (exists); // Ensure unique project_id
-    const project = this.projectsRepository.create({
+        } while (exists);
+
+        // Create and save the new project
+        const project = this.projectsRepository.create({
         ...projectDto,
         project_id,
-    });
-    return this.projectsRepository.save(project);
+        });
+
+        const savedProject = await this.projectsRepository.save(project);
+
+        return {
+        status: "success",
+        message: "Project created successfully",
+        data: savedProject,
+        };
+    } catch (error) {
+        console.error("Error creating project:", error);
+        return {
+        status: "error",
+        message: "Failed to create project",
+        error: error?.message || error,
+        };
+    }
     }
 
 

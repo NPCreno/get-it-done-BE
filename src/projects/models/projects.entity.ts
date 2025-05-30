@@ -17,6 +17,9 @@ export class Projects{
 
     @Column({nullable: true})
     color: string;
+
+    @Column({nullable: true})
+    colorLabel: string;
     
     @Column({ type: 'timestamp', nullable: true })
     due_date: Date;
