@@ -1,3 +1,4 @@
+import { TaskInstance } from "src/task/models/taskInstance.entity";
 import { Users } from "src/user/models/user.entity";
 import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
@@ -38,5 +39,8 @@ export class Projects{
     user: Users;
 
     @Column()
-    user_id: string; // Foreign key for relationship (MUST BE EXPLICIT)
+    user_id: string; 
+
+    @OneToMany(() => TaskInstance, (taskInstance) => taskInstance.project)
+    taskInstances: TaskInstance[];
 }
