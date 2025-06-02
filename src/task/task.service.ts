@@ -131,4 +131,34 @@ export class TaskService {
           };
       }
     }
+
+    async findAllTasksForUser(user_id: string): Promise<any[]> { // change return type to any since user is not returned[] 
+      const data = await this.taskInstanceRepository.find({
+          where: { user: { user_id } },
+          relations: ['user'],
+          withDeleted: false,
+      });
+      if (data.length === 0) {
+          throw new NotFoundException(`No tasks found for user ID ${user_id}`);
+      }
+      const sanitizedData = data.map(({ user, ...rest }) => ({
+          ...rest,
+      }));
+      return sanitizedData;
+    }
+
+    async findAllTasksForProject(project_id: string): Promise<any[]> { // change return type to any since user is not returned[] 
+      const data = await this.taskInstanceRepository.find({
+          where: { project: { project_id } },
+          relations: ['project'],
+          withDeleted: false,
+      });
+      if (data.length === 0) {
+          throw new NotFoundException(`No tasks found for project ID ${project_id}`);
+      }
+      const sanitizedData = data.map(({ user, project, ...rest }) => ({
+          ...rest,
+      }));
+      return sanitizedData;
+    }
 }
