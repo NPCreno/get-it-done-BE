@@ -10,7 +10,7 @@ export class TaskTemplate{
     user_id: string;
 
     @Column({unique: true})
-    tastkTemplate_id: string;
+    taskTemplate_id: string;
 
     @Column()
     title: string;

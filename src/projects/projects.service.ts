@@ -94,7 +94,6 @@ export class ProjectsService {
     }
     }
 
-
     async updateOne(project_id: string, updateProjectsDto: UpdateProjectDto): Promise<Projects> {
     const project = await this.projectsRepository.findOne({ where: { project_id } });
     if (!project) {

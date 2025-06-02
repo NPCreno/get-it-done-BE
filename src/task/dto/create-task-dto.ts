@@ -5,10 +5,10 @@ export class CreateTaskDto {
   description: string;
   priority: string;
   status: string;
-  due_date?: Date | null;
+  due_date?: Date;
   isRecurring: boolean;
   repeat_every?: string;
   repeat_days?: string[];
   start_date?: Date;
-  end_date?: Date | null;
+  end_date?: Date;
 }
