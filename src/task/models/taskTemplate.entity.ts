@@ -9,6 +9,9 @@ export class TaskTemplate{
     @Column()
     user_id: string;
 
+    @Column({nullable: true})
+    project_id: string;
+
     @Column({unique: true})
     taskTemplate_id: string;
 

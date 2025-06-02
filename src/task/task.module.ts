@@ -8,8 +8,7 @@ import { TaskService } from './task.service';
 import { UserModule } from 'src/user/user.module';
 import { Projects } from 'src/projects/models/projects.entity';
 import { Users } from 'src/user/models/user.entity';
-
-@Module({})
+import { TaskGeneratorService } from './taskGenerator.service';
 
 @Module({
   imports: [
@@ -17,7 +16,7 @@ import { Users } from 'src/user/models/user.entity';
     AuthModule,
     UserModule,
   ],
-  providers: [TaskService],
+  providers: [TaskService, TaskGeneratorService],
   controllers: [TaskController]
 })
 

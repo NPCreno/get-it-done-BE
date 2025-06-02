@@ -34,9 +34,9 @@ export class TaskInstance {
 
   @Column({
     type: 'enum',
-    enum: ['Pending', 'Complete'],
+    enum: ['Pending', 'Complete', 'Overdue'],
     })
-  status: 'Pending' | 'Complete';
+  status: 'Pending' | 'Complete' | 'Overdue';
 
   @Column({ type: 'timestamp', nullable: true })
   due_date: Date;

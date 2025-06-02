@@ -8,7 +8,7 @@ import { TaskTemplate } from './models/taskTemplate.entity';
 export class TaskController {
     constructor(private taskService: TaskService){}
 
-    // @UseGuards(AuthorizeGuard)
+    @UseGuards(AuthorizeGuard)
     @Post('create')
     async create(@Body() dto: CreateTaskDto): Promise<{
     status: string;
@@ -19,12 +19,13 @@ export class TaskController {
     return this.taskService.createTask(dto);
     }
 
+    @UseGuards(AuthorizeGuard)
     @Get('getAll/:user_id')
     findAllForUser(@Param('user_id') user_id: string) {
     return this.taskService.findAllTasksForUser(user_id);
     }
 
-    
+    @UseGuards(AuthorizeGuard)
     @Get('getAllfromProj/:project_id')
     findAllTasksForProject(@Param('project_id') project_id: string) {
     return this.taskService.findAllTasksForProject(project_id);

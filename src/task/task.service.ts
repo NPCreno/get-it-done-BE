@@ -7,14 +7,20 @@ import { CreateTaskDto } from './dto/create-task-dto';
 import { DeepPartial } from 'typeorm';
 import { Users } from 'src/user/models/user.entity';
 import { Projects } from 'src/projects/models/projects.entity';
+import { TaskGeneratorService } from './taskGenerator.service';
+import { OnModuleInit } from '@nestjs/common';
 @Injectable()
-export class TaskService {
+export class TaskService implements OnModuleInit{
     constructor (
         @InjectRepository(TaskTemplate) private readonly taskTemplateRepository: Repository<TaskTemplate>,
         @InjectRepository(TaskInstance) private readonly taskInstanceRepository: Repository<TaskInstance>,
         @InjectRepository(Users) private readonly usersRepository: Repository<Users>,
         @InjectRepository(Projects) private readonly projectsRepository: Repository<Projects>,
+        private readonly taskGeneratorService: TaskGeneratorService,
     ){}
+    async onModuleInit() {
+      await this.taskGeneratorService.generateInstancesForCurrentMonth();  //trigger cronjob for generating task instances from task template
+    }
 
     private generateTaskInstanceId(): string {
       const randomNumber = Math.floor(Math.random() * 1_000_000_000); // 0 to 999,999,999
@@ -63,7 +69,8 @@ export class TaskService {
             repeat_every,
             repeat_days,
             start_date,
-            end_date
+            end_date,
+            project_id,
           } = taskDto;
 
         const taskTemplate = this.taskTemplateRepository.create({
@@ -75,10 +82,11 @@ export class TaskService {
         repeat_days,
         start_date,
         end_date,
+        project_id
         } as DeepPartial<TaskTemplate>);
 
         const savedTaskTemplate = await this.taskTemplateRepository.save(taskTemplate);
-
+        await this.taskGeneratorService.generateInstancesForCurrentMonth();  //trigger cronjob for generating task instances from task template
         return {
           status: "success",
           message: "Recurring task created successfully",
@@ -141,8 +149,9 @@ export class TaskService {
       if (data.length === 0) {
           throw new NotFoundException(`No tasks found for user ID ${user_id}`);
       }
-      const sanitizedData = data.map(({ user, ...rest }) => ({
-          ...rest,
+      const sanitizedData = data.map(({ project, ...rest }) => ({
+        ...rest,
+        project_id: project.project_id,  // only project_id, not full project
       }));
       return sanitizedData;
     }
@@ -156,9 +165,11 @@ export class TaskService {
       if (data.length === 0) {
           throw new NotFoundException(`No tasks found for project ID ${project_id}`);
       }
-      const sanitizedData = data.map(({ user, project, ...rest }) => ({
-          ...rest,
+      const sanitizedData = data.map(({ project, ...rest }) => ({
+        ...rest,
+        project_id: project.project_id,  // only project_id, not full project
       }));
+
       return sanitizedData;
     }
 }
