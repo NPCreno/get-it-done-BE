@@ -20,9 +20,9 @@ export class TaskTemplate{
 
     @Column({
     type: 'enum',
-    enum: ['daily', 'weekly', 'monthly'],
+    enum: ['Day', 'Week', 'Month'],
     })
-    repeat_every: 'daily' | 'weekly' | 'monthly';
+    repeat_every: 'Day' | 'Week' | 'Month';
 
     @Column({ type: 'simple-array', nullable: true })
     repeat_days: string[]; // e.g., ["Monday", "Thursday"]

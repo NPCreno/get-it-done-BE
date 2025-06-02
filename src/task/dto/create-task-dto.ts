@@ -3,11 +3,11 @@ export class CreateTaskDto {
   project_id?: string;
   title: string;
   description: string;
-  priority: string;
-  status: string;
+   priority: 'Low' | 'Medium' | 'High';
+  status: 'Pending' | 'Complete';
   due_date?: Date;
   isRecurring: boolean;
-  repeat_every?: string;
+  repeat_every?: 'Day' | 'Week' | 'Month';
   repeat_days?: string[];
   start_date?: Date;
   end_date?: Date;

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TaskInstance } from './models/taskInstance.entity';
@@ -45,22 +45,26 @@ export class TaskService {
         let task_id: string;
         let taskTemplate_id: string;
         let exists = true;
-
         if(taskDto.isRecurring){
-          do {
-          taskTemplate_id = this.generateTaskTemplateId(); 
-          const existing = await this.taskTemplateRepository.findOne({ where: { taskTemplate_id } }); 
-          exists = !!existing;
-        } while (exists);
-        const {
-          user_id,
-          title,
-          description,
-          repeat_every,
-          repeat_days,
-          start_date,
-          end_date
-        } = taskDto;
+          if (!taskDto.repeat_every) throw new BadRequestException('repeat_every is required for recurring tasks');
+          if (!taskDto.start_date) throw new BadRequestException('start_date is required for recurring tasks');
+          if (taskDto.repeat_every === 'Week' && (!taskDto.repeat_days || taskDto.repeat_days.length === 0)) {
+            throw new BadRequestException('repeat days is required when repeat every is "Week"');
+          }
+            do {
+            taskTemplate_id = this.generateTaskTemplateId(); 
+            const existing = await this.taskTemplateRepository.findOne({ where: { taskTemplate_id } }); 
+            exists = !!existing;
+          } while (exists);
+          const {
+            user_id,
+            title,
+            description,
+            repeat_every,
+            repeat_days,
+            start_date,
+            end_date
+          } = taskDto;
 
         const taskTemplate = this.taskTemplateRepository.create({
         taskTemplate_id,
