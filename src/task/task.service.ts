@@ -213,38 +213,38 @@ export class TaskService implements OnModuleInit {
     startDate?: string,
     endDate?: string,
   ): Promise<any[]> {
-    const project = await this.projectsRepository.findOne({
-      where: { project_id },
-    });
-    if (!project) {
-      throw new NotFoundException(`Project with ID ${project_id} not found`);
-    }
-    // change return type to any since user is not returned[]
-    const where: any[] = [{ project: { project_id }, due_date: IsNull() }];
-    if (startDate && endDate) {
-      where.push({
-        project: { project_id },
-        due_date: Between(new Date(startDate), new Date(endDate)),
+    try {
+      const project = await this.projectsRepository.findOne({
+        where: { project_id },
       });
+      if (!project) {
+        throw new NotFoundException(`Project with ID ${project_id} not found`);
+      }
+
+      const where: any[] = [{ project: { project_id }, due_date: IsNull() }];
+      if (startDate && endDate) {
+        where.push({
+          project: { project_id },
+          due_date: Between(new Date(startDate), new Date(endDate)),
+        });
+      }
+
+      const data = await this.taskInstanceRepository.find({
+        where,
+        relations: ['project'],
+        withDeleted: false,
+      });
+
+      const sanitizedData = data.map(({ project, ...rest }) => ({
+        ...rest,
+        project_id: project.project_id,
+      }));
+
+      return sanitizedData;
+    } catch (error) {
+      console.error(`Error fetching tasks for project ${project_id}:`, error);
+      return []; // Return empty array on error
     }
-
-    const data = await this.taskInstanceRepository.find({
-      where,
-      relations: ['project'],
-      withDeleted: false,
-    });
-
-    if (data.length === 0) {
-      throw new NotFoundException(
-        `No tasks found for project ID ${project_id}`,
-      );
-    }
-    const sanitizedData = data.map(({ project, ...rest }) => ({
-      ...rest,
-      project_id: project.project_id, // only project_id, not full project
-    }));
-
-    return sanitizedData;
   }
 
   async updateOne(

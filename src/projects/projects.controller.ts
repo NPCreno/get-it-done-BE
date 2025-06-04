@@ -13,6 +13,7 @@ import {
   import { Projects } from './models/projects.entity';
   import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
   import { UpdateProjectDto } from './dto/update-project-dto';
+import { SanitizedProject } from './interfaces/sanitizedProject';
   
   @Controller('api/projects')
   export class ProjectsController {
@@ -25,10 +26,15 @@ import {
     }
   
     @Get('getAll/:user_id')
-    findAllForUser(@Param('user_id') user_id: string) {
-      return this.projectsService.findAllForUser(user_id);
+    findAllForUser(@Param('user_id') user_id: string): Promise<{
+        status: string;
+        message: string;
+        data?: SanitizedProject[];
+        error?: any;
+      }> {
+    return this.projectsService.findAllForUser(user_id);
     }
-  
+
     @UseGuards(AuthorizeGuard)
     @Get(':project_id')
     findOne(@Param('project_id') project_id: string): Promise<Projects> {

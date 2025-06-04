@@ -17,7 +17,8 @@ import { TaskGeneratorService } from './taskGenerator.service';
     UserModule,
   ],
   providers: [TaskService, TaskGeneratorService],
-  controllers: [TaskController]
+  controllers: [TaskController],
+  exports: [TaskService, TaskGeneratorService],
 })
 
 export class TaskModule {}

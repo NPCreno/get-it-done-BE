@@ -6,10 +6,13 @@ import { CreateProjectDto } from './dto/create-project-dto';
 import { UpdateProjectDto } from './dto/update-project-dto';
 import { TaskInstance } from 'src/task/models/taskInstance.entity';
 import { TaskTemplate } from 'src/task/models/taskTemplate.entity';
+import { TaskService } from 'src/task/task.service';
+import { SanitizedProject } from './interfaces/sanitizedProject';
 
 @Injectable()
 export class ProjectsService {
     constructor (
+        private readonly taskService: TaskService,
         @InjectRepository(Projects) private readonly projectsRepository: Repository<Projects>,
         @InjectRepository(Projects) private readonly taskInstanceRepository: Repository<TaskInstance>,
         @InjectRepository(Projects) private readonly taskTemplateRepository: Repository<TaskTemplate>,
@@ -36,19 +39,50 @@ export class ProjectsService {
     return projects;
     }
     
-    async findAllForUser(user_id: string): Promise<any[]> { // change return type to any since user is not returned[] 
-    const projects = await this.projectsRepository.find({
+    async findAllForUser(user_id: string): Promise<{
+    status: string;
+    message: string;
+    data?: SanitizedProject[];
+    error?: any;
+    }> {
+    try {
+        const projects = await this.projectsRepository.find({
         where: { user: { user_id } },
         relations: ['user'],
         withDeleted: false,
-    });
-    if (projects.length === 0) {
+        });
+
+        if (projects.length === 0) {
         throw new NotFoundException(`No projects found for user ID ${user_id}`);
+        }
+
+        const sanitizedProjects: SanitizedProject[] = [];
+
+        for (const project of projects) {
+        const startDate = new Date().toISOString();
+        const endDate = new Date(new Date().setDate(new Date().getDate() + 1)).toISOString();
+        const tasks = await this.taskService.getTasksByProj(project.project_id, startDate, endDate);
+
+        const { user, taskInstances, ...rest } = project;
+
+        sanitizedProjects.push({
+            ...rest,
+            task_count: tasks.length,
+        });
+        }
+
+        return {
+        status: 'success',
+        message: 'Projects fetched successfully',
+        data: sanitizedProjects,
+        };
+    } catch (error) {
+        return {
+        status: 'error',
+        message: 'Failed to fetch projects',
+        error: error?.message || error,
+        };
     }
-    const sanitizedProjects = projects.map(({ user, ...rest }) => ({ // Map to remove user completely
-        ...rest,
-    }));
-    return sanitizedProjects;
     }
 
     async findDueProjects(): Promise<Projects[]> {
