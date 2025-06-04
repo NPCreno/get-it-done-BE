@@ -21,6 +21,110 @@
   <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
   [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
+# Get It Done - Backend
+
+A robust backend API for a productivity and task management application, built with [NestJS](https://nestjs.com/) and TypeScript. This service provides user, project, and advanced task management (including recurring tasks), with secure authentication and PostgreSQL database support.
+
+---
+
+## Features
+
+- **User Management:** Registration, authentication, and user preferences.
+- **Project Management:** Create, update, and delete projects. Projects have titles, descriptions, colors, due dates, and are linked to users.
+- **Task Management:**
+  - Create, update, and delete tasks (one-time or recurring).
+  - Tasks are linked to users and optionally to projects.
+  - Manage task status and priority.
+  - Recurring tasks with flexible repeat options (daily, weekly, monthly).
+- **Authentication & Authorization:** JWT-based authentication and route guards.
+- **Scheduling:** Automated generation of recurring tasks using NestJS's scheduling module.
+- **Database:** Uses PostgreSQL via TypeORM ORM.
+
+---
+
+## Technologies Used
+
+- **Node.js** (runtime)
+- **NestJS** (framework)
+- **TypeScript** (language)
+- **TypeORM** (ORM)
+- **PostgreSQL** (database)
+- **JWT** (authentication)
+- **bcrypt** (password hashing)
+- **date-fns** and **date-fns-tz** (date utilities)
+- **Jest** (testing)
+- **ESLint** & **Prettier** (code quality)
+
+---
+
+## Local Setup
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18 or later recommended)
+- [npm](https://www.npmjs.com/) (comes with Node.js)
+- [PostgreSQL](https://www.postgresql.org/) (local or remote instance)
+
+### 1. Clone the repository
+```bash
+git clone <repo-url>
+cd get-it-done-BE
+```
+
+### 2. Install dependencies
+```bash
+npm install
+```
+
+### 3. Configure environment variables
+Create a `.env` file in the root directory with the following (example):
+```env
+DATABASE_URL=postgres://<username>:<password>@localhost:5432/<database_name>
+JWT_SECRET=your_jwt_secret
+```
+- Replace `<username>`, `<password>`, and `<database_name>` with your PostgreSQL credentials.
+- Set a strong value for `JWT_SECRET`.
+
+### 4. Run database migrations (if any)
+> _Note: This project uses TypeORM's `synchronize: true` for development, so tables are auto-created. For production, use migrations._
+
+### 5. Start the application
+```bash
+# Development
+npm run start:dev
+
+# Production
+npm run build
+npm run start:prod
+```
+
+### 6. Run tests
+```bash
+# Unit tests
+npm run test
+
+# End-to-end tests
+npm run test:e2e
+
+# Test coverage
+npm run test:cov
+```
+
+---
+
+## Project Structure
+
+- `src/user` - User logic (controllers, services, models, DTOs)
+- `src/projects` - Project logic
+- `src/task` - Task and recurring task logic
+- `src/auth` - Authentication and authorization
+- `test/` - Unit and e2e tests
+
+---
+
+## License
+
+This project is UNLICENSED. For usage or contributions, please contact the author.
+
 ## Description
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
