@@ -15,7 +15,7 @@ import { TaskInstance } from './models/taskInstance.entity';
 import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
 import { TaskTemplate } from './models/taskTemplate.entity';
 import { UpdateTaskDto } from './dto/update-task-dto';
-@Controller('api/task')
+@Controller('api/tasks')
 export class TaskController {
   constructor(private taskService: TaskService) {}
 
@@ -32,8 +32,12 @@ export class TaskController {
 
   @UseGuards(AuthorizeGuard)
   @Get('getTasksByUser/:user_id')
-  findAllForUser(@Param('user_id') user_id: string) {
-    return this.taskService.findAllTasksForUser(user_id);
+  getTasksByUser(
+    @Param('user_id') user_id: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.taskService.getTasksByUser(user_id, startDate, endDate);
   }
 
   @UseGuards(AuthorizeGuard)

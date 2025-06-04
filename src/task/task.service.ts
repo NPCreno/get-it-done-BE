@@ -173,21 +173,39 @@ export class TaskService implements OnModuleInit {
     }
   }
 
-  async findAllTasksForUser(user_id: string): Promise<any[]> {
-    // change return type to any since user is not returned[]
+  async getTasksByUser(
+    user_id: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<any[]> {
+    const user = await this.usersRepository.findOne({ where: { user_id } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${user_id} not found`);
+    }
+
+    const where: any[] = [{ user: { user_id }, due_date: IsNull() }];
+    if (startDate && endDate) {
+      where.push({
+        user: { user_id },
+        due_date: Between(new Date(startDate), new Date(endDate)),
+      });
+    }
+
     const data = await this.taskInstanceRepository.find({
-      where: { user: { user_id } },
-      relations: ['user'],
+      where,
+      relations: ['user', 'project'],  // include project relation here
       withDeleted: false,
     });
+
     if (data.length === 0) {
       throw new NotFoundException(`No tasks found for user ID ${user_id}`);
     }
-    const sanitizedData = data.map(({ project, ...rest }) => ({
+
+    return data.map(({ user, project, ...rest }) => ({
       ...rest,
-      project_id: project.project_id, // only project_id, not full project
+      user_id: user.user_id,
+      project_title: project?.title ?? null,
     }));
-    return sanitizedData;
   }
 
   async getTasksByProj(
