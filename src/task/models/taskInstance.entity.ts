@@ -1,5 +1,14 @@
 // task-instance.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  DeleteDateColumn,
+} from 'typeorm';
 import { TaskTemplate } from './taskTemplate.entity';
 import { Projects } from 'src/projects/models/projects.entity';
 import { Users } from 'src/user/models/user.entity';
@@ -9,10 +18,10 @@ export class TaskInstance {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({unique:true})
+  @Column({ unique: true })
   task_id: string;
 
-  @ManyToOne (() => Users, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Users, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id', referencedColumnName: 'user_id' })
   user: Users;
 
@@ -29,13 +38,13 @@ export class TaskInstance {
   @Column({
     type: 'enum',
     enum: ['Low', 'Medium', 'High'],
-    })
+  })
   priority: 'Low' | 'Medium' | 'High';
 
   @Column({
     type: 'enum',
     enum: ['Pending', 'Complete', 'Overdue'],
-    })
+  })
   status: 'Pending' | 'Complete' | 'Overdue';
 
   @Column({ type: 'timestamp', nullable: true })
@@ -46,4 +55,13 @@ export class TaskInstance {
     onDelete: 'CASCADE',
   })
   template: TaskTemplate | null;
+
+  @CreateDateColumn({ type: 'timestamp' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ type: 'timestamp' })
+  updatedAt: Date;
+
+  @DeleteDateColumn({ type: 'timestamp', nullable: true })
+  deletedAt: Date;
 }

@@ -13,6 +13,7 @@ import { Users } from 'src/user/models/user.entity';
 import { Projects } from 'src/projects/models/projects.entity';
 import { TaskGeneratorService } from './taskGenerator.service';
 import { OnModuleInit } from '@nestjs/common';
+import { UpdateTaskDto } from './dto/update-task-dto';
 @Injectable()
 export class TaskService implements OnModuleInit {
   constructor(
@@ -40,9 +41,7 @@ export class TaskService implements OnModuleInit {
     return 'taskTemplate-' + randomNumber.toString().padStart(9, '0');
   }
 
-  async createTask(
-    taskDto: CreateTaskDto,
-  ): Promise<{
+  async createTask(taskDto: CreateTaskDto): Promise<{
     status: string;
     message: string;
     data?: TaskInstance | TaskTemplate;
@@ -197,7 +196,6 @@ export class TaskService implements OnModuleInit {
     endDate?: string,
   ): Promise<any[]> {
     // change return type to any since user is not returned[]
-
     const where: any[] = [{ project: { project_id }, due_date: IsNull() }];
 
     if (startDate && endDate) {
@@ -224,5 +222,47 @@ export class TaskService implements OnModuleInit {
     }));
 
     return sanitizedData;
+  }
+
+  async updateOne(
+    task_id: string,
+    updateTaskDto: UpdateTaskDto,
+  ): Promise<TaskInstance> {
+    const task = await this.taskInstanceRepository.findOne({
+      where: { task_id },
+    });
+    if (!task) {
+      throw new NotFoundException(`Task with ID ${task_id} not found`);
+    }
+    await this.taskInstanceRepository.update({ task_id }, updateTaskDto);
+    const updatedTask = await this.taskInstanceRepository.findOne({
+      where: { task_id },
+    });
+    if (!updatedTask) throw new NotFoundException(`Updated task not found`);
+    return updatedTask;
+  }
+
+  async softDeleteOne(task_id: string): Promise<TaskInstance> {
+    const task = await this.taskInstanceRepository.findOne({
+      where: { task_id },
+    });
+    if (!task) throw new NotFoundException(`Task with ID ${task_id} not found`);
+    await this.taskInstanceRepository.softDelete({ task_id });
+    return this.taskInstanceRepository.findOne({
+      where: { task_id },
+      withDeleted: true,
+    }) as Promise<TaskInstance>;
+  }
+
+  async hardDeleteOne(task_id: string): Promise<TaskInstance> {
+    const task = await this.taskInstanceRepository.findOne({
+      where: { task_id },
+      withDeleted: true,
+    });
+    if (!task) {
+      throw new NotFoundException(`task with ID ${task_id} not found`);
+    }
+    await this.taskInstanceRepository.remove(task);
+    return task;
   }
 }
