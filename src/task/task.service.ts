@@ -195,9 +195,14 @@ export class TaskService implements OnModuleInit {
     startDate?: string,
     endDate?: string,
   ): Promise<any[]> {
+    const project = await this.projectsRepository.findOne({
+      where: { project_id },
+    });
+    if (!project) {
+      throw new NotFoundException(`Project with ID ${project_id} not found`);
+    }
     // change return type to any since user is not returned[]
     const where: any[] = [{ project: { project_id }, due_date: IsNull() }];
-
     if (startDate && endDate) {
       where.push({
         project: { project_id },

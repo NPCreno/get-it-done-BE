@@ -4,11 +4,15 @@ import { Projects } from './models/projects.entity';
 import { LessThanOrEqual, Repository } from 'typeorm';
 import { CreateProjectDto } from './dto/create-project-dto';
 import { UpdateProjectDto } from './dto/update-project-dto';
+import { TaskInstance } from 'src/task/models/taskInstance.entity';
+import { TaskTemplate } from 'src/task/models/taskTemplate.entity';
 
 @Injectable()
 export class ProjectsService {
     constructor (
         @InjectRepository(Projects) private readonly projectsRepository: Repository<Projects>,
+        @InjectRepository(Projects) private readonly taskInstanceRepository: Repository<TaskInstance>,
+        @InjectRepository(Projects) private readonly taskTemplateRepository: Repository<TaskTemplate>,
     ){}
 
     private generateProjectId(): string {
@@ -112,24 +116,58 @@ export class ProjectsService {
     }
     project.deletedAt = new Date();
     await this.projectsRepository.save(project);
+
+    // Soft-delete related TaskTemplates
+    await this.taskTemplateRepository
+    .createQueryBuilder()
+    .softDelete()
+    .where("project_id = :project_id", { project_id })
+    .execute();
+    console.log("deleting related task templates")
+
+    // Soft-delete related TaskInstances
+    await this.taskInstanceRepository
+    .createQueryBuilder()
+    .softDelete()
+    .where("project_id = :project_id", { project_id })
+    .execute();
+    console.log("deleting related task instances")
+
     const updatedProject = await this.projectsRepository.findOne({
         where: { project_id },
         withDeleted: true
     });
+
     if (!updatedProject) throw new NotFoundException(`Updated user not found`);
     return updatedProject;
     }
 
-    async hardDeleteOne(project_id: string): Promise<Projects> {
-    const project = await this.projectsRepository.findOne({ 
+    async hardDeleteOne(project_id: string): Promise<{
+    status: string;
+    message: string;
+    data?: Projects;
+    error?: any;
+    }> {
+    try {
+        const project = await this.projectsRepository.findOne({ 
         where: { project_id },
         withDeleted: true
-    });
-    if (!project) {
-        throw new NotFoundException(`Project with ID ${project_id} not found`);
+        });
+        if (!project) {
+            throw new NotFoundException(`Project with ID ${project_id} not found`);
+        }
+        await this.projectsRepository.remove(project);
+        return {
+            status: 'success',
+            message: 'Project deleted successfully',
+            data: project,
+            };
+    }catch (error) {
+        return {
+        status: 'error',
+        message: 'Failed to create task',
+        error: error?.message || error,
+      };
     }
-    await this.projectsRepository.remove(project);
-
-    return project;
     }
 }
