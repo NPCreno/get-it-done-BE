@@ -55,7 +55,12 @@ export class TaskController {
   async update(
     @Param('task_id') task_id: string,
     @Body() updateTaskDto: UpdateTaskDto,
-  ): Promise<TaskInstance> {
+  ): Promise<{
+          status: string;
+          message: string;
+          data?: TaskInstance;
+          error?: any;
+        }> {
     return this.taskService.updateOne(task_id, updateTaskDto);
   }
 

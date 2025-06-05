@@ -250,8 +250,16 @@ export class TaskService implements OnModuleInit {
   async updateOne(
     task_id: string,
     updateTaskDto: UpdateTaskDto,
-  ): Promise<TaskInstance> {
-    const task = await this.taskInstanceRepository.findOne({
+  ): Promise<
+    {
+    status: string;
+    message: string;
+    data?: TaskInstance;
+    error?: any;
+    }
+  > {
+    try {
+      const task = await this.taskInstanceRepository.findOne({
       where: { task_id },
     });
     if (!task) {
@@ -262,8 +270,18 @@ export class TaskService implements OnModuleInit {
       where: { task_id },
     });
     if (!updatedTask) throw new NotFoundException(`Updated task not found`);
-    return updatedTask;
-  }
+     return {
+            status: 'success',
+            message: 'Task updated successfully',
+            data: updatedTask,
+            };
+    } catch (error) {
+      return {
+            status: 'error',
+            message: 'Failed to update task',
+            error: error?.message || error,
+            };
+    }}
 
   async softDeleteOne(task_id: string): Promise<TaskInstance> {
     const task = await this.taskInstanceRepository.findOne({
