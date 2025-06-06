@@ -201,11 +201,17 @@ export class TaskService implements OnModuleInit {
       throw new NotFoundException(`No tasks found for user ID ${user_id}`);
     }
 
-    return data.map(({ user, project, ...rest }) => ({
-      ...rest,
-      user_id: user.user_id,
-      project_title: project?.title ?? null,
-    }));
+    return data
+      .map(({ user, project, ...rest }) => ({
+        ...rest,
+        user_id: user.user_id,
+        project_title: project?.title ?? null,
+      }))
+      .sort((a, b) => {
+        if (a.status === "Complete" && b.status !== "Complete") return 1;
+        if (a.status !== "Complete" && b.status === "Complete") return -1;
+        return 0;
+      });
   }
 
   async getTasksByProj(
@@ -235,12 +241,16 @@ export class TaskService implements OnModuleInit {
         withDeleted: false,
       });
 
-      const sanitizedData = data.map(({ project, ...rest }) => ({
+      return data
+      .map(({ project, ...rest }) => ({
         ...rest,
         project_id: project.project_id,
-      }));
-
-      return sanitizedData;
+      }))
+      .sort((a, b) => {
+        if (a.status === "Complete" && b.status !== "Complete") return 1;
+        if (a.status !== "Complete" && b.status === "Complete") return -1;
+        return 0;
+      });
     } catch (error) {
       console.error(`Error fetching tasks for project ${project_id}:`, error);
       return []; // Return empty array on error
@@ -283,18 +293,38 @@ export class TaskService implements OnModuleInit {
             };
     }}
 
-  async softDeleteOne(task_id: string): Promise<TaskInstance> {
-    const task = await this.taskInstanceRepository.findOne({
-      where: { task_id },
-    });
-    if (!task) throw new NotFoundException(`Task with ID ${task_id} not found`);
-    await this.taskInstanceRepository.softDelete({ task_id });
-    return this.taskInstanceRepository.findOne({
-      where: { task_id },
-      withDeleted: true,
-    }) as Promise<TaskInstance>;
-  }
+  async softDeleteOne(task_id: string): Promise<{
+    status: string;
+    message: string;
+    data?: TaskInstance | null;
+    error?: any;
+  }> {
+    try {
+      const task = await this.taskInstanceRepository.findOne({
+        where: { task_id },
+      });
+      if (!task) throw new NotFoundException(`Task with ID ${task_id} not found`);
 
+      await this.taskInstanceRepository.softDelete({ task_id });
+
+      const deletedTask = await this.taskInstanceRepository.findOne({
+        where: { task_id },
+        withDeleted: true,
+      });
+
+      return {
+        status: 'success',
+        message: 'Task deleted successfully',
+        data: deletedTask,
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to delete task',
+        error: error?.message || error,
+      };
+    }
+  }
   async hardDeleteOne(task_id: string): Promise<TaskInstance> {
     const task = await this.taskInstanceRepository.findOne({
       where: { task_id },

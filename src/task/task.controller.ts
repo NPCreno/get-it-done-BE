@@ -68,7 +68,12 @@ export class TaskController {
   @Delete(':task_id')
   async softDeleteOne(
     @Param('task_id') task_id: string,
-  ): Promise<TaskInstance> {
+  ):  Promise<{
+          status: string;
+          message: string;
+          data?: TaskInstance | null;
+          error?: any;
+        }> {
     return this.taskService.softDeleteOne(task_id);
   }
 
