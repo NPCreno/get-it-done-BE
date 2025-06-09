@@ -6,9 +6,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { ProjectsModule } from './projects/projects.module';
+import { TaskModule } from './task/task.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({isGlobal: true}),
     TypeOrmModule.forRoot({
       type: 'postgres',
@@ -18,7 +21,8 @@ import { ProjectsModule } from './projects/projects.module';
     }),
     UserModule,
     AuthModule,
-    ProjectsModule
+    ProjectsModule,
+    TaskModule
   ],
   controllers: [AppController],
   providers: [AppService],

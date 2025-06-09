@@ -4,11 +4,18 @@ import { Projects } from './models/projects.entity';
 import { LessThanOrEqual, Repository } from 'typeorm';
 import { CreateProjectDto } from './dto/create-project-dto';
 import { UpdateProjectDto } from './dto/update-project-dto';
+import { TaskInstance } from 'src/task/models/taskInstance.entity';
+import { TaskTemplate } from 'src/task/models/taskTemplate.entity';
+import { TaskService } from 'src/task/task.service';
+import { SanitizedProject } from './interfaces/sanitizedProject';
 
 @Injectable()
 export class ProjectsService {
     constructor (
+        private readonly taskService: TaskService,
         @InjectRepository(Projects) private readonly projectsRepository: Repository<Projects>,
+        @InjectRepository(Projects) private readonly taskInstanceRepository: Repository<TaskInstance>,
+        @InjectRepository(Projects) private readonly taskTemplateRepository: Repository<TaskTemplate>,
     ){}
 
     private generateProjectId(): string {
@@ -32,19 +39,50 @@ export class ProjectsService {
     return projects;
     }
     
-    async findAllForUser(user_id: string): Promise<any[]> { // change return type to any since user is not returned[] 
-    const projects = await this.projectsRepository.find({
+    async findAllForUser(user_id: string): Promise<{
+    status: string;
+    message: string;
+    data?: SanitizedProject[];
+    error?: any;
+    }> {
+    try {
+        const projects = await this.projectsRepository.find({
         where: { user: { user_id } },
         relations: ['user'],
         withDeleted: false,
-    });
-    if (projects.length === 0) {
+        });
+
+        if (projects.length === 0) {
         throw new NotFoundException(`No projects found for user ID ${user_id}`);
+        }
+
+        const sanitizedProjects: SanitizedProject[] = [];
+
+        for (const project of projects) {
+        const startDate = new Date().toISOString();
+        const endDate = new Date(new Date().setDate(new Date().getDate() + 1)).toISOString();
+        const tasks = await this.taskService.getTasksByProj(project.project_id, startDate, endDate);
+
+        const { user, taskInstances, ...rest } = project;
+
+        sanitizedProjects.push({
+            ...rest,
+            task_count: tasks.length,
+        });
+        }
+
+        return {
+        status: 'success',
+        message: 'Projects fetched successfully',
+        data: sanitizedProjects,
+        };
+    } catch (error) {
+        return {
+        status: 'error',
+        message: 'Failed to fetch projects',
+        error: error?.message || error,
+        };
     }
-    const sanitizedProjects = projects.map(({ user, ...rest }) => ({ // Map to remove user completely
-        ...rest,
-    }));
-    return sanitizedProjects;
     }
 
     async findDueProjects(): Promise<Projects[]> {
@@ -94,7 +132,6 @@ export class ProjectsService {
     }
     }
 
-
     async updateOne(project_id: string, updateProjectsDto: UpdateProjectDto): Promise<Projects> {
     const project = await this.projectsRepository.findOne({ where: { project_id } });
     if (!project) {
@@ -113,24 +150,58 @@ export class ProjectsService {
     }
     project.deletedAt = new Date();
     await this.projectsRepository.save(project);
+
+    // Soft-delete related TaskTemplates
+    await this.taskTemplateRepository
+    .createQueryBuilder()
+    .softDelete()
+    .where("project_id = :project_id", { project_id })
+    .execute();
+    console.log("deleting related task templates")
+
+    // Soft-delete related TaskInstances
+    await this.taskInstanceRepository
+    .createQueryBuilder()
+    .softDelete()
+    .where("project_id = :project_id", { project_id })
+    .execute();
+    console.log("deleting related task instances")
+
     const updatedProject = await this.projectsRepository.findOne({
         where: { project_id },
         withDeleted: true
     });
+
     if (!updatedProject) throw new NotFoundException(`Updated user not found`);
     return updatedProject;
     }
 
-    async hardDeleteOne(project_id: string): Promise<Projects> {
-    const project = await this.projectsRepository.findOne({ 
+    async hardDeleteOne(project_id: string): Promise<{
+    status: string;
+    message: string;
+    data?: Projects;
+    error?: any;
+    }> {
+    try {
+        const project = await this.projectsRepository.findOne({ 
         where: { project_id },
         withDeleted: true
-    });
-    if (!project) {
-        throw new NotFoundException(`Project with ID ${project_id} not found`);
+        });
+        if (!project) {
+            throw new NotFoundException(`Project with ID ${project_id} not found`);
+        }
+        await this.projectsRepository.remove(project);
+        return {
+            status: 'success',
+            message: 'Project deleted successfully',
+            data: project,
+            };
+    }catch (error) {
+        return {
+        status: 'error',
+        message: 'Failed to create task',
+        error: error?.message || error,
+      };
     }
-    await this.projectsRepository.remove(project);
-
-    return project;
     }
 }
