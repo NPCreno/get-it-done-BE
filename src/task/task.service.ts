@@ -14,6 +14,7 @@ import { Projects } from 'src/projects/models/projects.entity';
 import { TaskGeneratorService } from './taskGenerator.service';
 import { OnModuleInit } from '@nestjs/common';
 import { UpdateTaskDto } from './dto/update-task-dto';
+import { IDashboardData } from './interfaces/dashboardData';
 @Injectable()
 export class TaskService implements OnModuleInit {
   constructor(
@@ -336,4 +337,67 @@ export class TaskService implements OnModuleInit {
     await this.taskInstanceRepository.remove(task);
     return task;
   }
+
+  async getDashboardData(
+    user_id: string,
+    startDate?: string,
+    endDate?: string,
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: IDashboardData;
+    error?: string;
+  }> {
+    try {
+      const user = await this.usersRepository.findOne({ where: { user_id } });
+      if (!user) {
+        throw new NotFoundException(`User with ID ${user_id} not found`);
+      }
+
+      const where: any[] = [{ user: { user_id }, due_date: IsNull() }];
+      if (startDate && endDate) {
+        where.push({
+          user: { user_id },
+          due_date: Between(new Date(startDate), new Date(endDate)),
+        });
+      }
+
+      const projects = await this.projectsRepository.find({
+        where: { user: { user_id } },
+        relations: ['user'],
+        withDeleted: false,
+      });
+
+      if (projects.length === 0) {
+        throw new NotFoundException(`No projects found for user ID ${user_id}`);
+      }
+
+      const data = await this.taskInstanceRepository.find({
+        where,
+        relations: ['user', 'project'],
+        withDeleted: false,
+      });
+
+      const pendingTasks = data.filter(task => task.status === 'Pending');
+      const completeTasks = data.filter(task => task.status === 'Complete');
+
+      return {
+        status: 'success',
+        message: 'Dashboard data fetched successfully',
+        data: {
+          all_tasks: data.length,
+          pending_tasks: pendingTasks.length,
+          complete_tasks: completeTasks.length,
+          all_projects: projects.length,
+        },
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to fetch dashboard data',
+        error: error.message || error,
+      };
+    }
+  }
+
 }
