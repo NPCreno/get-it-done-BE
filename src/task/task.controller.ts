@@ -15,6 +15,7 @@ import { TaskInstance } from './models/taskInstance.entity';
 import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
 import { TaskTemplate } from './models/taskTemplate.entity';
 import { UpdateTaskDto } from './dto/update-task-dto';
+import { IDashboardData } from './interfaces/dashboardData';
 @Controller('api/tasks')
 export class TaskController {
   constructor(private taskService: TaskService) {}
@@ -83,5 +84,20 @@ export class TaskController {
     @Param('task_id') task_id: string,
   ): Promise<TaskInstance> {
     return this.taskService.hardDeleteOne(task_id);
+  }
+
+  @UseGuards(AuthorizeGuard)
+  @Get('getDashboardData/:user_id')
+  getDashboardData(
+    @Param('user_id') user_id: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ):Promise<{
+      status: string;
+      message: string;
+      data?: IDashboardData;
+      error?: string;
+  }> {
+    return this.taskService.getDashboardData(user_id, startDate, endDate);
   }
 }
