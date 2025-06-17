@@ -6,6 +6,8 @@ import {
     Param,
     Patch,
     Post,
+    Req,
+    UnauthorizedException,
     UseGuards,
   } from '@nestjs/common';
   import { ProjectsService } from './projects.service';
@@ -37,18 +39,23 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
 
     @UseGuards(AuthorizeGuard)
     @Get(':project_id')
-    findOne(@Param('project_id') project_id: string): Promise<Projects> {
-      return this.projectsService.findOne(project_id);
+    findOne(@Param('project_id') project_id: string, @Req() req: Request): Promise<Projects> {
+      const tokenUserId = req['user'];
+      return this.projectsService.findOne(project_id, tokenUserId.user.user_id);
     }
   
     @UseGuards(AuthorizeGuard)
     @Post('create')
-    async create(@Body() dto: CreateProjectDto): Promise<{
+    async create(@Body() dto: CreateProjectDto, @Req() req: Request): Promise<{
       status: string;
       message: string;
       data?: Projects;
       error?: any;
     }> {
+      const tokenUserId = req['user'];
+      if (tokenUserId.user.user_id !== dto.user_id) {
+          throw new UnauthorizedException('Access denied: Not your data.');
+      }
       return this.projectsService.createProject(dto);
     }
   
@@ -57,25 +64,29 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
     async update(
       @Param('project_id') project_id: string,
       @Body() updateProjectDto: UpdateProjectDto,
+      @Req() req: Request,
     ): Promise<Projects> {
-      return this.projectsService.updateOne(project_id, updateProjectDto);
+      const tokenUserId = req['user'];
+      return this.projectsService.updateOne(project_id, updateProjectDto, tokenUserId.user.user_id);
     }
   
     @UseGuards(AuthorizeGuard)
     @Delete(':project_id')
-    async softDeleteOne(@Param('id') project_id: string): Promise<Projects> {
-      return this.projectsService.softDeleteOne(project_id);
+    async softDeleteOne(@Param('id') project_id: string, @Req() req: Request): Promise<Projects> {
+      const tokenUserId = req['user'];
+      return this.projectsService.softDeleteOne(project_id, tokenUserId.user.user_id);
     }
   
     @UseGuards(AuthorizeGuard)
     @Delete(':project_id/hard')
-    async hardDeleteOne(@Param('id') project_id: string): Promise<{
+    async hardDeleteOne(@Param('id') project_id: string, @Req() req: Request): Promise<{
         status: string;
         message: string;
         data?: Projects;
         error?: any;
       }> {
-    return this.projectsService.hardDeleteOne(project_id);
+    const tokenUserId = req['user'];
+    return this.projectsService.hardDeleteOne(project_id, tokenUserId.user.user_id);
     }
   }
   
