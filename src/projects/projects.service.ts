@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Projects } from './models/projects.entity';
 import { LessThanOrEqual, Repository } from 'typeorm';
@@ -23,10 +23,13 @@ export class ProjectsService {
       return 'PRJ-' + randomNumber.toString().padStart(9, '0');
     }
 
-    async findOne(project_id: string): Promise<Projects> {
+    async findOne(project_id: string, tokenUserId: string): Promise<Projects> {
     const project = await this.projectsRepository.findOne({ where: { project_id } });
     if (!project) {
         throw new NotFoundException(`Project with ID ${project_id} not found`);
+    }
+    if (project.user.user_id !== tokenUserId) {
+        throw new UnauthorizedException('Access denied: Not your data.');
     }
     return project
     }
@@ -132,10 +135,17 @@ export class ProjectsService {
     }
     }
 
-    async updateOne(project_id: string, updateProjectsDto: UpdateProjectDto): Promise<Projects> {
+    async updateOne(
+        project_id: string, 
+        updateProjectsDto: UpdateProjectDto, 
+        tokenUserId: string
+    ): Promise<Projects> {
     const project = await this.projectsRepository.findOne({ where: { project_id } });
     if (!project) {
         throw new NotFoundException(`Project with ID ${project_id} not found`);
+    }
+    if (project.user.user_id !== tokenUserId) {
+        throw new UnauthorizedException('Access denied: Not your data.');
     }
     await this.projectsRepository.update({ project_id }, updateProjectsDto);
     const updatedProject = await this.projectsRepository.findOne({ where: { project_id } });
@@ -143,10 +153,16 @@ export class ProjectsService {
     return updatedProject;
     }
 
-    async softDeleteOne(project_id: string): Promise<Projects> {
+    async softDeleteOne(
+        project_id: string,
+        tokenUserId: string
+    ): Promise<Projects> {
     const project = await this.projectsRepository.findOne({ where: { project_id } });
     if (!project) {
         throw new NotFoundException(`Project with ID ${project_id} not found`);
+    }
+    if (project.user.user_id !== tokenUserId) {
+        throw new UnauthorizedException('Access denied: Not your data.');
     }
     project.deletedAt = new Date();
     await this.projectsRepository.save(project);
@@ -176,7 +192,10 @@ export class ProjectsService {
     return updatedProject;
     }
 
-    async hardDeleteOne(project_id: string): Promise<{
+    async hardDeleteOne(
+        project_id: string, 
+        tokenUserId: string
+    ): Promise<{
     status: string;
     message: string;
     data?: Projects;
@@ -189,6 +208,9 @@ export class ProjectsService {
         });
         if (!project) {
             throw new NotFoundException(`Project with ID ${project_id} not found`);
+        }
+        if (project.user.user_id !== tokenUserId) {
+            throw new UnauthorizedException('Access denied: Not your data.');
         }
         await this.projectsRepository.remove(project);
         return {

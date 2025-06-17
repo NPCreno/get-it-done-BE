@@ -1,8 +1,7 @@
-import { Controller, Post, Patch, Delete, Get, Body, Param, NotFoundException, UseGuards } from '@nestjs/common';
+import { Controller, Post, Patch, Delete, Get, Body, Param, NotFoundException, UseGuards, Req, UnauthorizedException } from '@nestjs/common';
 import { UserService } from './user.service';
 import { User } from './models/user.interface';
 import { catchError, map, Observable, of } from 'rxjs';
-import { Users } from './models/user.entity';
 import { CreateUserDto } from './dto/create-user-dto';
 import { UpdateUserDto } from './dto/update-user-dto';
 import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
@@ -45,10 +44,14 @@ export class UserController {
 
     @UseGuards(AuthorizeGuard)
     @Get('get/:id')
-    findOne(@Param('user_id') user_id: string): Observable<User> {
-    return this.userService.findOne(user_id).pipe(
+    findOne(@Param('id') id: string, @Req() req: Request): Observable<User> {
+    const tokenUserId = req['user'];
+    if (tokenUserId.user.user_id !== id) {
+        throw new UnauthorizedException('Access denied: Not your data.');
+    }
+    return this.userService.findOne(id).pipe(
         map(user => {
-        if (!user) throw new NotFoundException(`User with user_id ${user_id} not found`);
+        if (!user) throw new NotFoundException(`User with user_id ${id} not found`);
         return user;
         })
     );
@@ -61,12 +64,21 @@ export class UserController {
     }
 
     @Delete(':id')
-    softDeleteOne(@Param('id')id: string):Observable<User> {
+    softDeleteOne(@Param('id')id: string, @Req() req: Request):Observable<User> {
+        const tokenUserId = req['user'];
+        if (tokenUserId.user.user_id !== id) {
+            throw new UnauthorizedException('Access denied: Not your data.');
+        }
         return this.userService.softDeleteOne(Number(id));
     }
 
     @Delete(':id/hard')
-    hardDeleteOne(@Param('id')id: string):Observable<User> {
+    @UseGuards(AuthorizeGuard)
+    hardDeleteOne(@Param('id')id: string, @Req() req: Request):Observable<User> {
+        const tokenUserId = req['user'];
+        if (tokenUserId.user.user_id !== id) {
+            throw new UnauthorizedException('Access denied: Not your data.');
+        }
         return this.userService.hardDeleteOne(Number(id));
     }
     
@@ -74,8 +86,13 @@ export class UserController {
     @Patch('update/:user_id')
     async update(
     @Param('user_id') user_id: string,
-    @Body() updateUserDto: UpdateUserDto
+    @Body() updateUserDto: UpdateUserDto,
+    @Req() req: Request
     ): Promise<User> {
+    const tokenUserId = req['user'];
+    if (tokenUserId.user.user_id !== user_id) {
+        throw new UnauthorizedException('Access denied: Not your data.');
+    }
     return this.userService.updateOne(user_id, updateUserDto);
     }
 }
