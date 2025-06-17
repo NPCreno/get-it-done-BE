@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, IsNull, Repository } from 'typeorm';
@@ -216,6 +217,7 @@ export class TaskService implements OnModuleInit {
   }
 
   async getTasksByProj(
+    tokenUserId: string,
     project_id: string,
     startDate?: string,
     endDate?: string,
@@ -227,7 +229,9 @@ export class TaskService implements OnModuleInit {
       if (!project) {
         throw new NotFoundException(`Project with ID ${project_id} not found`);
       }
-
+      if (tokenUserId !== project.user_id) {
+        throw new UnauthorizedException('Access denied: Not your data.');
+      }
       const where: any[] = [{ project: { project_id }, due_date: IsNull() }];
       if (startDate && endDate) {
         where.push({
@@ -261,6 +265,7 @@ export class TaskService implements OnModuleInit {
   async updateOne(
     task_id: string,
     updateTaskDto: UpdateTaskDto,
+    tokenUserId: string,
   ): Promise<
     {
     status: string;
@@ -275,6 +280,9 @@ export class TaskService implements OnModuleInit {
     });
     if (!task) {
       throw new NotFoundException(`Task with ID ${task_id} not found`);
+    }
+    if (tokenUserId !== task.user.user_id) {
+      throw new UnauthorizedException('Access denied: Not your data.');
     }
     await this.taskInstanceRepository.update({ task_id }, updateTaskDto);
     const updatedTask = await this.taskInstanceRepository.findOne({
@@ -294,7 +302,7 @@ export class TaskService implements OnModuleInit {
             };
     }}
 
-  async softDeleteOne(task_id: string): Promise<{
+  async softDeleteOne(task_id: string, tokenUserId: string): Promise<{
     status: string;
     message: string;
     data?: TaskInstance | null;
@@ -305,7 +313,9 @@ export class TaskService implements OnModuleInit {
         where: { task_id },
       });
       if (!task) throw new NotFoundException(`Task with ID ${task_id} not found`);
-
+      if (tokenUserId !== task.user.user_id) {
+        throw new UnauthorizedException('Access denied: Not your data.');
+      }
       await this.taskInstanceRepository.softDelete({ task_id });
 
       const deletedTask = await this.taskInstanceRepository.findOne({
@@ -326,13 +336,16 @@ export class TaskService implements OnModuleInit {
       };
     }
   }
-  async hardDeleteOne(task_id: string): Promise<TaskInstance> {
+  async hardDeleteOne(task_id: string, tokenUserId: string): Promise<TaskInstance> {
     const task = await this.taskInstanceRepository.findOne({
       where: { task_id },
       withDeleted: true,
     });
     if (!task) {
       throw new NotFoundException(`task with ID ${task_id} not found`);
+    }
+    if (tokenUserId !== task.user.user_id) {
+      throw new UnauthorizedException('Access denied: Not your data.');
     }
     await this.taskInstanceRepository.remove(task);
     return task;
