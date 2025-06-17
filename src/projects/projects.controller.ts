@@ -41,10 +41,7 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
     @Get(':project_id')
     findOne(@Param('project_id') project_id: string, @Req() req: Request): Promise<Projects> {
       const tokenUserId = req['user'];
-      if (tokenUserId.user.user_id !== project_id) {
-          throw new UnauthorizedException('Access denied: Not your data.');
-      }
-      return this.projectsService.findOne(project_id);
+      return this.projectsService.findOne(project_id, tokenUserId.user.user_id);
     }
   
     @UseGuards(AuthorizeGuard)
@@ -70,20 +67,14 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
       @Req() req: Request,
     ): Promise<Projects> {
       const tokenUserId = req['user'];
-      if (tokenUserId.user.user_id !== project_id) {
-          throw new UnauthorizedException('Access denied: Not your data.');
-      }
-      return this.projectsService.updateOne(project_id, updateProjectDto);
+      return this.projectsService.updateOne(project_id, updateProjectDto, tokenUserId.user.user_id);
     }
   
     @UseGuards(AuthorizeGuard)
     @Delete(':project_id')
     async softDeleteOne(@Param('id') project_id: string, @Req() req: Request): Promise<Projects> {
       const tokenUserId = req['user'];
-      if (tokenUserId.user.user_id !== project_id) {
-          throw new UnauthorizedException('Access denied: Not your data.');
-      }
-      return this.projectsService.softDeleteOne(project_id);
+      return this.projectsService.softDeleteOne(project_id, tokenUserId.user.user_id);
     }
   
     @UseGuards(AuthorizeGuard)
@@ -94,11 +85,8 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
         data?: Projects;
         error?: any;
       }> {
-      const tokenUserId = req['user'];
-      if (tokenUserId.user.user_id !== project_id) {
-          throw new UnauthorizedException('Access denied: Not your data.');
-      }
-    return this.projectsService.hardDeleteOne(project_id);
+    const tokenUserId = req['user'];
+    return this.projectsService.hardDeleteOne(project_id, tokenUserId.user.user_id);
     }
   }
   
