@@ -16,7 +16,6 @@ export class UserController {
         return this.userService.createUser(userDto).pipe(
             map((user: User) => user), 
             catchError(err => of({error: err.message}))
-
         );
     }
 
@@ -59,27 +58,34 @@ export class UserController {
     
     @UseGuards(AuthorizeGuard)
     @Get('getAll')
-    findAll(){
+    findAll(@Req() req: Request): Observable<User[]> {
+        const tokenUserId = req['user'];
+        if (tokenUserId.user.role !== 'admin') {
+          throw new UnauthorizedException('Access denied: Admin only.');
+        }
         return this.userService.findAll();
     }
-
+    
+    @UseGuards(AuthorizeGuard)
     @Delete(':id')
-    softDeleteOne(@Param('id')id: string, @Req() req: Request):Observable<User> {
+    softDeleteOne(@Param('id')user_id: string, @Req() req: Request):Promise<{
+            status: string;
+            message: string;
+            error?: any;
+          }> {
         const tokenUserId = req['user'];
-        if (tokenUserId.user.user_id !== id) {
-            throw new UnauthorizedException('Access denied: Not your data.');
-        }
-        return this.userService.softDeleteOne(Number(id));
+        return this.userService.softDeleteOne(user_id, tokenUserId.user.user_id);
     }
 
-    @Delete(':id/hard')
     @UseGuards(AuthorizeGuard)
-    hardDeleteOne(@Param('id')id: string, @Req() req: Request):Observable<User> {
+    @Delete(':id/hard')
+    hardDeleteOne(@Param('id')user_id: string, @Req() req: Request):Promise<{
+            status: string;
+            message: string;
+            error?: any;
+          }> {
         const tokenUserId = req['user'];
-        if (tokenUserId.user.user_id !== id) {
-            throw new UnauthorizedException('Access denied: Not your data.');
-        }
-        return this.userService.hardDeleteOne(Number(id));
+        return this.userService.hardDeleteOne(user_id, tokenUserId.user.user_id);
     }
     
     @UseGuards(AuthorizeGuard)
