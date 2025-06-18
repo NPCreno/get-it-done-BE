@@ -153,43 +153,54 @@ export class ProjectsService {
     return updatedProject;
     }
 
-    async softDeleteOne(
-        project_id: string,
-        tokenUserId: string
-    ): Promise<Projects> {
-    const project = await this.projectsRepository.findOne({ where: { project_id } });
-    if (!project) {
+    async softDeleteOne(project_id: string,tokenUserId: string): 
+    Promise<{
+        status: string;
+        message: string;
+        error?: any;
+    }> {
+    try {
+        const project = await this.projectsRepository.findOne({ where: { project_id } });
+        if (!project) {
+            throw new NotFoundException(`Project with ID ${project_id} not found`);
+        }
+        if (project.user.user_id !== tokenUserId) {
+            throw new UnauthorizedException('Access denied: Not your data.');
+        }
+        project.deletedAt = new Date();
+        await this.projectsRepository.save(project);
+
+        // Soft-delete related TaskTemplates
+        await this.taskTemplateRepository
+        .createQueryBuilder()
+        .softDelete()
+        .where("project_id = :project_id", { project_id })
+        .execute();
+        console.log("deleting related task templates")
+
+        // Soft-delete related TaskInstances
+        await this.taskInstanceRepository
+        .createQueryBuilder()
+        .softDelete()
+        .where("project_id = :project_id", { project_id })
+        .execute();
+        console.log("deleting related task instances")
+
+        const updatedProject = await this.projectsRepository.findOne({
+            where: { project_id },
+            withDeleted: true
+        });
+
+        if (!updatedProject) throw new NotFoundException(`Updated user not found`);
+        return {
+                status: 'success',
+                message: `Project with ID ${project_id} soft deleted successfully`,
+                error: null
+        };
+    } catch (error) {
+        console.error("Error during soft delete:", error);
         throw new NotFoundException(`Project with ID ${project_id} not found`);
     }
-    if (project.user.user_id !== tokenUserId) {
-        throw new UnauthorizedException('Access denied: Not your data.');
-    }
-    project.deletedAt = new Date();
-    await this.projectsRepository.save(project);
-
-    // Soft-delete related TaskTemplates
-    await this.taskTemplateRepository
-    .createQueryBuilder()
-    .softDelete()
-    .where("project_id = :project_id", { project_id })
-    .execute();
-    console.log("deleting related task templates")
-
-    // Soft-delete related TaskInstances
-    await this.taskInstanceRepository
-    .createQueryBuilder()
-    .softDelete()
-    .where("project_id = :project_id", { project_id })
-    .execute();
-    console.log("deleting related task instances")
-
-    const updatedProject = await this.projectsRepository.findOne({
-        where: { project_id },
-        withDeleted: true
-    });
-
-    if (!updatedProject) throw new NotFoundException(`Updated user not found`);
-    return updatedProject;
     }
 
     async hardDeleteOne(
@@ -198,7 +209,6 @@ export class ProjectsService {
     ): Promise<{
     status: string;
     message: string;
-    data?: Projects;
     error?: any;
     }> {
     try {
@@ -216,7 +226,6 @@ export class ProjectsService {
         return {
             status: 'success',
             message: 'Project deleted successfully',
-            data: project,
             };
     }catch (error) {
         return {

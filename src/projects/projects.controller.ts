@@ -23,17 +23,26 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
   
     @UseGuards(AuthorizeGuard)
     @Get('getAll')
-    findAll() {
+    findAll( @Req() req: Request): Promise<Projects[]> {
+      const tokenUserId = req['user'];
+      if (tokenUserId.user.role !== 'admin') {
+          throw new UnauthorizedException('Access denied: Admin only.');
+        }
       return this.projectsService.findAll();
     }
   
+    @UseGuards(AuthorizeGuard)
     @Get('getAll/:user_id')
-    findAllForUser(@Param('user_id') user_id: string): Promise<{
+    findAllForUser(@Param('user_id') user_id: string, @Req() req: Request): Promise<{
         status: string;
         message: string;
         data?: SanitizedProject[];
         error?: any;
       }> {
+      const tokenUserId = req['user'];
+      if (tokenUserId.user.user_id !== user_id) {
+          throw new UnauthorizedException('Access denied: Not your data.');
+        }
     return this.projectsService.findAllForUser(user_id);
     }
 
@@ -72,7 +81,11 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
   
     @UseGuards(AuthorizeGuard)
     @Delete(':project_id')
-    async softDeleteOne(@Param('id') project_id: string, @Req() req: Request): Promise<Projects> {
+    async softDeleteOne(@Param('id') project_id: string, @Req() req: Request): Promise<{
+        status: string;
+        message: string;
+        error?: any;
+    }> {
       const tokenUserId = req['user'];
       return this.projectsService.softDeleteOne(project_id, tokenUserId.user.user_id);
     }
@@ -82,7 +95,6 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
     async hardDeleteOne(@Param('id') project_id: string, @Req() req: Request): Promise<{
         status: string;
         message: string;
-        data?: Projects;
         error?: any;
       }> {
     const tokenUserId = req['user'];

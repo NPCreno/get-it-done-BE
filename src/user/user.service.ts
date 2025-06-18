@@ -77,22 +77,57 @@ export class UserService {
       );
     }
 
-    softDeleteOne(id: number): Observable<any> {
-        const timestamp = new Date(); // current timestamp
-      
-        return from(
-          this.userRepository.update(id, { deletedAt: timestamp })
-        ).pipe(
-          map(() => ({ message: 'User soft-deleted successfully', deletedAt: timestamp })),
-          catchError((error) => {
-            console.error('Soft delete failed:', error);
-            return of({ message: 'Failed to soft-delete user', error });
-          })
-        );
-      }
+    async softDeleteOne(user_id: string, tokenUserId: string): Promise<{
+        status: string;
+        message: string;
+        error?: any;
+      }> {
+        try {
+          const user = await this.userRepository.findOne({ where: { user_id } });
+        if (!user) {
+            throw new NotFoundException(`User with ID ${user_id} not found`);
+        }
+        if (user.user_id !== tokenUserId) {
+            throw new UnauthorizedException('Access denied: Not your data.');
+        }
+        await this.userRepository.softDelete({ user_id });
+        const updatedUser = await this.userRepository.findOne({
+            where: { user_id },
+            withDeleted: true
+        });
+        if (!updatedUser) throw new NotFoundException(`Updated user not found`);
+        return {
+            status: 'success',
+            message: `User with ID ${user_id} soft deleted successfully`,
+            error: null
+        };
+        } catch (error) {
+          throw new InternalServerErrorException('Failed to soft delete user');
+        }
+    }
 
-    hardDeleteOne(id: number):  Observable<any>{
-        return from(this.userRepository.delete(id));
+    async hardDeleteOne(user_id: string, tokenUserId: string): Promise<{
+        status: string;
+        message: string;
+        error?: any;
+      }> {
+        try {
+          const user = await this.userRepository.findOne({ where: { user_id } });
+        if (!user) {
+            throw new NotFoundException(`User with ID ${user_id} not found`);
+        }
+        if (user.user_id !== tokenUserId) {
+            throw new UnauthorizedException('Access denied: Not your data.');
+        }
+        await this.userRepository.delete({ user_id });
+        return {
+            status: 'success',
+            message: `User with ID ${user_id} permanently deleted`,
+            error: null
+        };
+        } catch (error) {
+          throw new InternalServerErrorException('Failed to delete user');
+        }
     }
 
 
