@@ -61,11 +61,13 @@ export class TaskService implements OnModuleInit {
 
       // find project_id
       const project_id = taskDto?.project_id;
-      const projectExists = await this.projectsRepository.findOne({
-        where: { project_id },
-      });
-      if (!projectExists) {
-        throw new NotFoundException(`Project with ID ${project_id} not found`);
+      if(project_id !== undefined){
+        const projectExists = await this.projectsRepository.findOne({
+          where: { project_id },
+        });
+        if (!projectExists) {
+          throw new NotFoundException(`Project with ID ${project_id} not found`);
+        }
       }
 
       let task_id: string;
@@ -276,8 +278,19 @@ export class TaskService implements OnModuleInit {
   > {
     try {
       const task = await this.taskInstanceRepository.findOne({
-      where: { task_id },
-    });
+        where: { task_id },
+        relations: ['user', 'project'],
+        select: {
+          id: true,
+          task_id: true,
+          project: {
+            project_id: true,
+          },
+          user: {
+            user_id: true,
+          }
+        }
+      });
     if (!task) {
       throw new NotFoundException(`Task with ID ${task_id} not found`);
     }
