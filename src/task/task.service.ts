@@ -61,7 +61,7 @@ export class TaskService implements OnModuleInit {
 
       // find project_id
       const project_id = taskDto?.project_id;
-      if(project_id != undefined){
+      if(project_id !== undefined){
         const projectExists = await this.projectsRepository.findOne({
           where: { project_id },
         });
