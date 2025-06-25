@@ -324,6 +324,17 @@ export class TaskService implements OnModuleInit {
     try {
       const task = await this.taskInstanceRepository.findOne({
         where: { task_id },
+        relations: ['user', 'project'],
+        select: {
+          id: true,
+          task_id: true,
+          project: {
+            project_id: true,
+          },
+          user: {
+            user_id: true,
+          }
+        }
       });
       if (!task) throw new NotFoundException(`Task with ID ${task_id} not found`);
       if (tokenUserId !== task.user.user_id) {
