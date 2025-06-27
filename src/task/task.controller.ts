@@ -126,7 +126,7 @@ export class TaskController {
     return this.taskService.getDashboardData(user_id, startDate, endDate);
   }
 
-  // @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard)
   @Get('completion-trend/:user_id')
   async getCompletionTrend(
     @Req() req: Request,
@@ -134,10 +134,10 @@ export class TaskController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string
   ) {
-    // const tokenUserId = req['user'];
-    // if (tokenUserId.user.user_id !== user_id) {
-    //   throw new UnauthorizedException('Access denied: Not your data.');
-    // }
+    const tokenUserId = req['user'];
+    if (tokenUserId.user.user_id !== user_id) {
+      throw new UnauthorizedException('Access denied: Not your data.');
+    }
     
     if (!startDate || !endDate) {
       throw new BadRequestException('Both startDate and endDate are required');

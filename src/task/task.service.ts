@@ -452,46 +452,41 @@ export class TaskService implements OnModuleInit {
         throw new NotFoundException(`User with ID ${user_id} not found`);
       }
 
-      //Fetch all tasks with status complete and pending within date range
-      const tasks = await this.taskInstanceRepository.find({
+      const tasks = await this.taskInstanceRepository.find({ //Fetch all tasks with status complete and pending within date range
         where: [
           {
             user: { user_id },
             status: 'Complete',
             updatedAt: Between(new Date(startDate), new Date(endDate))
-          },
-          {
-            user: { user_id },
-            status: 'Pending',
-            createdAt: LessThanOrEqual(new Date(endDate))
           }
         ]
       });
 
-      //initialize the day names from the date range parameters
+      // First, create a map to count completed tasks by date
+      const completedByDate = new Map<string, number>();
+      
+      // Count completed tasks (O(n) where n is number of tasks)
+      tasks.forEach(task => {
+        if (task.status === 'Complete') {
+          const dateStr = task.updatedAt.toISOString().split('T')[0];
+          completedByDate.set(dateStr, (completedByDate.get(dateStr) || 0) + 1);
+        }
+      });
+
+      // Build the result array with pre-counted values (O(m) where m is number of days)
       const result: TaskCompletionTrend[] = [];
       const currentDate = new Date(startDate);
       const endDateObj = new Date(endDate);
+      
       while (currentDate <= endDateObj) {
-        const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'short' });
+        const dateStr = currentDate.toISOString().split('T')[0];
         result.push({
-          day: dayName,
-          date: currentDate.toISOString().split('T')[0],
-          completed: 0,
+          day: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
+          date: dateStr,
+          completed: completedByDate.get(dateStr) || 0,
         });
         currentDate.setDate(currentDate.getDate() + 1);
       }
-
-      tasks.forEach(task => {
-        if (task.status === 'Complete') {
-          // For completed tasks, count them on the day they were completed
-          const dateStr = task.updatedAt.toISOString().split('T')[0];
-          const dayData = result.find(d => d.date === dateStr);
-          if (dayData) {
-            dayData.completed++;
-          }
-        }
-      });
       const resultCleanup = result.map(({ date, ...rest }) => rest);
       return {
         status: 'success',
