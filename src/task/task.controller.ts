@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -123,5 +124,41 @@ export class TaskController {
       throw new UnauthorizedException('Access denied: Not your data.');
     }
     return this.taskService.getDashboardData(user_id, startDate, endDate);
+  }
+
+  @UseGuards(AuthorizeGuard)
+  @Get('completion-trend/:user_id')
+  async getCompletionTrend(
+    @Req() req: Request,
+    @Param('user_id') user_id: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string
+  ) {
+    const tokenUserId = req['user'];
+    if (tokenUserId.user.user_id !== user_id) {
+      throw new UnauthorizedException('Access denied: Not your data.');
+    }
+    
+    if (!startDate || !endDate) {
+      throw new BadRequestException('Both startDate and endDate are required');
+    }
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new BadRequestException('Invalid date format');
+    }
+    
+    if (start > end) {
+      throw new BadRequestException('startDate must be before endDate');
+    }
+    
+    const data = await this.taskService.getTaskCompletionTrend(
+      user_id,
+      startDate,
+      endDate
+    );
+    return data;
   }
 }

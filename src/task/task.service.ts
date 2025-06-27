@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, IsNull, Repository } from 'typeorm';
+import { Between, IsNull, LessThanOrEqual, Repository } from 'typeorm';
 import { TaskInstance } from './models/taskInstance.entity';
 import { TaskTemplate } from './models/taskTemplate.entity';
 import { CreateTaskDto } from './dto/create-task-dto';
@@ -16,6 +16,7 @@ import { TaskGeneratorService } from './taskGenerator.service';
 import { OnModuleInit } from '@nestjs/common';
 import { UpdateTaskDto } from './dto/update-task-dto';
 import { IDashboardData } from './interfaces/dashboardData';
+import { TaskCompletionTrend } from './interfaces/taskCompletionTrend';
 @Injectable()
 export class TaskService implements OnModuleInit {
   constructor(
@@ -324,6 +325,17 @@ export class TaskService implements OnModuleInit {
     try {
       const task = await this.taskInstanceRepository.findOne({
         where: { task_id },
+        relations: ['user', 'project'],
+        select: {
+          id: true,
+          task_id: true,
+          project: {
+            project_id: true,
+          },
+          user: {
+            user_id: true,
+          }
+        }
       });
       if (!task) throw new NotFoundException(`Task with ID ${task_id} not found`);
       if (tokenUserId !== task.user.user_id) {
@@ -426,4 +438,67 @@ export class TaskService implements OnModuleInit {
     }
   }
 
+  async getTaskCompletionTrend(
+    user_id:string, 
+    startDate: string, 
+    endDate: string):Promise<{
+    status:string;
+    message:string;
+    data?:TaskCompletionTrend[];
+    error?:string}>{
+    try {
+      const user = await this.usersRepository.findOne({ where: { user_id } });
+      if (!user) {
+        throw new NotFoundException(`User with ID ${user_id} not found`);
+      }
+
+      const tasks = await this.taskInstanceRepository.find({ //Fetch all tasks with status complete and pending within date range
+        where: [
+          {
+            user: { user_id },
+            status: 'Complete',
+            updatedAt: Between(new Date(startDate), new Date(endDate))
+          }
+        ]
+      });
+
+      // First, create a map to count completed tasks by date
+      const completedByDate = new Map<string, number>();
+      
+      // Count completed tasks (O(n) where n is number of tasks)
+      tasks.forEach(task => {
+        if (task.status === 'Complete') {
+          const dateStr = task.updatedAt.toISOString().split('T')[0];
+          completedByDate.set(dateStr, (completedByDate.get(dateStr) || 0) + 1);
+        }
+      });
+
+      // Build the result array with pre-counted values (O(m) where m is number of days)
+      const result: TaskCompletionTrend[] = [];
+      const currentDate = new Date(startDate);
+      const endDateObj = new Date(endDate);
+      
+      while (currentDate <= endDateObj) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        result.push({
+          day: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
+          date: dateStr,
+          completed: completedByDate.get(dateStr) || 0,
+        });
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      const resultCleanup = result.map(({ date, ...rest }) => rest);
+      return {
+        status: 'success',
+        message: 'Task completion trend retrieved successfully',
+        data: resultCleanup,
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to fetch task completion trend',
+        error: error.message || error,
+      };
+    }
+  }
 }
