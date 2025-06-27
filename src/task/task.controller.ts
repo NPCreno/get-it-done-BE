@@ -142,7 +142,18 @@ export class TaskController {
     if (!startDate || !endDate) {
       throw new BadRequestException('Both startDate and endDate are required');
     }
-
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new BadRequestException('Invalid date format');
+    }
+    
+    if (start > end) {
+      throw new BadRequestException('startDate must be before endDate');
+    }
+    
     const data = await this.taskService.getTaskCompletionTrend(
       user_id,
       startDate,
