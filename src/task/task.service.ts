@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, IsNull, Repository } from 'typeorm';
+import { Between, IsNull, LessThanOrEqual, Repository } from 'typeorm';
 import { TaskInstance } from './models/taskInstance.entity';
 import { TaskTemplate } from './models/taskTemplate.entity';
 import { CreateTaskDto } from './dto/create-task-dto';
@@ -16,6 +16,7 @@ import { TaskGeneratorService } from './taskGenerator.service';
 import { OnModuleInit } from '@nestjs/common';
 import { UpdateTaskDto } from './dto/update-task-dto';
 import { IDashboardData } from './interfaces/dashboardData';
+import { TaskCompletionTrend } from './interfaces/taskCompletionTrend';
 @Injectable()
 export class TaskService implements OnModuleInit {
   constructor(
@@ -437,4 +438,72 @@ export class TaskService implements OnModuleInit {
     }
   }
 
+  async getTaskCompletionTrend(
+    user_id:string, 
+    startDate: string, 
+    endDate: string):Promise<{
+    status:string;
+    message:string;
+    data?:TaskCompletionTrend[];
+    error?:string}>{
+    try {
+      const user = await this.usersRepository.findOne({ where: { user_id } });
+      if (!user) {
+        throw new NotFoundException(`User with ID ${user_id} not found`);
+      }
+
+      //Fetch all tasks with status complete and pending within date range
+      const tasks = await this.taskInstanceRepository.find({
+        where: [
+          {
+            user: { user_id },
+            status: 'Complete',
+            updatedAt: Between(new Date(startDate), new Date(endDate))
+          },
+          {
+            user: { user_id },
+            status: 'Pending',
+            createdAt: LessThanOrEqual(new Date(endDate))
+          }
+        ]
+      });
+
+      //initialize the day names from the date range parameters
+      const result: TaskCompletionTrend[] = [];
+      const currentDate = new Date(startDate);
+      const endDateObj = new Date(endDate);
+      while (currentDate <= endDateObj) {
+        const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'short' });
+        result.push({
+          day: dayName,
+          date: currentDate.toISOString().split('T')[0],
+          completed: 0,
+        });
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      tasks.forEach(task => {
+        if (task.status === 'Complete') {
+          // For completed tasks, count them on the day they were completed
+          const dateStr = task.updatedAt.toISOString().split('T')[0];
+          const dayData = result.find(d => d.date === dateStr);
+          if (dayData) {
+            dayData.completed++;
+          }
+        }
+      });
+      const resultCleanup = result.map(({ date, ...rest }) => rest);
+      return {
+        status: 'success',
+        message: 'Task completion trend retrieved successfully',
+        data: resultCleanup,
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to fetch task completion trend',
+        error: error.message || error,
+      };
+    }
+  }
 }
