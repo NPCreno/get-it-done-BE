@@ -17,6 +17,7 @@ import { OnModuleInit } from '@nestjs/common';
 import { UpdateTaskDto } from './dto/update-task-dto';
 import { IDashboardData } from './interfaces/dashboardData';
 import { TaskCompletionTrend } from './interfaces/taskCompletionTrend';
+import { TaskDistribution } from './interfaces/taskDistribution';
 @Injectable()
 export class TaskService implements OnModuleInit {
   constructor(
@@ -497,6 +498,74 @@ export class TaskService implements OnModuleInit {
       return {
         status: 'error',
         message: 'Failed to fetch task completion trend',
+        error: error.message || error,
+      };
+    }
+  }
+
+  async getTaskDistribution(
+    user_id: string,
+    month: string,
+    year: string
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: TaskDistribution[];
+    error?: string;
+  }> {
+    try {
+      const user = await this.usersRepository.findOne({ where: { user_id } });
+      if (!user) {
+        throw new NotFoundException(`User with ID ${user_id} not found`);
+      }
+
+      // Create date objects for the start and end of the target month
+      const targetDate = new Date(`${year}-${month}-01`);
+      const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+      const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
+
+      // Fetch projects with their completed tasks for the target month
+      const projects = await this.projectsRepository
+        .createQueryBuilder('project')
+        .leftJoinAndSelect(
+          'project.taskInstances', 
+          'task',
+          'task.status = :status AND task.updatedAt BETWEEN :startOfMonth AND :endOfMonth',
+          { 
+            status: 'Complete',
+            startOfMonth,
+            endOfMonth 
+          }
+        )
+        .where('project.user_id = :user_id', { user_id })
+        .andWhere('project.createdAt <= :endOfMonth', { endOfMonth })
+        .andWhere('(project.deletedAt IS NULL OR project.deletedAt >= :startOfMonth)', { startOfMonth })
+        .select([
+          'project.id',
+          'project.project_id',
+          'project.title',
+          'project.color',
+          'task.id', // Only select task.id for counting
+          'task.status'
+        ])
+        .getMany();
+
+      // Transform projects to match the TaskDistribution interface
+      const distributionData = projects.map(project => ({
+        title: project.title || 'Untitled Project',
+        value: project.taskInstances?.filter(task => task.status === 'Complete').length || 0,
+        fill: project.color || '#808080', // Default to gray if no color is set
+      }));
+
+      return {
+        status: 'success',
+        message: 'Task distribution retrieved successfully',
+        data: distributionData,
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to fetch project distribution',
         error: error.message || error,
       };
     }
