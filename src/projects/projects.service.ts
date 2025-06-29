@@ -71,7 +71,7 @@ export class ProjectsService {
         sanitizedProjects.push({
             ...rest,
             task_count: tasks.length,
-            task_completed: tasks.filter((task) => task.status === 'Complete').length,
+            task_completed: tasks.filter((task) => task.status?.toLowerCase() === 'complete').length,
         });
         }
 
