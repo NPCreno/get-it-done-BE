@@ -440,59 +440,78 @@ export class TaskService implements OnModuleInit {
   }
 
   async getTaskCompletionTrend(
-    user_id:string, 
+    user_id: string, 
     startDate: string, 
-    endDate: string):Promise<{
-    status:string;
-    message:string;
-    data?:TaskCompletionTrend[];
-    error?:string}>{
+    endDate: string
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: TaskCompletionTrend[];
+    error?: string;
+  }> {
     try {
+      // Validate user exists
       const user = await this.usersRepository.findOne({ where: { user_id } });
       if (!user) {
         throw new NotFoundException(`User with ID ${user_id} not found`);
       }
 
-      const tasks = await this.taskInstanceRepository.find({ //Fetch all tasks with status complete and pending within date range
-        where: [
-          {
-            user: { user_id },
-            status: 'Complete',
-            updatedAt: Between(new Date(startDate), new Date(endDate))
-          }
-        ]
-      });
-
-      // First, create a map to count completed tasks by date
-      const completedByDate = new Map<string, number>();
+      // Parse dates and set proper time boundaries
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0); // Start of day
       
-      // Count completed tasks (O(n) where n is number of tasks)
-      tasks.forEach(task => {
-        if (task.status === 'Complete') {
-          const dateStr = task.updatedAt.toISOString().split('T')[0];
-          completedByDate.set(dateStr, (completedByDate.get(dateStr) || 0) + 1);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // End of day
+
+      // Fetch completed tasks within the date range
+      const tasks = await this.taskInstanceRepository.find({
+        where: {
+          user: { user_id },
+          status: 'Complete',
+          updatedAt: Between(start, end)
+        },
+        order: {
+          updatedAt: 'ASC'
         }
       });
 
-      // Build the result array with pre-counted values (O(m) where m is number of days)
-      const result: TaskCompletionTrend[] = [];
-      const currentDate = new Date(startDate);
-      const endDateObj = new Date(endDate);
+      // Initialize a map for all dates in the range with 0 counts
+      const dateMap = new Map<string, { completed: number; day: string }>();
+      const currentDate = new Date(start);
       
-      while (currentDate <= endDateObj) {
+      // Initialize all dates in range with 0 counts and day names
+      while (currentDate <= end) {
         const dateStr = currentDate.toISOString().split('T')[0];
-        result.push({
-          day: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
-          date: dateStr,
-          completed: completedByDate.get(dateStr) || 0,
-        });
+        const dayOfWeek = currentDate.toLocaleDateString('en-US', { weekday: 'short' });
+        dateMap.set(dateStr, { completed: 0, day: dayOfWeek });
         currentDate.setDate(currentDate.getDate() + 1);
       }
-      const resultCleanup = result.map(({ date, ...rest }) => rest);
+
+      // Count completed tasks by date
+      tasks.forEach(task => {
+        if (task.updatedAt) {
+          const dateStr = task.updatedAt.toISOString().split('T')[0];
+          const dateData = dateMap.get(dateStr) || { completed: 0, day: '' };
+          dateMap.set(dateStr, {
+            ...dateData,
+            completed: dateData.completed + 1
+          });
+        }
+      });
+
+      // Convert map to array of TaskCompletionTrend
+      const result = Array.from(dateMap.entries())
+        .sort(([dateA], [dateB]) => new Date(dateA).getTime() - new Date(dateB).getTime())
+        .map(([date, { completed, day }]) => ({
+          date,
+          day,
+          completed
+        }));
+
       return {
         status: 'success',
         message: 'Task completion trend retrieved successfully',
-        data: resultCleanup,
+        data: result
       };
     } catch (error) {
       return {
