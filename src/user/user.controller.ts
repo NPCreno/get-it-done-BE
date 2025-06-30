@@ -12,11 +12,13 @@ export class UserController {
     constructor(private userService: UserService){}
 
     @Post('create')
-    create(@Body()userDto: CreateUserDto): Observable<User | Object>{
-        return this.userService.createUser(userDto).pipe(
-            map((user: User) => user), 
-            catchError(err => of({error: err.message}))
-        );
+    create(@Body()userDto: CreateUserDto): Promise<{
+        status: string;
+        message: string;
+        data?: User | null;
+        error?: any;
+    }>{
+        return this.userService.createUser(userDto);
     }
 
     @Post('loginEmail')

@@ -11,4 +11,5 @@ updatedAt: Date;
 deletedAt: Date;
 user_id: string;
 task_count: number;
+task_completed: number;
 }

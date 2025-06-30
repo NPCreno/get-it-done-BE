@@ -20,40 +20,73 @@ export class UserService {
       return 'user-' + randomNumber.toString().padStart(9, '0');
     }
 
-    createUser(userDto: CreateUserDto): Observable<User> {
-      return this.authService.hashPassword(userDto.password).pipe(
-        switchMap((passwordHash: string) => {
-          const user_id = this.generateUserId();
-          const newUser = this.userRepository.create({  // Modify userDto to include the hashed password
-            ...userDto, 
-            password: passwordHash,  // Replace the plain password with the hashed one
-            role: 'standard',
-            user_id,
-            status: 'active',
-          });
+    async createUser(userDto: CreateUserDto): Promise<{
+      status: string;
+      message: string;
+      data?: User | null;
+      error?: any;
+    }> {
+      try {
+        // Ensure password is a primitive string
+        const password = String(userDto.password);
+        
+        // Hash the password
+        const passwordHash = await this.authService.hashPassword(password).toPromise();
+        if (!passwordHash) {
+          throw new Error('Failed to hash password');
+        }
 
+        const user_id = this.generateUserId();
+        
+        // Create a new user instance with explicit typing
+        const newUser = this.userRepository.create({
+          fullname: String(userDto.fullname),
+          username: String(userDto.username),
+          email: String(userDto.email).toLowerCase(),
+          password: String(passwordHash),  // Ensure it's a primitive string
+          tier: userDto.tier || 'free',
+          role: 'standard',
+          user_id,
+          status: 'active',
+        });
+    
         // Save the new user with the hashed password
-        return from(this.userRepository.save(newUser)).pipe(
-          map((user: User) => { 
-            const {password, ...result} = user;  //Don't include password in the response
-            return result;
-          }),
-          catchError((error) => {
-            if (error.code === '23505') { // Postgres unique violation
-              const detail = error.detail || '';
-              if (detail.includes('username')) {
-                return throwError(() => new ConflictException('Username already exists.'));
-              }
-              if (detail.includes('email')) {
-                return throwError(() => new ConflictException('Email already exists.'));
-              }
-              return throwError(() => new ConflictException('Duplicate entry.'));
-            }
-            return throwError(() => new InternalServerErrorException('Failed to create user.'));
-            })
-          );
-        })
-      );
+        const savedUser = await this.userRepository.save(newUser);
+        
+        // Remove password from the returned object
+        const { password: _, ...userWithoutPassword } = savedUser;
+    
+        return {
+          status: 'success',
+          message: 'User created successfully',
+          data: userWithoutPassword
+        };
+      } catch (error) {
+        console.error('Error creating user:', error);
+        
+        if (error.code === '23505') { // Postgres unique violation
+          const detail = error.detail || '';
+          let message = 'Duplicate entry.';
+          
+          if (detail.includes('username')) {
+            message = 'Username already exists.';
+          } else if (detail.includes('email')) {
+            message = 'Email already exists.';
+          }
+    
+          return {
+            status: 'error',
+            message,
+            error: { message }
+          };
+        }
+    
+        return {
+          status: 'error',
+          message: 'Failed to create user.',
+          error: { message: error.message || 'Internal server error' }
+        };
+      }
     }
 
     findOne(user_id: string): Observable<User | null> {

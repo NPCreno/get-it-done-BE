@@ -161,4 +161,29 @@ export class TaskController {
     );
     return data;
   }
+
+    @UseGuards(AuthorizeGuard)
+    @Get('task-distribution/:user_id')
+    async getTaskDistribution(
+      @Req() req: Request,
+      @Param('user_id') user_id: string,
+      @Query('month') month: string,
+      @Query('year') year: string
+    ) {
+      const tokenUserId = req['user'];
+      if (tokenUserId.user.user_id !== user_id) {
+        throw new UnauthorizedException('Access denied: Not your data.');
+      }
+      
+      if (!month || !year) {
+        throw new BadRequestException('Both month and year are required');
+      }
+      
+      const data = await this.taskService.getTaskDistribution(
+        user_id,
+        month,
+        year
+      );
+      return data;
+    }
 }

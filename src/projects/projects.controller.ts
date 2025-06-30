@@ -43,7 +43,7 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
       if (tokenUserId.user.user_id !== user_id) {
           throw new UnauthorizedException('Access denied: Not your data.');
         }
-    return this.projectsService.findAllForUser(user_id);
+    return this.projectsService.findAllForUser(user_id, tokenUserId.user.user_id);
     }
 
     @UseGuards(AuthorizeGuard)
