@@ -42,7 +42,7 @@ export class ProjectsService {
     return projects;
     }
     
-    async findAllForUser(user_id: string): Promise<{
+    async findAllForUser(user_id: string, tokenUserId: string): Promise<{
     status: string;
     message: string;
     data?: SanitizedProject[];
@@ -64,13 +64,14 @@ export class ProjectsService {
         for (const project of projects) {
         const startDate = new Date().toISOString();
         const endDate = new Date(new Date().setDate(new Date().getDate() + 1)).toISOString();
-        const tasks = await this.taskService.getTasksByProj(project.project_id, startDate, endDate);
+        const tasks = await this.taskService.getTasksByProj(tokenUserId, project.project_id, startDate, endDate);
 
         const { user, taskInstances, ...rest } = project;
 
         sanitizedProjects.push({
             ...rest,
             task_count: tasks.length,
+            task_completed: tasks.filter((task) => task.status?.toLowerCase() === 'complete').length,
         });
         }
 

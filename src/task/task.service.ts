@@ -17,6 +17,8 @@ import { OnModuleInit } from '@nestjs/common';
 import { UpdateTaskDto } from './dto/update-task-dto';
 import { IDashboardData } from './interfaces/dashboardData';
 import { TaskCompletionTrend } from './interfaces/taskCompletionTrend';
+import { TaskDistribution } from './interfaces/taskDistribution';
+import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
 @Injectable()
 export class TaskService implements OnModuleInit {
   constructor(
@@ -182,8 +184,14 @@ export class TaskService implements OnModuleInit {
     user_id: string,
     startDate?: string,
     endDate?: string,
-  ): Promise<any[]> {
-    const user = await this.usersRepository.findOne({ where: { user_id } });
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: TaskInstanceResponse[];
+    error?: string;
+  }> {
+    try {
+      const user = await this.usersRepository.findOne({ where: { user_id } });
     if (!user) {
       throw new NotFoundException(`User with ID ${user_id} not found`);
     }
@@ -206,7 +214,7 @@ export class TaskService implements OnModuleInit {
       throw new NotFoundException(`No tasks found for user ID ${user_id}`);
     }
 
-    return data
+    const sortedData = data
       .map(({ user, project, ...rest }) => ({
         ...rest,
         user_id: user.user_id,
@@ -217,6 +225,20 @@ export class TaskService implements OnModuleInit {
         if (a.status !== "Complete" && b.status === "Complete") return -1;
         return 0;
       });
+
+      return {
+        status: 'success',
+        message: 'Tasks fetched successfully',
+        data: sortedData,
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to fetch tasks',
+        error: error?.message || error,
+      };
+    }
+    
   }
 
   async getTasksByProj(
@@ -439,64 +461,151 @@ export class TaskService implements OnModuleInit {
   }
 
   async getTaskCompletionTrend(
-    user_id:string, 
+    user_id: string, 
     startDate: string, 
-    endDate: string):Promise<{
-    status:string;
-    message:string;
-    data?:TaskCompletionTrend[];
-    error?:string}>{
+    endDate: string
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: TaskCompletionTrend[];
+    error?: string;
+  }> {
+    try {
+      // Validate user exists
+      const user = await this.usersRepository.findOne({ where: { user_id } });
+      if (!user) {
+        throw new NotFoundException(`User with ID ${user_id} not found`);
+      }
+
+      // Parse dates and set proper time boundaries
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0); // Start of day
+      
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // End of day
+
+      // Fetch completed tasks within the date range
+      const tasks = await this.taskInstanceRepository.find({
+        where: {
+          user: { user_id },
+          status: 'Complete',
+          updatedAt: Between(start, end)
+        },
+        order: {
+          updatedAt: 'ASC'
+        }
+      });
+
+      // Initialize a map for all dates in the range with 0 counts
+      const dateMap = new Map<string, { completed: number; day: string }>();
+      const currentDate = new Date(start);
+      
+      // Initialize all dates in range with 0 counts and day names
+      while (currentDate <= end) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const dayOfWeek = currentDate.toLocaleDateString('en-US', { weekday: 'short' });
+        dateMap.set(dateStr, { completed: 0, day: dayOfWeek });
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      // Count completed tasks by date
+      tasks.forEach(task => {
+        if (task.updatedAt) {
+          const dateStr = task.updatedAt.toISOString().split('T')[0];
+          const dateData = dateMap.get(dateStr) || { completed: 0, day: '' };
+          dateMap.set(dateStr, {
+            ...dateData,
+            completed: dateData.completed + 1
+          });
+        }
+      });
+
+      // Convert map to array of TaskCompletionTrend
+      const result = Array.from(dateMap.entries())
+        .sort(([dateA], [dateB]) => new Date(dateA).getTime() - new Date(dateB).getTime())
+        .map(([date, { completed, day }]) => ({
+          date,
+          day,
+          completed
+        }));
+
+      return {
+        status: 'success',
+        message: 'Task completion trend retrieved successfully',
+        data: result
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to fetch task completion trend',
+        error: error.message || error,
+      };
+    }
+  }
+
+  async getTaskDistribution(
+    user_id: string,
+    month: string,
+    year: string
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: TaskDistribution[];
+    error?: string;
+  }> {
     try {
       const user = await this.usersRepository.findOne({ where: { user_id } });
       if (!user) {
         throw new NotFoundException(`User with ID ${user_id} not found`);
       }
 
-      const tasks = await this.taskInstanceRepository.find({ //Fetch all tasks with status complete and pending within date range
-        where: [
-          {
-            user: { user_id },
+      // Create date objects for the start and end of the target month
+      const targetDate = new Date(`${year}-${month}-01`);
+      const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+      const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
+
+      // Fetch projects with their completed tasks for the target month
+      const projects = await this.projectsRepository
+        .createQueryBuilder('project')
+        .leftJoinAndSelect(
+          'project.taskInstances', 
+          'task',
+          'task.status = :status AND task.updatedAt BETWEEN :startOfMonth AND :endOfMonth',
+          { 
             status: 'Complete',
-            updatedAt: Between(new Date(startDate), new Date(endDate))
+            startOfMonth,
+            endOfMonth 
           }
-        ]
-      });
+        )
+        .where('project.user_id = :user_id', { user_id })
+        .andWhere('project.createdAt <= :endOfMonth', { endOfMonth })
+        .andWhere('(project.deletedAt IS NULL OR project.deletedAt >= :startOfMonth)', { startOfMonth })
+        .select([
+          'project.id',
+          'project.project_id',
+          'project.title',
+          'project.color',
+          'task.id', // Only select task.id for counting
+          'task.status'
+        ])
+        .getMany();
 
-      // First, create a map to count completed tasks by date
-      const completedByDate = new Map<string, number>();
-      
-      // Count completed tasks (O(n) where n is number of tasks)
-      tasks.forEach(task => {
-        if (task.status === 'Complete') {
-          const dateStr = task.updatedAt.toISOString().split('T')[0];
-          completedByDate.set(dateStr, (completedByDate.get(dateStr) || 0) + 1);
-        }
-      });
+      // Transform projects to match the TaskDistribution interface
+      const distributionData = projects.map(project => ({
+        title: project.title || 'Untitled Project',
+        value: project.taskInstances?.filter(task => task.status === 'Complete').length || 0,
+        fill: project.color || '#808080', // Default to gray if no color is set
+      }));
 
-      // Build the result array with pre-counted values (O(m) where m is number of days)
-      const result: TaskCompletionTrend[] = [];
-      const currentDate = new Date(startDate);
-      const endDateObj = new Date(endDate);
-      
-      while (currentDate <= endDateObj) {
-        const dateStr = currentDate.toISOString().split('T')[0];
-        result.push({
-          day: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
-          date: dateStr,
-          completed: completedByDate.get(dateStr) || 0,
-        });
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-      const resultCleanup = result.map(({ date, ...rest }) => rest);
       return {
         status: 'success',
-        message: 'Task completion trend retrieved successfully',
-        data: resultCleanup,
+        message: 'Task distribution retrieved successfully',
+        data: distributionData,
       };
     } catch (error) {
       return {
         status: 'error',
-        message: 'Failed to fetch task completion trend',
+        message: 'Failed to fetch project distribution',
         error: error.message || error,
       };
     }
