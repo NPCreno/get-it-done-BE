@@ -18,6 +18,7 @@ import { UpdateTaskDto } from './dto/update-task-dto';
 import { IDashboardData } from './interfaces/dashboardData';
 import { TaskCompletionTrend } from './interfaces/taskCompletionTrend';
 import { TaskDistribution } from './interfaces/taskDistribution';
+import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
 @Injectable()
 export class TaskService implements OnModuleInit {
   constructor(
@@ -183,8 +184,14 @@ export class TaskService implements OnModuleInit {
     user_id: string,
     startDate?: string,
     endDate?: string,
-  ): Promise<any[]> {
-    const user = await this.usersRepository.findOne({ where: { user_id } });
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: TaskInstanceResponse[];
+    error?: string;
+  }> {
+    try {
+      const user = await this.usersRepository.findOne({ where: { user_id } });
     if (!user) {
       throw new NotFoundException(`User with ID ${user_id} not found`);
     }
@@ -207,7 +214,7 @@ export class TaskService implements OnModuleInit {
       throw new NotFoundException(`No tasks found for user ID ${user_id}`);
     }
 
-    return data
+    const sortedData = data
       .map(({ user, project, ...rest }) => ({
         ...rest,
         user_id: user.user_id,
@@ -218,6 +225,20 @@ export class TaskService implements OnModuleInit {
         if (a.status !== "Complete" && b.status === "Complete") return -1;
         return 0;
       });
+
+      return {
+        status: 'success',
+        message: 'Tasks fetched successfully',
+        data: sortedData,
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to fetch tasks',
+        error: error?.message || error,
+      };
+    }
+    
   }
 
   async getTasksByProj(
