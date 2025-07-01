@@ -186,4 +186,21 @@ export class TaskController {
       );
       return data;
     }
+
+    @UseGuards(AuthorizeGuard)
+    @Patch('update-task-status/:task_id/status/:status')
+    async updateTaskStatus(
+      @Req() req: Request,
+      @Param('task_id') task_id: string,
+      @Param('status') status: string
+    ) {
+      const tokenUserId = req['user'];
+      
+      const data = await this.taskService.updateTaskStatus(
+        task_id,
+        status,
+        tokenUserId.user.user_id
+      );
+      return data;
+    }
 }

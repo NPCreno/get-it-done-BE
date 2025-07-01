@@ -610,4 +610,35 @@ export class TaskService implements OnModuleInit {
       };
     }
   }
+
+  async updateTaskStatus(task_id: string, status: string, user_id: string){
+    try {
+      const task = await this.taskInstanceRepository.findOne({
+        where: { task_id },
+        relations: ['user'],
+        select: {
+          id: true,
+          task_id: true,
+          user: {
+            user_id: true,
+          }
+        }
+      });
+      if (!task) throw new NotFoundException(`Task with ID ${task_id} not found`);
+      if (user_id !== task.user.user_id) {
+        throw new UnauthorizedException('Access denied: Not your data.');
+      }
+      await this.taskInstanceRepository.update({ task_id }, { status: status as 'Complete' | 'Pending' | 'Overdue' });
+      return {
+        status: 'success',
+        message: `Task updated to ${status} successfully`,
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to update task status',
+        error: error?.message || error,
+      };
+    }
+  }
 }
