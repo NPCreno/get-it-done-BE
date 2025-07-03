@@ -650,7 +650,12 @@ export class TaskService implements OnModuleInit {
 
       // Group tasks by date and count them
       const dateCounts = completedTasks.reduce((acc, task) => {
-        const dateStr = new Date(task.date).toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        const date = new Date(task.date);
+        // Use local date components to avoid timezone issues
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
         acc[dateStr] = (acc[dateStr] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
@@ -660,11 +665,16 @@ export class TaskService implements OnModuleInit {
       const currentDate = new Date(startOfMonth);
       
       while (currentDate <= endOfMonth) {
-        const dateStr = currentDate.toISOString().split('T')[0];
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const day = String(currentDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+        
         allDays.push({
           date: dateStr,
           value: dateCounts[dateStr] || 0
         });
+        
         currentDate.setDate(currentDate.getDate() + 1);
       }
 
