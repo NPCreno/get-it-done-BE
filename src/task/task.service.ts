@@ -19,6 +19,7 @@ import { IDashboardData } from './interfaces/dashboardData';
 import { TaskCompletionTrend } from './interfaces/taskCompletionTrend';
 import { TaskDistribution } from './interfaces/taskDistribution';
 import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
+import { CalendarHeatmap } from './interfaces/calendarHeatmap';
 @Injectable()
 export class TaskService implements OnModuleInit {
   constructor(
@@ -606,6 +607,76 @@ export class TaskService implements OnModuleInit {
       return {
         status: 'error',
         message: 'Failed to fetch project distribution',
+        error: error.message || error,
+      };
+    }
+  }
+
+  async getCalendarHeatmap(
+    user_id: string,
+    month: string,
+    year: string
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: CalendarHeatmap[];
+    error?: string;
+  }> {
+    try {
+      const user = await this.usersRepository.findOne({ where: { user_id } });
+      if (!user) {
+        throw new NotFoundException(`User with ID ${user_id} not found`);
+      }
+
+      // Create date objects for the start and end of the target month
+      const targetDate = new Date(`${year}-${month}-01`);
+      const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+      const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
+
+      // Fetch all completed tasks for the user in the target month
+      const completedTasks = await this.taskInstanceRepository
+        .createQueryBuilder('task')
+        .where('task.user_id = :user_id', { user_id })
+        .andWhere('task.status = :status', { status: 'Complete' })
+        .andWhere('task.updatedAt BETWEEN :startOfMonth AND :endOfMonth', { 
+          startOfMonth, 
+          endOfMonth 
+        })
+        .select([
+          'task.id',
+          'DATE(task.updatedAt) as date',
+        ])
+        .getRawMany();
+
+      // Group tasks by date and count them
+      const dateCounts = completedTasks.reduce((acc, task) => {
+        const dateStr = new Date(task.date).toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        acc[dateStr] = (acc[dateStr] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      // Generate all days in the month
+      const allDays: CalendarHeatmap[] = [];
+      const currentDate = new Date(startOfMonth);
+      
+      while (currentDate <= endOfMonth) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        allDays.push({
+          date: dateStr,
+          value: dateCounts[dateStr] || 0
+        });
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      return {
+        status: 'success',
+        message: 'Calendar heatmap data retrieved successfully',
+        data: allDays,
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to fetch calendar heatmap data',
         error: error.message || error,
       };
     }
