@@ -692,6 +692,74 @@ export class TaskService implements OnModuleInit {
     }
   }
 
+  async getStreakCount(
+    user_id: string,
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: { count: number };
+    error?: any;
+  }> {
+    try {
+      const user = await this.usersRepository.findOne({ where: { user_id } });
+      if (!user) {
+        throw new NotFoundException(`User with ID ${user_id} not found`);
+      }
+
+      // Get today's date at midnight in local time
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Get yesterday's date
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      // Start with yesterday as the initial date to check
+      let currentDate = new Date(yesterday);
+      let streak = 0;
+      let hasCompletedTask = true;
+
+      // Continue checking previous days until we find a day without a completed task
+      while (hasCompletedTask) {
+        const nextDay = new Date(currentDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+
+        // Find all tasks completed on currentDate
+        const completedTasks = await this.taskInstanceRepository.find({
+          where: {
+            user: { user_id },
+            status: 'Complete',
+            updatedAt: Between(
+              currentDate,
+              new Date(nextDay.getTime() - 1) // End of currentDate
+            )
+          },
+          take: 1 // We only need to know if at least one task was completed
+        });
+
+        if (completedTasks.length > 0) {
+          streak++;
+          // Move to previous day
+          currentDate.setDate(currentDate.getDate() - 1);
+        } else {
+          hasCompletedTask = false;
+        }
+      }
+
+      return {
+        status: 'success',
+        message: 'Streak count retrieved successfully',
+        data: { count: streak }
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to retrieve streak count',
+        error: error?.message || error,
+      };
+    }
+  }
+
   async updateTaskStatus(task_id: string, status: string, user_id: string){
     try {
       const task = await this.taskInstanceRepository.findOne({

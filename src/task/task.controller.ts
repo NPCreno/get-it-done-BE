@@ -213,6 +213,23 @@ export class TaskController {
   }
 
   @UseGuards(AuthorizeGuard)
+  @Get('streak/:user_id')
+  async getStreakCount(
+    @Param('user_id') user_id: string,
+    @Req() req: Request,
+  ) {
+    const tokenUserId = req['user'];
+    if (tokenUserId.user.user_id !== user_id) {
+      throw new UnauthorizedException('Access denied: Not your data.');
+    }
+    
+    const data = await this.taskService.getStreakCount(
+      user_id
+    );
+    return data;
+  }
+
+  @UseGuards(AuthorizeGuard)
   @Patch('update-task-status/:task_id/status/:status')
   async updateTaskStatus(
     @Req() req: Request,
