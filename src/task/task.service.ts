@@ -19,6 +19,7 @@ import { IDashboardData } from './interfaces/dashboardData';
 import { TaskCompletionTrend } from './interfaces/taskCompletionTrend';
 import { TaskDistribution } from './interfaces/taskDistribution';
 import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
+import { CalendarHeatmap } from './interfaces/calendarHeatmap';
 @Injectable()
 export class TaskService implements OnModuleInit {
   constructor(
@@ -607,6 +608,154 @@ export class TaskService implements OnModuleInit {
         status: 'error',
         message: 'Failed to fetch project distribution',
         error: error.message || error,
+      };
+    }
+  }
+
+  async getCalendarHeatmap(
+    user_id: string,
+    month: string,
+    year: string
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: CalendarHeatmap[];
+    error?: string;
+  }> {
+    try {
+      const user = await this.usersRepository.findOne({ where: { user_id } });
+      if (!user) {
+        throw new NotFoundException(`User with ID ${user_id} not found`);
+      }
+
+      // Create date objects for the start and end of the target month
+      const targetDate = new Date(`${year}-${month}-01`);
+      const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+      const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
+
+      // Fetch all completed tasks for the user in the target month
+      const completedTasks = await this.taskInstanceRepository
+        .createQueryBuilder('task')
+        .where('task.user_id = :user_id', { user_id })
+        .andWhere('task.status = :status', { status: 'Complete' })
+        .andWhere('task.updatedAt BETWEEN :startOfMonth AND :endOfMonth', { 
+          startOfMonth, 
+          endOfMonth 
+        })
+        .select([
+          'task.id',
+          'DATE(task.updatedAt) as date',
+        ])
+        .getRawMany();
+
+      // Group tasks by date and count them
+      const dateCounts = completedTasks.reduce((acc, task) => {
+        const date = new Date(task.date);
+        // Use local date components to avoid timezone issues
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+        acc[dateStr] = (acc[dateStr] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      // Generate all days in the month
+      const allDays: CalendarHeatmap[] = [];
+      const currentDate = new Date(startOfMonth);
+      
+      while (currentDate <= endOfMonth) {
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const day = String(currentDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+        
+        allDays.push({
+          date: dateStr,
+          value: dateCounts[dateStr] || 0
+        });
+        
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      return {
+        status: 'success',
+        message: 'Calendar heatmap data retrieved successfully',
+        data: allDays,
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to fetch calendar heatmap data',
+        error: error.message || error,
+      };
+    }
+  }
+
+  async getStreakCount(
+    user_id: string,
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: { count: number };
+    error?: any;
+  }> {
+    try {
+      const user = await this.usersRepository.findOne({ where: { user_id } });
+      if (!user) {
+        throw new NotFoundException(`User with ID ${user_id} not found`);
+      }
+
+      // Get today's date at midnight in local time
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Get yesterday's date
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      // Start with yesterday as the initial date to check
+      let currentDate = new Date(yesterday);
+      let streak = 0;
+      let hasCompletedTask = true;
+
+      // Continue checking previous days until we find a day without a completed task
+      while (hasCompletedTask) {
+        const nextDay = new Date(currentDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+
+        // Find all tasks completed on currentDate
+        const completedTasks = await this.taskInstanceRepository.find({
+          where: {
+            user: { user_id },
+            status: 'Complete',
+            updatedAt: Between(
+              currentDate,
+              new Date(nextDay.getTime() - 1) // End of currentDate
+            )
+          },
+          take: 1 // We only need to know if at least one task was completed
+        });
+
+        if (completedTasks.length > 0) {
+          streak++;
+          // Move to previous day
+          currentDate.setDate(currentDate.getDate() - 1);
+        } else {
+          hasCompletedTask = false;
+        }
+      }
+
+      return {
+        status: 'success',
+        message: 'Streak count retrieved successfully',
+        data: { count: streak }
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to retrieve streak count',
+        error: error?.message || error,
       };
     }
   }
