@@ -478,12 +478,12 @@ export class TaskService implements OnModuleInit {
         throw new NotFoundException(`User with ID ${user_id} not found`);
       }
 
-      // Parse dates and set proper time boundaries
+      // Parse dates and set proper time boundaries in local timezone
       const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0); // Start of day
+      start.setHours(0, 0, 0, 0);
       
       const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999); // End of day
+      end.setHours(23, 59, 59, 999);
 
       // Fetch completed tasks within the date range
       const tasks = await this.taskInstanceRepository.find({
@@ -503,27 +503,46 @@ export class TaskService implements OnModuleInit {
       
       // Initialize all dates in range with 0 counts and day names
       while (currentDate <= end) {
-        const dateStr = currentDate.toISOString().split('T')[0];
-        const dayOfWeek = currentDate.toLocaleDateString('en-US', { weekday: 'short' });
+        // Format date as YYYY-MM-DD in local time
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const day = String(currentDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+        
+        // Get day name in user's locale
+        const dayOfWeek = currentDate.toLocaleDateString('en-US', { 
+          weekday: 'short'
+        });
+        
         dateMap.set(dateStr, { completed: 0, day: dayOfWeek });
+        
+        // Move to the next day in local time
         currentDate.setDate(currentDate.getDate() + 1);
       }
 
       // Count completed tasks by date
       tasks.forEach(task => {
         if (task.updatedAt) {
-          const dateStr = task.updatedAt.toISOString().split('T')[0];
-          const dateData = dateMap.get(dateStr) || { completed: 0, day: '' };
-          dateMap.set(dateStr, {
-            ...dateData,
-            completed: dateData.completed + 1
-          });
+          // Convert task date to local date string for consistent comparison
+          const taskDate = new Date(task.updatedAt);
+          const year = taskDate.getFullYear();
+          const month = String(taskDate.getMonth() + 1).padStart(2, '0');
+          const day = String(taskDate.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
+          
+          const dateData = dateMap.get(dateStr);
+          if (dateData) {
+            dateMap.set(dateStr, {
+              ...dateData,
+              completed: dateData.completed + 1
+            });
+          }
         }
       });
 
       // Convert map to array of TaskCompletionTrend
       const result = Array.from(dateMap.entries())
-        .sort(([dateA], [dateB]) => new Date(dateA).getTime() - new Date(dateB).getTime())
+        .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
         .map(([date, { completed, day }]) => ({
           date,
           day,
