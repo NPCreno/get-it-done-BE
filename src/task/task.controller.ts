@@ -19,6 +19,7 @@ import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
 import { TaskTemplate } from './models/taskTemplate.entity';
 import { UpdateTaskDto } from './dto/update-task-dto';
 import { IDashboardData } from './interfaces/dashboardData';
+import { StatusValidationPipe } from 'src/common/pipes/status-validation.pipe';
 @Controller('api/tasks')
 export class TaskController {
   constructor(private taskService: TaskService) {}
@@ -162,45 +163,88 @@ export class TaskController {
     return data;
   }
 
-    @UseGuards(AuthorizeGuard)
-    @Get('task-distribution/:user_id')
-    async getTaskDistribution(
-      @Req() req: Request,
-      @Param('user_id') user_id: string,
-      @Query('month') month: string,
-      @Query('year') year: string
-    ) {
-      const tokenUserId = req['user'];
-      if (tokenUserId.user.user_id !== user_id) {
-        throw new UnauthorizedException('Access denied: Not your data.');
-      }
-      
-      if (!month || !year) {
-        throw new BadRequestException('Both month and year are required');
-      }
-      
-      const data = await this.taskService.getTaskDistribution(
-        user_id,
-        month,
-        year
-      );
-      return data;
+  @UseGuards(AuthorizeGuard)
+  @Get('task-distribution/:user_id')
+  async getTaskDistribution(
+    @Req() req: Request,
+    @Param('user_id') user_id: string,
+    @Query('month') month: string,
+    @Query('year') year: string
+  ) {
+    const tokenUserId = req['user'];
+    if (tokenUserId.user.user_id !== user_id) {
+      throw new UnauthorizedException('Access denied: Not your data.');
     }
+    
+    if (!month || !year) {
+      throw new BadRequestException('Both month and year are required');
+    }
+    
+    const data = await this.taskService.getTaskDistribution(
+      user_id,
+      month,
+      year
+    );
+    return data;
+  }
 
-    @UseGuards(AuthorizeGuard)
-    @Patch('update-task-status/:task_id/status/:status')
-    async updateTaskStatus(
-      @Req() req: Request,
-      @Param('task_id') task_id: string,
-      @Param('status') status: string
-    ) {
-      const tokenUserId = req['user'];
-      
-      const data = await this.taskService.updateTaskStatus(
-        task_id,
-        status,
-        tokenUserId.user.user_id
-      );
-      return data;
+  @UseGuards(AuthorizeGuard)
+  @Get('calendar-heatmap/:user_id')
+  async getCalendarHeatmap(
+    @Req() req: Request,
+    @Param('user_id') user_id: string,
+    @Query('month') month: string,
+    @Query('year') year: string
+  ) {
+    const tokenUserId = req['user'];
+    if (tokenUserId.user.user_id !== user_id) {
+      throw new UnauthorizedException('Access denied: Not your data.');
     }
+    
+    if (!month || !year) {
+      throw new BadRequestException('Both month and year are required');
+    }
+    
+    const data = await this.taskService.getCalendarHeatmap(
+      user_id,
+      month,
+      year
+    );
+    return data;
+  }
+
+  @UseGuards(AuthorizeGuard)
+  @Get('streak/:user_id')
+  async getStreakCount(
+    @Param('user_id') user_id: string,
+    @Req() req: Request,
+  ) {
+    const tokenUserId = req['user'];
+    if (tokenUserId.user.user_id !== user_id) {
+      throw new UnauthorizedException('Access denied: Not your data.');
+    }
+    
+    const data = await this.taskService.getStreakCount(
+      user_id
+    );
+    return data;
+  }
+
+  @UseGuards(AuthorizeGuard)
+  @Patch('update-task-status/:task_id/status/:status')
+  async updateTaskStatus(
+    @Req() req: Request,
+    @Param('task_id') task_id: string,
+    @Param('status', new StatusValidationPipe()) status: string
+  ) {
+    const tokenUserId = req['user'];
+    
+    const data = await this.taskService.updateTaskStatus(
+      task_id,
+      status,
+      tokenUserId.user.user_id
+    );
+    
+    return data;
+  }
 }
