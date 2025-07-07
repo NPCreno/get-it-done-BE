@@ -19,6 +19,7 @@ import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
 import { TaskTemplate } from './models/taskTemplate.entity';
 import { UpdateTaskDto } from './dto/update-task-dto';
 import { IDashboardData } from './interfaces/dashboardData';
+import { StatusValidationPipe } from 'src/common/pipes/status-validation.pipe';
 @Controller('api/tasks')
 export class TaskController {
   constructor(private taskService: TaskService) {}
@@ -234,7 +235,7 @@ export class TaskController {
   async updateTaskStatus(
     @Req() req: Request,
     @Param('task_id') task_id: string,
-    @Param('status') status: string
+    @Param('status', new StatusValidationPipe()) status: string
   ) {
     const tokenUserId = req['user'];
     

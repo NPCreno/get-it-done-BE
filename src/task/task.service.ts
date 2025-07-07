@@ -711,60 +711,60 @@ export class TaskService implements OnModuleInit {
     }
   }
 
-  async getStreakCount(
-    user_id: string,
-  ): Promise<{
+  async getStreakCount(user_id: string): Promise<{
     status: string;
     message: string;
     data?: { count: number };
     error?: any;
   }> {
     try {
-      const user = await this.usersRepository.findOne({ where: { user_id } });
-      if (!user) {
-        throw new NotFoundException(`User with ID ${user_id} not found`);
-      }
-
-      // Get today's date at midnight in local time
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-
-      // Get yesterday's date
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      // Start with yesterday as the initial date to check
-      let currentDate = new Date(yesterday);
+  
+      // Set a reasonable upper limit for the streak check (e.g., 2 years)
+      const maxDaysToCheck = 730; // ~2 years
+      const startDate = new Date(today);
+      startDate.setDate(startDate.getDate() - maxDaysToCheck);
+  
+      // Get all completed tasks in one query
+      const completedTasks = await this.taskInstanceRepository.find({
+        where: {
+          user: { user_id },
+          status: 'Complete',
+          updatedAt: Between(
+            startDate,
+            today
+          )
+        },
+        select: ['updatedAt'], // Only fetch what we need
+        order: { updatedAt: 'DESC' }
+      });
+  
+      // Convert to Set of YYYY-MM-DD strings for O(1) lookups
+      const completedDates = new Set(
+        completedTasks.map(task => 
+          task.updatedAt.toISOString().split('T')[0]
+        )
+      );
+  
       let streak = 0;
-      let hasCompletedTask = true;
-
-      // Continue checking previous days until we find a day without a completed task
-      while (hasCompletedTask) {
-        const nextDay = new Date(currentDate);
-        nextDay.setDate(nextDay.getDate() + 1);
-
-        // Find all tasks completed on currentDate
-        const completedTasks = await this.taskInstanceRepository.find({
-          where: {
-            user: { user_id },
-            status: 'Complete',
-            updatedAt: Between(
-              currentDate,
-              new Date(nextDay.getTime() - 1) // End of currentDate
-            )
-          },
-          take: 1 // We only need to know if at least one task was completed
-        });
-
-        if (completedTasks.length > 0) {
+      let currentDate = new Date(today);
+      
+      // Check yesterday first
+      currentDate.setDate(currentDate.getDate() - 1);
+      
+      // Count consecutive days with completed tasks
+      while (streak < maxDaysToCheck) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        
+        if (completedDates.has(dateStr)) {
           streak++;
-          // Move to previous day
           currentDate.setDate(currentDate.getDate() - 1);
         } else {
-          hasCompletedTask = false;
+          break;
         }
       }
-
+  
       return {
         status: 'success',
         message: 'Streak count retrieved successfully',
