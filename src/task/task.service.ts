@@ -663,7 +663,7 @@ export class TaskService implements OnModuleInit {
         })
         .select([
           'task.id',
-          'DATE(task.updatedAt) as date',
+          'TO_CHAR(task.updatedAt, \'YYYY-MM-DD\') as date',
         ])
         .getRawMany();
 
