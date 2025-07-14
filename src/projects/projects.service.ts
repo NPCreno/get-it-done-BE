@@ -23,15 +23,33 @@ export class ProjectsService {
       return 'PRJ-' + randomNumber.toString().padStart(9, '0');
     }
 
-    async findOne(project_id: string, tokenUserId: string): Promise<Projects> {
-    const project = await this.projectsRepository.findOne({ where: { project_id } });
-    if (!project) {
-        throw new NotFoundException(`Project with ID ${project_id} not found`);
-    }
-    if (project.user.user_id !== tokenUserId) {
-        throw new UnauthorizedException('Access denied: Not your data.');
-    }
-    return project
+    async findOne(project_id: string, tokenUserId: string): Promise<{
+        status: string;
+        message: string;
+        data?: Projects;
+        error?: any;
+    }> {
+        try {
+            const project = await this.projectsRepository.findOne({ where: { project_id } });
+            if (!project) {
+                throw new NotFoundException(`Project with ID ${project_id} not found`);
+            }
+            if (project.user_id !== tokenUserId) {
+                throw new UnauthorizedException('Access denied: Not your data.');
+            }
+            return {
+                status: 'success',
+                message: 'Project fetched successfully',
+                data: project,
+                error: null
+            }
+        } catch (error) {
+            return {
+                status: 'error',
+                message: 'Failed to fetch project',
+                error: error?.message || error,
+            }
+        }
     }
 
     async findAll(): Promise<Projects[]> {
@@ -140,7 +158,12 @@ export class ProjectsService {
         project_id: string, 
         updateProjectsDto: UpdateProjectDto, 
         tokenUserId: string
-    ): Promise<Projects> {
+    ): Promise<{
+        status: string;
+        message: string;
+        data?: Projects;
+        error?: any;
+    }> {
     const project = await this.projectsRepository.findOne({ where: { project_id } });
     if (!project) {
         throw new NotFoundException(`Project with ID ${project_id} not found`);
@@ -151,7 +174,11 @@ export class ProjectsService {
     await this.projectsRepository.update({ project_id }, updateProjectsDto);
     const updatedProject = await this.projectsRepository.findOne({ where: { project_id } });
     if (!updatedProject) throw new NotFoundException(`Updated user not found`);
-    return updatedProject;
+    return {
+        status: "success",
+        message: "Project updated successfully",
+        data: updatedProject,
+    };
     }
 
     async softDeleteOne(project_id: string,tokenUserId: string): 
