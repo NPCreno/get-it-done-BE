@@ -48,7 +48,12 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
 
     @UseGuards(AuthorizeGuard)
     @Get(':project_id')
-    findOne(@Param('project_id') project_id: string, @Req() req: Request): Promise<Projects> {
+    findOne(@Param('project_id') project_id: string, @Req() req: Request): Promise<{
+      status: string;
+      message: string;
+      data?: Projects;
+      error?: any;
+    }> {
       const tokenUserId = req['user'];
       return this.projectsService.findOne(project_id, tokenUserId.user.user_id);
     }
@@ -74,14 +79,19 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
       @Param('project_id') project_id: string,
       @Body() updateProjectDto: UpdateProjectDto,
       @Req() req: Request,
-    ): Promise<Projects> {
+    ): Promise<{
+      status: string;
+      message: string;
+      data?: Projects;
+      error?: any;
+    }> {
       const tokenUserId = req['user'];
       return this.projectsService.updateOne(project_id, updateProjectDto, tokenUserId.user.user_id);
     }
   
     @UseGuards(AuthorizeGuard)
     @Delete(':project_id')
-    async softDeleteOne(@Param('id') project_id: string, @Req() req: Request): Promise<{
+    async softDeleteOne(@Param('project_id') project_id: string, @Req() req: Request): Promise<{
         status: string;
         message: string;
         error?: any;
@@ -92,7 +102,7 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
   
     @UseGuards(AuthorizeGuard)
     @Delete(':project_id/hard')
-    async hardDeleteOne(@Param('id') project_id: string, @Req() req: Request): Promise<{
+    async hardDeleteOne(@Param('project_id') project_id: string, @Req() req: Request): Promise<{
         status: string;
         message: string;
         error?: any;
