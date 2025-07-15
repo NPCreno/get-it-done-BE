@@ -91,7 +91,7 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
   
     @UseGuards(AuthorizeGuard)
     @Delete(':project_id')
-    async softDeleteOne(@Param('id') project_id: string, @Req() req: Request): Promise<{
+    async softDeleteOne(@Param('project_id') project_id: string, @Req() req: Request): Promise<{
         status: string;
         message: string;
         error?: any;
@@ -102,7 +102,7 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
   
     @UseGuards(AuthorizeGuard)
     @Delete(':project_id/hard')
-    async hardDeleteOne(@Param('id') project_id: string, @Req() req: Request): Promise<{
+    async hardDeleteOne(@Param('project_id') project_id: string, @Req() req: Request): Promise<{
         status: string;
         message: string;
         error?: any;
