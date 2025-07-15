@@ -46,7 +46,7 @@ export class ProjectsService {
         } catch (error) {
             return {
                 status: 'error',
-                message: 'Failed to fetch project',
+                message: 'Failed to find project',
                 error: error?.message || error,
             }
         }
@@ -246,7 +246,7 @@ export class ProjectsService {
         if (!project) {
             throw new NotFoundException(`Project with ID ${project_id} not found`);
         }
-        if (project.user.user_id !== tokenUserId) {
+        if (project.user_id !== tokenUserId) {
             throw new UnauthorizedException('Access denied: Not your data.');
         }
         await this.projectsRepository.remove(project);
