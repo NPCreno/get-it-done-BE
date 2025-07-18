@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, IsNull, LessThanOrEqual, Repository } from 'typeorm';
+import { Between, IsNull, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
 import { TaskInstance } from './models/taskInstance.entity';
 import { TaskTemplate } from './models/taskTemplate.entity';
 import { CreateTaskDto } from './dto/create-task-dto';
@@ -728,43 +728,46 @@ export class TaskService implements OnModuleInit {
       const endOfToday = new Date(today);
       endOfToday.setHours(23, 59, 59, 999);
       
-      const hasCompletedToday = await this.taskInstanceRepository.exist({
+      const hasCompletedToday = !!(await this.taskInstanceRepository.findOne({
         where: {
           user: { user_id },
           status: 'Complete',
           updatedAt: Between(startOfToday, endOfToday),
         },
-        take: 1,
+        select: ['id'],
+      }));
+      
+      // Get all completed task dates for the user in the last 2 years
+      const twoYearsAgo = new Date(today);
+      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+      
+      const completedTasks = await this.taskInstanceRepository.find({
+        where: {
+          user: { user_id },
+          status: 'Complete',
+          updatedAt: MoreThanOrEqual(twoYearsAgo),
+        },
+        select: ['updatedAt'],
       });
       
-      // Calculate streak starting from yesterday
+      // Create a Set of unique dates (YYYY-MM-DD) when tasks were completed
+      const completedDates = new Set(
+        completedTasks.map(task => 
+          task.updatedAt.toISOString().split('T')[0]
+        )
+      );
+      
+      // Calculate streak by checking consecutive days
       let streak = 0;
-      let daysChecked = 0;
-      const maxDaysToCheck = 730; // ~2 years as a safety limit
       let currentDate = new Date(today);
       currentDate.setDate(currentDate.getDate() - 1); // Start from yesterday
       
-      while (daysChecked < maxDaysToCheck) {
-        const startOfDay = new Date(currentDate);
-        const endOfDay = new Date(currentDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        
-        // Check if there's at least one completed task on this day
-        const hasCompletedTask = await this.taskInstanceRepository.exist({
-          where: {
-            user: { user_id },
-            status: 'Complete',
-            updatedAt: Between(startOfDay, endOfDay),
-          },
-          take: 1,
-        });
-        
-        if (!hasCompletedTask) {
+      while (streak < 730) { // 2 years max
+        const dateStr = currentDate.toISOString().split('T')[0];
+        if (!completedDates.has(dateStr)) {
           break;
         }
-        
         streak++;
-        daysChecked++;
         currentDate.setDate(currentDate.getDate() - 1);
       }
       

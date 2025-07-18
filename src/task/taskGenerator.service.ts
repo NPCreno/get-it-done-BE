@@ -29,15 +29,16 @@ export class TaskGeneratorService {
   }
 
   @Cron('0 0 * * *') // Every day at midnight
-    async generateInstancesForCurrentMonth() {
+  async generateInstancesForCurrentMonth() {
     const timeZone = 'Asia/Manila';
     
     // Process templates in batches
     const batchSize = this.BATCH_SIZE;
     let skip = 0;
-    let hasMoreTemplates = true;
+    let totalProcessed = 0;
+    let totalCount = 0;
 
-    while (hasMoreTemplates) {
+    while (true) {
       const [templates, count] = await this.taskTemplateRepository.findAndCount({
         take: batchSize,
         skip: skip,
@@ -49,16 +50,24 @@ export class TaskGeneratorService {
         break;
       }
 
-      this.logger.log(`Processing batch of ${templates.length} templates (${skip + 1}-${skip + templates.length}/${count})`);
+      // Update total count on first iteration
+      if (totalCount === 0) {
+        totalCount = count;
+      }
+
+      this.logger.log(`Processing batch of ${templates.length} templates (${skip + 1}-${skip + templates.length}/${totalCount})`);
       
       // Process current batch
       await this.processTemplatesBatch(templates, timeZone);
       
-      if (templates.length < batchSize) {
-        hasMoreTemplates = false;
-      } else {
-        skip += batchSize;
+      totalProcessed += templates.length;
+      
+      // Stop if we've processed all templates or if we received fewer templates than requested
+      if (templates.length < batchSize || totalProcessed >= totalCount) {
+        break;
       }
+      
+      skip += batchSize;
     }
     
     this.logger.log('Task instances generation completed');
