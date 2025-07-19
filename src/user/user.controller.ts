@@ -34,13 +34,36 @@ export class UserController {
     }
 
     @Post('loginEmail')
-    async loginEmail(@Body() credentials: { email: string; password: string }) {
-        return this.userService.loginEmail(credentials);
+    async loginEmail(@Body() credentials: { email: string; password: string }) 
+    : Promise<{
+        status: string;
+        message: string;
+        data?: {
+            access_token: string;
+            refresh_token: string;
+            expires_in: number;
+        };
+        error?: any;
+    }>
+    {
+        const authenticatedUser = await this.userService.loginEmail(credentials);
+        return authenticatedUser;
     }
 
     @Post('loginUsername')
-    async loginUsername(@Body() credentials: { username: string; password: string }) {
-        return this.userService.loginUsername(credentials);
+    async loginUsername(@Body() credentials: { username: string; password: string })
+    : Promise<{
+        status: string;
+        message: string;
+        data?: {
+            access_token: string;
+            refresh_token: string;
+            expires_in: number;
+        };
+        error?: any;
+    }> {
+        const authenticatedUser = await this.userService.loginUsername(credentials);
+        return authenticatedUser;
     }
 
     @UseGuards(AuthorizeGuard)

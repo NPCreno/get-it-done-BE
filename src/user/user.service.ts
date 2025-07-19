@@ -232,7 +232,7 @@ export class UserService {
     async validateUser(emailOrUsername: string, password: string): Promise<User> {
       const user = await this.findByEmailOrUsername(emailOrUsername);
       
-      if (!user || !user.password) {
+      if (!user) {
         throw new UnauthorizedException('Invalid credentials');
       }
       
@@ -245,13 +245,21 @@ export class UserService {
       return this.toUser(user);
     }
 
-    async findByEmailOrUsername(emailOrUsername: string): Promise<UserEntity | null> {
+    async findByEmailOrUsername(emailOrUsername: string): Promise<User> {
       const isEmail = /\S+@\S+\.\S+/.test(emailOrUsername);
       
       if (isEmail) {
-        return this.userRepository.findOne({ where: { email: emailOrUsername } });
+        const user = await this.userRepository.findOne({ where: { email: emailOrUsername } });
+        if (!user) {
+            throw new NotFoundException(`User with email ${emailOrUsername} not found`);
+        }
+        return this.toUser(user);
       } else {
-        return this.userRepository.findOne({ where: { username: emailOrUsername } });
+        const user = await this.userRepository.findOne({ where: { username: emailOrUsername } });
+        if (!user) {
+            throw new NotFoundException(`User with username ${emailOrUsername} not found`);
+        }
+        return this.toUser(user);
       }
     }
 

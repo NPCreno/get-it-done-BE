@@ -1,7 +1,7 @@
 import { ProjectEntity } from "src/projects/models/projects.entity";
 import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryColumn, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
-@Entity()
+@Entity('users')
 export class UserEntity{
     @PrimaryGeneratedColumn()
     id!: number;
