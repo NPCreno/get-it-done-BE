@@ -6,12 +6,12 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, IsNull, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
-import { TaskInstance } from './models/taskInstance.entity';
-import { TaskTemplate } from './models/taskTemplate.entity';
+import { TaskInstanceEntity } from './models/taskInstance.entity';
+import { TaskTemplateEntity } from './models/taskTemplate.entity';
 import { CreateTaskDto } from './dto/create-task-dto';
 import { DeepPartial } from 'typeorm';
-import { Users } from 'src/user/models/user.entity';
-import { Projects } from 'src/projects/models/projects.entity';
+import { UserEntity } from 'src/user/models/user.entity';
+import { ProjectEntity } from 'src/projects/models/projects.entity';
 import { TaskGeneratorService } from './taskGenerator.service';
 import { OnModuleInit } from '@nestjs/common';
 import { UpdateTaskDto } from './dto/update-task-dto';
@@ -23,14 +23,14 @@ import { CalendarHeatmap } from './interfaces/calendarHeatmap';
 @Injectable()
 export class TaskService implements OnModuleInit {
   constructor(
-    @InjectRepository(TaskTemplate)
-    private readonly taskTemplateRepository: Repository<TaskTemplate>,
-    @InjectRepository(TaskInstance)
-    private readonly taskInstanceRepository: Repository<TaskInstance>,
-    @InjectRepository(Users)
-    private readonly usersRepository: Repository<Users>,
-    @InjectRepository(Projects)
-    private readonly projectsRepository: Repository<Projects>,
+    @InjectRepository(TaskTemplateEntity)
+    private readonly taskTemplateRepository: Repository<TaskTemplateEntity>,
+    @InjectRepository(TaskInstanceEntity)
+    private readonly taskInstanceRepository: Repository<TaskInstanceEntity>,
+    @InjectRepository(UserEntity)
+    private readonly usersRepository: Repository<UserEntity>,
+    @InjectRepository(ProjectEntity)
+    private readonly projectsRepository: Repository<ProjectEntity>,
     private readonly taskGeneratorService: TaskGeneratorService,
   ) {}
   async onModuleInit() {
@@ -50,7 +50,7 @@ export class TaskService implements OnModuleInit {
   async createTask(taskDto: CreateTaskDto): Promise<{
     status: string;
     message: string;
-    data?: TaskInstance | TaskTemplate;
+    data?: TaskInstanceEntity | TaskTemplateEntity;
     error?: any;
   }> {
     try {
@@ -122,7 +122,7 @@ export class TaskService implements OnModuleInit {
           start_date,
           end_date,
           project_id,
-        } as DeepPartial<TaskTemplate>);
+        } as DeepPartial<TaskTemplateEntity>);
 
         const savedTaskTemplate =
           await this.taskTemplateRepository.save(taskTemplate);
@@ -143,7 +143,7 @@ export class TaskService implements OnModuleInit {
         } while (exists);
 
         // Create and save the new project
-        let taskInstance: TaskInstance;
+        let taskInstance: TaskInstanceEntity;
         if (taskDto.project_id) {
           taskInstance = this.taskInstanceRepository.create({
             ...taskDto,
@@ -168,10 +168,10 @@ export class TaskService implements OnModuleInit {
         return {
           status: 'success',
           message: 'Task created successfully',
-          data: savedTask,
+          data: savedTask,  
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating task:', error);
       return {
         status: 'error',
@@ -232,7 +232,7 @@ export class TaskService implements OnModuleInit {
         message: 'Tasks fetched successfully',
         data: sortedData,
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to fetch tasks',
@@ -282,7 +282,7 @@ export class TaskService implements OnModuleInit {
         if (a.status !== "Complete" && b.status === "Complete") return -1;
         return 0;
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error fetching tasks for project ${project_id}:`, error);
       return []; // Return empty array on error
     }
@@ -296,7 +296,7 @@ export class TaskService implements OnModuleInit {
     {
     status: string;
     message: string;
-    data?: TaskInstance;
+    data?: TaskInstanceEntity;
     error?: any;
     }
   > {
@@ -331,7 +331,7 @@ export class TaskService implements OnModuleInit {
             message: 'Task updated successfully',
             data: updatedTask,
             };
-    } catch (error) {
+    } catch (error: any) {
       return {
             status: 'error',
             message: 'Failed to update task',
@@ -342,7 +342,7 @@ export class TaskService implements OnModuleInit {
   async softDeleteOne(task_id: string, tokenUserId: string): Promise<{
     status: string;
     message: string;
-    data?: TaskInstance | null;
+    data?: TaskInstanceEntity | null;
     error?: any;
   }> {
     try {
@@ -376,7 +376,7 @@ export class TaskService implements OnModuleInit {
         message: 'Task deleted successfully',
         data: deletedTask,
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to delete task',
@@ -384,7 +384,7 @@ export class TaskService implements OnModuleInit {
       };
     }
   }
-  async hardDeleteOne(task_id: string, tokenUserId: string): Promise<TaskInstance> {
+  async hardDeleteOne(task_id: string, tokenUserId: string): Promise<TaskInstanceEntity> {
     const task = await this.taskInstanceRepository.findOne({
       where: { task_id },
       withDeleted: true,
@@ -452,7 +452,7 @@ export class TaskService implements OnModuleInit {
           all_projects: projects.length,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to fetch dashboard data',
@@ -554,7 +554,7 @@ export class TaskService implements OnModuleInit {
         message: 'Task completion trend retrieved successfully',
         data: result
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to fetch task completion trend',
@@ -622,7 +622,7 @@ export class TaskService implements OnModuleInit {
         message: 'Task distribution retrieved successfully',
         data: distributionData,
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to fetch project distribution',
@@ -702,7 +702,7 @@ export class TaskService implements OnModuleInit {
         message: 'Calendar heatmap data retrieved successfully',
         data: allDays,
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to fetch calendar heatmap data',
@@ -778,7 +778,7 @@ export class TaskService implements OnModuleInit {
           count: hasCompletedToday ? streak + 1 : streak,
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to retrieve streak count',
@@ -809,7 +809,7 @@ export class TaskService implements OnModuleInit {
         status: 'success',
         message: `Task updated to ${status} successfully`,
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to update task status',

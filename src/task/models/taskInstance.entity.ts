@@ -9,59 +9,59 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
 } from 'typeorm';
-import { TaskTemplate } from './taskTemplate.entity';
-import { Projects } from 'src/projects/models/projects.entity';
-import { Users } from 'src/user/models/user.entity';
+import { TaskTemplateEntity } from './taskTemplate.entity';
+import { ProjectEntity } from 'src/projects/models/projects.entity';
+import { UserEntity } from 'src/user/models/user.entity';
 
 @Entity()
-export class TaskInstance {
+export class TaskInstanceEntity {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column({ unique: true })
-  task_id: string;
+  task_id!: string;
 
-  @ManyToOne(() => Users, { onDelete: 'CASCADE' })
+  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id', referencedColumnName: 'user_id' })
-  user: Users;
+  user!: UserEntity;
 
-  @ManyToOne(() => Projects, { onDelete: 'CASCADE', nullable: true })
+  @ManyToOne(() => ProjectEntity, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'project_id', referencedColumnName: 'project_id' })
-  project: Projects;
+  project!: ProjectEntity;
 
   @Column()
-  title: string;
+  title!: string;
 
   @Column({ nullable: true })
-  description: string;
+  description!: string;
 
   @Column({
     type: 'enum',
     enum: ['Low', 'Medium', 'High'],
   })
-  priority: 'Low' | 'Medium' | 'High';
+  priority!: 'Low' | 'Medium' | 'High';
 
   @Column({
     type: 'enum',
     enum: ['Pending', 'Complete', 'Overdue'],
   })
-  status: 'Pending' | 'Complete' | 'Overdue';
+  status!: 'Pending' | 'Complete' | 'Overdue';
 
   @Column({ type: 'timestamp', nullable: true })
-  due_date: Date;
+  due_date!: Date;
 
-  @ManyToOne(() => TaskTemplate, (template) => template.instances, {
+  @ManyToOne(() => TaskTemplateEntity, (template) => template.instances, {
     nullable: true,
     onDelete: 'CASCADE',
   })
-  template: TaskTemplate | null;
+  template!: TaskTemplateEntity | null;
 
   @CreateDateColumn({ type: 'timestamp' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({ type: 'timestamp' })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @DeleteDateColumn({ type: 'timestamp', nullable: true })
-  deletedAt: Date;
+  deletedAt!: Date;
 }

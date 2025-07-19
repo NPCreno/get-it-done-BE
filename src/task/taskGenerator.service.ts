@@ -8,8 +8,8 @@ import {
 } from 'date-fns';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not, IsNull } from 'typeorm';
-import { TaskTemplate } from './models/taskTemplate.entity';
-import { TaskInstance } from './models/taskInstance.entity';
+import { TaskTemplateEntity } from './models/taskTemplate.entity';
+import { TaskInstanceEntity } from './models/taskInstance.entity';
 
 
 @Injectable()
@@ -18,10 +18,10 @@ export class TaskGeneratorService {
   private readonly BATCH_SIZE = 100; // Process templates in batches to avoid memory issues
 
   constructor(
-    @InjectRepository(TaskTemplate)
-    private readonly taskTemplateRepository: Repository<TaskTemplate>,
-    @InjectRepository(TaskInstance)
-    private readonly taskInstanceRepository: Repository<TaskInstance>,
+    @InjectRepository(TaskTemplateEntity)
+    private readonly taskTemplateRepository: Repository<TaskTemplateEntity>,
+    @InjectRepository(TaskInstanceEntity)
+    private readonly taskInstanceRepository: Repository<TaskInstanceEntity>,
   ) {}
 
   private generateTaskId(): string {
@@ -73,7 +73,7 @@ export class TaskGeneratorService {
     this.logger.log('Task instances generation completed');
   }
 
-  private async processTemplatesBatch(templates: TaskTemplate[], timeZone: string): Promise<void> {
+  private async processTemplatesBatch(templates: TaskTemplateEntity[], timeZone: string): Promise<void> {
     const today = new Date();
     const rangeStart = startOfMonth(today);
     const rangeEnd = endOfMonth(today);

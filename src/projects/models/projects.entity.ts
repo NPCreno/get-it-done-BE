@@ -1,46 +1,46 @@
-import { TaskInstance } from "src/task/models/taskInstance.entity";
-import { Users } from "src/user/models/user.entity";
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { TaskInstanceEntity } from "src/task/models/taskInstance.entity";
+import { UserEntity } from "src/user/models/user.entity";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity()
-export class Projects{
+export class ProjectEntity{
     @PrimaryGeneratedColumn()
-    id: number;
+    id!: number;
 
     @Column({unique: true})
-    project_id: string;
+    project_id!: string;
 
     @Column({nullable: true})
-    title: string;
+    title!: string;
 
     @Column({nullable: true})
-    description: string;
+    description!: string;
 
     @Column({nullable: true})
-    color: string;
+    color!: string;
 
     @Column({nullable: true})
-    colorLabel: string;
+    colorLabel!: string;
     
     @Column({ type: 'timestamp', nullable: true })
-    due_date: Date;
+    due_date!: Date;
     
     @CreateDateColumn({ type: 'timestamp' })
-    createdAt: Date;
+    createdAt!: Date;
   
     @UpdateDateColumn({ type: 'timestamp' })
-    updatedAt: Date;
+    updatedAt!: Date;
   
     @DeleteDateColumn({ type: 'timestamp', nullable: true })
-    deletedAt: Date;
+    deletedAt!: Date;
 
-    @ManyToOne(() => Users, (user) => user.projects, { onDelete: 'CASCADE' })
+    @ManyToOne(() => UserEntity, (user) => user.projects, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'user_id', referencedColumnName: 'user_id' })
-    user: Users;
+    user!: UserEntity;
 
     @Column()
-    user_id: string; 
+    user_id!: string; 
 
-    @OneToMany(() => TaskInstance, (taskInstance) => taskInstance.project)
-    taskInstances: TaskInstance[];
+    @OneToMany(() => TaskInstanceEntity, (taskInstance) => taskInstance.project)
+    taskInstances!: TaskInstanceEntity[];
 }

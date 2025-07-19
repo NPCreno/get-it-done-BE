@@ -2,12 +2,31 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { from, Observable, of } from 'rxjs';
 import { User } from 'src/user/models/user.interface';
+import { TokenPayload } from './Interfaces/tokenPayload';
+import { AuthTokenEntity } from './models/auth.entity';
+import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 const bcrypt = require('bcrypt');
 @Injectable()
 export class AuthService {
     constructor(
-        private readonly jwtService: JwtService
+        private readonly jwtService: JwtService,
+        @InjectRepository(AuthTokenEntity)
+        private readonly authTokenRepository: Repository<AuthTokenEntity>
     ){}
+
+      // Generate Access Token (short-lived)
+    generateAccessToken(user: User): string {
+        const payload: TokenPayload = {
+        sub: user.user_id.toString(),
+        type: 'access',
+        jti: crypto.randomUUID(),
+        };
+        return this.jwtService.sign(payload, {
+        expiresIn: '15m',
+        secret: process.env.JWT_SECRET
+        });
+    }
 
     generateJWT(user: User): Observable <String>{
         const payload = { user }; // You can include more data in the payload if needed.
@@ -22,16 +41,15 @@ export class AuthService {
         return from<any | boolean>(bcrypt.compare(newPassword, passwordHash)); 
     }
 
-      // Generate Refresh Token
-    generateRefreshToken(user: User): string {
-        const payload = { user }; // Same payload or different one based on your needs
-        return this.jwtService.sign(payload, { expiresIn: '1d' }); // 1 day for refresh token
-    }
-
-    // Validate the Refresh Token and issue new Access Token
-    async refreshAccessToken(refreshToken: string): Promise<any | string> { 
-        const decoded = this.jwtService.verify(refreshToken); // Verify refresh token
-        const user = decoded.user; // Get user info from payload (or look it up in DB)
-        return this.generateJWT(user); // Generate a new access token
+    generateRefreshToken(refreshToken: string, ipAddress: string, user: User): string {
+        const payload: TokenPayload = {
+        sub: user.user_id.toString(),
+        type: 'refresh',
+        jti: crypto.randomUUID(),
+        };
+        return this.jwtService.sign(payload, {
+        expiresIn: '7d',
+        secret: process.env.JWT_SECRET
+        });
     }
 }

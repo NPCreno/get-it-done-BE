@@ -1,17 +1,17 @@
 import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Users } from './models/user.entity';
+import { UserEntity } from './models/user.entity';
 import { Repository } from 'typeorm';
-import { catchError, from, map, Observable, of, switchMap, throwError } from 'rxjs';
-import { User } from './models/user.interface';
 import { CreateUserDto } from './dto/create-user-dto';
 import { UpdateUserDto } from './dto/update-user-dto';
 import { AuthService } from 'src/auth/auth.service';
+import { UserCleanupResponse } from './models/userCleanupResponse';
+import { User } from './models/user.interface';
 
 @Injectable()
 export class UserService {
     constructor (
-        @InjectRepository(Users) private readonly userRepository: Repository<Users>,
+        @InjectRepository(UserEntity) private readonly userRepository: Repository<UserEntity>,
         private readonly authService: AuthService,
     ){}
     
@@ -23,7 +23,7 @@ export class UserService {
     async createUser(userDto: CreateUserDto): Promise<{
       status: string;
       message: string;
-      data?: User | null;
+      data?: UserCleanupResponse | null;
       error?: any;
     }> {
       try {
@@ -61,7 +61,7 @@ export class UserService {
           message: 'User created successfully',
           data: userWithoutPassword
         };
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error creating user:', error);
         
         if (error.code === '23505') { // Postgres unique violation
@@ -89,25 +89,16 @@ export class UserService {
       }
     }
 
-    findOne(user_id: string): Observable<User | null> {
-      return from(this.userRepository.findOne({ where: { user_id } })).pipe(
-        map((user: User | null) => {
-          if (!user) return null; // Or throw NotFoundException in service if you prefer
-          const { password, ...result } = user; // Exclude password
-          return result;
-        })
-      );
+    async findOne(user_id: string): Promise<UserCleanupResponse | null> {
+      const user = await this.userRepository.findOne({ where: { user_id } });
+      if (!user) return null;
+      const { password, ...result } = user;
+      return result;
     }
 
-    findAll(): Observable<User[]>{
-      return from(this.userRepository.find()).pipe(
-        map((users: User[]) => { 
-          return users.map((user: User) => {
-            const { password, ...result } = user; // Exclude password from each user
-            return result;
-          });
-        })
-      );
+    async findAll(): Promise<UserCleanupResponse[]> {
+      const users = await this.userRepository.find();
+      return users.map(({ password, ...user }) => user);
     }
 
     async softDeleteOne(user_id: string, tokenUserId: string): Promise<{
@@ -164,7 +155,7 @@ export class UserService {
     }
 
 
-  async updateOne(user_id: string, updateUserDto: UpdateUserDto): Promise<User> {
+  async updateOne(user_id: string, updateUserDto: UpdateUserDto): Promise<UserCleanupResponse> {
     const user = await this.userRepository.findOne({ where: { user_id } });
     if (!user) {
       throw new NotFoundException(`User with ID ${user_id} not found`);
@@ -196,72 +187,147 @@ export class UserService {
     return sanitizedUser;
   }
 
-    validateUser(emailOrUsername: string, password: string): Observable<User> {
-      return this.findByEmailOrUsername(emailOrUsername).pipe(
-        switchMap((user: User) => {
-          if (!user || !user.password) {
-            throw new Error('Password not found for user');
-          }
-          
-          return this.authService.comparePasswords(password, user.password).pipe(
-            map((match: boolean) => {
-              if (match) {
-                const { password, ...result } = user; // Don't include password in the response
-                return result;
-              } else {
-                throw new UnauthorizedException('Invalid credentials');
-              }
-            })
-          );
-        })
-      );
+    private toUser(userEntity: UserEntity): User {
+    const [firstname, ...lastnameParts] = userEntity.fullname?.split(' ') || [];
+    const lastname = lastnameParts.join(' ');
+    
+    return {
+      ...userEntity,
+      id: userEntity.id,
+      user_id: userEntity.user_id,
+      firstname: firstname || '',
+      lastname: lastname || '',
+      username: userEntity.username,
+      email: userEntity.email,
+      password: userEntity.password,
+      tier: userEntity.tier,
+      role: userEntity.role,
+      status: userEntity.status,
+      enableNotifications: userEntity.enableNotifications,
+      theme: userEntity.theme,
+      soundFx: userEntity.soundFx,
+      emailToLowerCase: function() {
+        this.email = this.email.toLowerCase();
+      }
+    } as User;
+  }
+
+  private sanitizeUser(user: UserEntity): UserCleanupResponse {
+    const [firstname, ...lastnameParts] = user.fullname?.split(' ') || [];
+    const lastname = lastnameParts.join(' ');
+    
+    return {
+      user_id: user.user_id,
+      fullname: user.fullname,
+      username: user.username,
+      email: user.email,
+      tier: user.tier,
+      role: user.role,
+      status: user.status,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    };
+  }
+
+    async validateUser(emailOrUsername: string, password: string): Promise<User> {
+      const user = await this.findByEmailOrUsername(emailOrUsername);
+      
+      if (!user || !user.password) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
+      
+      const isMatch = await this.authService.comparePasswords(password, user.password).toPromise();
+      
+      if (!isMatch) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
+      
+      return this.toUser(user);
     }
 
-    findByEmailOrUsername(emailOrUsername: string): Observable<User | null> {
+    async findByEmailOrUsername(emailOrUsername: string): Promise<UserEntity | null> {
       const isEmail = /\S+@\S+\.\S+/.test(emailOrUsername);
       
       if (isEmail) {
-        return from(this.userRepository.findOne({ where: { email: emailOrUsername } }));
+        return this.userRepository.findOne({ where: { email: emailOrUsername } });
       } else {
-        return  from(this.userRepository.findOne({ where: { username: emailOrUsername } }));
+        return this.userRepository.findOne({ where: { username: emailOrUsername } });
       }
     }
 
-    loginEmail(user: User): Observable<string>{
-      const { email, password } = user;
+    async loginEmail(credentials: { email: string; password: string }): Promise<
+    {
+      status: string;
+      message: string;
+      data?: {
+        access_token: string;
+        refresh_token: string;
+        expires_in: number;
+      };
+      error?: any;
+    }
+    > {
+      const { email, password } = credentials;
 
       if (!email || !password) {
         throw new Error('Email and password are required.');
       }
-      return this.validateUser(email, password).pipe(
-        switchMap((user: User)=>{
-          if(user){
-            return this.authService.generateJWT(user).pipe(
-              map((jwt: string) => jwt)
-            )
-          }
-          else{
-            throw new UnauthorizedException('Invalid credentials');
-          }
-        })
-      )}
+      
+      try {
+        const validatedUser = await this.validateUser(email, password);
+        const jwt = await this.authService.generateJWT(validatedUser).toPromise();
+        if (!jwt) {
+          throw new Error('Failed to generate JWT token');
+        }
+        return {
+          status: 'success',
+          message: 'Login successful',
+          data: {
+            access_token: jwt.toString(),
+            refresh_token: jwt.toString(),
+            expires_in: 3600
+          },
+          error: null
+        };
+      } catch (error) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
+    }
 
-    loginUsername(user: User): Observable<string>{
-      const { username, password } = user;
+    async loginUsername(credentials: { username: string; password: string }): Promise<{
+      status: string;
+      message: string;
+      data?: {
+        access_token: string;
+        refresh_token: string;
+        expires_in: number;
+      };
+      error?: any;
+    }> {
+      const { username, password } = credentials;
 
       if (!username || !password) {
-        throw new Error('username and password are required.');
+        throw new Error('Username and password are required.');
       }
-      return this.validateUser(username, password).pipe(
-        switchMap((user: User)=>{
-          if(user){
-            return this.authService.generateJWT(user).pipe(
-              map((jwt: string) => jwt)
-            )
-          }
-          else{
-            throw new UnauthorizedException('Invalid credentials');
-          }
-        })
-    )}
+      
+      try {
+        const validatedUser = await this.validateUser(username, password);
+        const jwt = await this.authService.generateJWT(validatedUser).toPromise();
+        if (!jwt) {
+          throw new Error('Failed to generate JWT token');
+        }
+        return {
+          status: 'success',
+          message: 'Login successful',
+          data: {
+            access_token: jwt.toString(),
+            refresh_token: jwt.toString(),
+            expires_in: 3600
+          },
+          error: null
+        };
+      } catch (error) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
+    }
 }

@@ -1,11 +1,11 @@
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Projects } from './models/projects.entity';
+import { ProjectEntity } from './models/projects.entity';
 import { LessThanOrEqual, Repository } from 'typeorm';
 import { CreateProjectDto } from './dto/create-project-dto';
 import { UpdateProjectDto } from './dto/update-project-dto';
-import { TaskInstance } from 'src/task/models/taskInstance.entity';
-import { TaskTemplate } from 'src/task/models/taskTemplate.entity';
+import { TaskInstanceEntity } from 'src/task/models/taskInstance.entity';
+import { TaskTemplateEntity } from 'src/task/models/taskTemplate.entity';
 import { TaskService } from 'src/task/task.service';
 import { SanitizedProject } from './interfaces/sanitizedProject';
 
@@ -13,9 +13,9 @@ import { SanitizedProject } from './interfaces/sanitizedProject';
 export class ProjectsService {
     constructor (
         private readonly taskService: TaskService,
-        @InjectRepository(Projects) private readonly projectsRepository: Repository<Projects>,
-        @InjectRepository(Projects) private readonly taskInstanceRepository: Repository<TaskInstance>,
-        @InjectRepository(Projects) private readonly taskTemplateRepository: Repository<TaskTemplate>,
+        @InjectRepository(ProjectEntity) private readonly projectsRepository: Repository<ProjectEntity>,
+        @InjectRepository(TaskInstanceEntity) private readonly taskInstanceRepository: Repository<TaskInstanceEntity>,
+        @InjectRepository(TaskTemplateEntity) private readonly taskTemplateRepository: Repository<TaskTemplateEntity>,
     ){}
 
     private generateProjectId(): string {
@@ -26,7 +26,7 @@ export class ProjectsService {
     async findOne(project_id: string, tokenUserId: string): Promise<{
         status: string;
         message: string;
-        data?: Projects;
+        data?: ProjectEntity;
         error?: any;
     }> {
         try {
@@ -43,16 +43,16 @@ export class ProjectsService {
                 data: project,
                 error: null
             }
-        } catch (error) {
+        } catch (error: any) {
             return {
                 status: 'error',
                 message: 'Failed to find project',
-                error: error?.message || error,
+                error: error,
             }
         }
     }
 
-    async findAll(): Promise<Projects[]> {
+    async findAll(): Promise<ProjectEntity[]> {
     const projects = await this.projectsRepository.find();
     if (projects.length === 0) {
         throw new NotFoundException('No projects found');
@@ -98,16 +98,16 @@ export class ProjectsService {
         message: 'Projects fetched successfully',
         data: sanitizedProjects,
         };
-    } catch (error) {
+    } catch (error: any) {
         return {
         status: 'error',
         message: 'Failed to fetch projects',
-        error: error?.message || error,
+        error: error,
         };
     }
     }
 
-    async findDueProjects(): Promise<Projects[]> {
+    async findDueProjects(): Promise<ProjectEntity[]> {
     const projects = await this.projectsRepository.find({
         where: {
         due_date: LessThanOrEqual(new Date()),
@@ -119,7 +119,12 @@ export class ProjectsService {
     return projects;
     }
 
-    async createProject(projectDto: CreateProjectDto): Promise<{ status: string; message: string; data?: Projects; error?: any }> {
+    async createProject(projectDto: CreateProjectDto): Promise<{ 
+        status: string; 
+        message: string; 
+        data?: ProjectEntity; 
+        error?: any 
+    }> {
     try {
         let project_id: string;
         let exists = true;
@@ -144,12 +149,12 @@ export class ProjectsService {
         message: "Project created successfully",
         data: savedProject,
         };
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error creating project:", error);
         return {
         status: "error",
         message: "Failed to create project",
-        error: error?.message || error,
+        error: error,
         };
     }
     }
@@ -161,7 +166,7 @@ export class ProjectsService {
     ): Promise<{
         status: string;
         message: string;
-        data?: Projects;
+        data?: ProjectEntity;
         error?: any;
     }> {
     const project = await this.projectsRepository.findOne({ where: { project_id } });
@@ -254,11 +259,11 @@ export class ProjectsService {
             status: 'success',
             message: 'Project deleted successfully',
             };
-    }catch (error) {
+    }catch (error: any) {
         return {
         status: 'error',
         message: 'Failed to create task',
-        error: error?.message || error,
+        error: error,
       };
     }
     }

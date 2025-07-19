@@ -1,22 +1,22 @@
-import { Projects } from "src/projects/models/projects.entity";
+import { ProjectEntity } from "src/projects/models/projects.entity";
 import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryColumn, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity()
-export class Users{
+export class UserEntity{
     @PrimaryGeneratedColumn()
-    id: number;
+    id!: number;
     
     @Column()
-    fullname: string;
+    fullname!: string;
 
     @Column({unique: true})
-    user_id: string;
+    user_id!: string;
 
     @Column({unique: true})
-    username: string;
+    username!: string;
 
     @Column({unique: true})
-    email: string;
+    email!: string;
 
     @BeforeInsert()
     emailToLowerCase() {
@@ -24,48 +24,48 @@ export class Users{
     }
 
     @Column()
-    password: string;
+    password!: string;
 
     // Preferences
     @Column({nullable: true})
-    enableNotifications: string;
+    enableNotifications!: string;
 
     @Column({nullable: true})
-    theme: string;
+    theme!: string;
 
     @Column({nullable: true})
-    soundFx: string;
+    soundFx!: string;
 
     //role & permissions
     @Column()
-    tier: string;
+    tier!: string;
 
     @Column({nullable: true})
-    role: string;
+    role!: string;
 
     @Column({nullable: true})
-    status: string;
+    status!: string;
 
     //dates
     @CreateDateColumn({ type: 'timestamp' })
-    createdAt: Date;
+    createdAt!: Date;
   
     @UpdateDateColumn({ type: 'timestamp' })
-    updatedAt: Date;
+    updatedAt!: Date;
   
     @DeleteDateColumn({ type: 'timestamp', nullable: true })
-    deletedAt: Date;
+    deletedAt!: Date;
 
     @Column({ type: 'timestamp', nullable: true })
-    premiumExpiry: Date;
+    premiumExpiry!: Date;
 
     // security
     @Column({ type: 'timestamp', nullable: true })
-    lastLoginAt: Date;
+    lastLoginAt!: Date;
 
     @Column({nullable: true})
-    loginAttempts: number;
+    loginAttempts!: number;
 
-    @OneToMany(() => Projects, (project) => project.user)
-    projects: Projects[];
+    @OneToMany(() => ProjectEntity, (project) => project.user)
+    projects!: ProjectEntity[];
 }
