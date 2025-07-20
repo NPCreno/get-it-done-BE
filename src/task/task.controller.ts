@@ -34,7 +34,7 @@ export class TaskController {
     error?: any;
   }> {
     const tokenUserId = req['user'];
-    if (tokenUserId.user_id !== dto.user_id) {
+    if (tokenUserId.user.user_id !== dto.user_id) {
         throw new UnauthorizedException('Access denied: Not your data.');
     }
     return this.taskService.createTask(dto);
@@ -49,7 +49,7 @@ export class TaskController {
     @Query('endDate') endDate?: string,
   ) {
     const tokenUserId = req['user'];
-    if (tokenUserId.user_id !== user_id) {
+    if (tokenUserId.user.user_id !== user_id) {
         throw new UnauthorizedException('Access denied: Not your data.');
     }
     return this.taskService.getTasksByUser(user_id, startDate, endDate);
@@ -64,7 +64,7 @@ export class TaskController {
     @Query('endDate') endDate?: string,
   ) {
     const tokenUserId = req['user'];
-    return this.taskService.getTasksByProj(tokenUserId.user_id, project_id, startDate, endDate);
+    return this.taskService.getTasksByProj(tokenUserId.user.user_id, project_id, startDate, endDate);
   }
 
   @UseGuards(AuthorizeGuard)
@@ -80,7 +80,7 @@ export class TaskController {
           error?: any;
         }> {
     const tokenUserId = req['user'];
-    return this.taskService.updateOne(task_id, updateTaskDto, tokenUserId.user_id);
+    return this.taskService.updateOne(task_id, updateTaskDto, tokenUserId.user.user_id);
   }
 
   @UseGuards(AuthorizeGuard)
@@ -95,7 +95,7 @@ export class TaskController {
           error?: any;
         }> {
     const tokenUserId = req['user'];
-    return this.taskService.softDeleteOne(task_id, tokenUserId.user_id);
+    return this.taskService.softDeleteOne(task_id, tokenUserId.user.user_id);
   }
 
   @UseGuards(AuthorizeGuard)
@@ -105,7 +105,7 @@ export class TaskController {
     @Req() req: AuthenticatedRequest,
   ): Promise<TaskInstanceEntity> {
     const tokenUserId = req['user'];
-    return this.taskService.hardDeleteOne(task_id, tokenUserId.user_id);
+    return this.taskService.hardDeleteOne(task_id, tokenUserId.user.user_id);
   }
 
   @UseGuards(AuthorizeGuard)
@@ -122,7 +122,7 @@ export class TaskController {
       error?: string;
   }> {
     const tokenUserId = req['user'];
-    if(tokenUserId.user_id !== user_id) {
+    if(tokenUserId.user.user_id !== user_id) {
       throw new UnauthorizedException('Access denied: Not your data.');
     }
     return this.taskService.getDashboardData(user_id, startDate, endDate);
@@ -137,7 +137,7 @@ export class TaskController {
     @Query('endDate') endDate: string
   ) {
     const tokenUserId = req['user'];
-    if (tokenUserId.user_id !== user_id) {
+    if (tokenUserId.user.user_id !== user_id) {
       throw new UnauthorizedException('Access denied: Not your data.');
     }
     
@@ -173,7 +173,7 @@ export class TaskController {
     @Query('year') year: string
   ) {
     const tokenUserId = req['user'];
-    if (tokenUserId.user_id !== user_id) {
+    if (tokenUserId.user.user_id !== user_id) {
       throw new UnauthorizedException('Access denied: Not your data.');
     }
     
@@ -198,7 +198,7 @@ export class TaskController {
     @Query('year') year: string
   ) {
     const tokenUserId = req['user'];
-    if (tokenUserId.user_id !== user_id) {
+    if (tokenUserId.user.user_id !== user_id) {
       throw new UnauthorizedException('Access denied: Not your data.');
     }
     
@@ -221,7 +221,7 @@ export class TaskController {
     @Req() req: AuthenticatedRequest,
   ) {
     const tokenUserId = req['user'];
-    if (tokenUserId.user_id !== user_id) {
+    if (tokenUserId.user.user_id !== user_id) {
       throw new UnauthorizedException('Access denied: Not your data.');
     }
     
@@ -243,7 +243,7 @@ export class TaskController {
     const data = await this.taskService.updateTaskStatus(
       task_id,
       status,
-      tokenUserId.user_id
+      tokenUserId.user.user_id
     );
     
     return data;

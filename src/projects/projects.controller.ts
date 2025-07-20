@@ -25,7 +25,7 @@ import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
     @UseGuards(AuthorizeGuard)
     @Get('getAll')
     findAll( @Req() req: AuthenticatedRequest): Promise<ProjectEntity[]> {
-      const tokenUserId = req['user'];
+      const tokenUserId = req.user.user;
       if (tokenUserId.role !== 'admin') {
           throw new UnauthorizedException('Access denied: Admin only.');
         }
@@ -40,11 +40,10 @@ import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
         data?: SanitizedProject[];
         error?: any;
       }> {
-      const tokenUserId = req['user'];
-      if (tokenUserId.user_id !== user_id) {
+        if (user_id !== req.user.user.user_id) {
           throw new UnauthorizedException('Access denied: Not your data.');
         }
-    return this.projectsService.findAllForUser(user_id, tokenUserId.user_id);
+    return this.projectsService.findAllForUser(user_id, req.user.user.user_id);
     }
 
     @UseGuards(AuthorizeGuard)
@@ -55,7 +54,7 @@ import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
       data?: ProjectEntity;
       error?: any;
     }> {
-      const tokenUserId = req['user'];
+      const tokenUserId = req.user.user;
       return this.projectsService.findOne(project_id, tokenUserId.user_id);
     }
   
@@ -67,9 +66,8 @@ import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
       data?: ProjectEntity;
       error?: any;
     }> {
-      const tokenUserId = req['user'];
-      if (tokenUserId.user_id !== dto.user_id) {
-          throw new UnauthorizedException('Access denied: Not your data.');
+      if (dto.user_id !== req.user.user.user_id) {
+        throw new UnauthorizedException('Access denied: Not your data.');
       }
       return this.projectsService.createProject(dto);
     }
@@ -86,7 +84,7 @@ import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
       data?: ProjectEntity;
       error?: any;
     }> {
-      const tokenUserId = req['user'];
+      const tokenUserId = req.user.user;
       return this.projectsService.updateOne(project_id, updateProjectDto, tokenUserId.user_id);
     }
   
@@ -97,7 +95,7 @@ import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
         message: string;
         error?: any;
     }> {
-      const tokenUserId = req['user'];
+      const tokenUserId = req.user.user;
       return this.projectsService.softDeleteOne(project_id, tokenUserId.user_id);
     }
   
@@ -108,7 +106,7 @@ import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
         message: string;
         error?: any;
       }> {
-    const tokenUserId = req['user'];
+    const tokenUserId = req.user.user;
     return this.projectsService.hardDeleteOne(project_id, tokenUserId.user_id);
     }
   }

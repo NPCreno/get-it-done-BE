@@ -73,7 +73,7 @@ export class UserController {
         @Req() req: AuthenticatedRequest
     ): Promise<UserCleanupResponse | null> {
         const tokenUser = req.user;
-        if (tokenUser.user_id !== id && tokenUser.role !== 'admin') {
+        if (tokenUser.user.user_id !== id && tokenUser.user.role !== 'admin') {
             throw new UnauthorizedException('Access denied: Not authorized to view this data.');
         }
         const user = await this.userService.findOne(id);
@@ -87,7 +87,7 @@ export class UserController {
     @Get('getAll')
     async findAll(@Req() req: AuthenticatedRequest): Promise<UserCleanupResponse[]> {
         const tokenUser = req.user;
-        if (tokenUser.role !== 'admin') {
+        if (tokenUser.user.role !== 'admin') {
             throw new UnauthorizedException('Access denied: Admin only.');
         }
         return this.userService.findAll();
@@ -104,10 +104,10 @@ export class UserController {
         error?: any;
     }> {
         const tokenUser = req.user;
-        if (tokenUser.user_id !== user_id && tokenUser.role !== 'admin') {
+        if (tokenUser.user.user_id !== user_id && tokenUser.user.role !== 'admin') {
             throw new UnauthorizedException('Access denied: Not authorized to perform this action.');
         }
-        return this.userService.softDeleteOne(user_id, tokenUser.user_id);
+        return this.userService.softDeleteOne(user_id, tokenUser.user.user_id);
     }
 
     @UseGuards(AuthorizeGuard)
@@ -121,10 +121,10 @@ export class UserController {
         error?: any;
     }> {
         const tokenUser = req.user;
-        if (tokenUser.role !== 'admin') {
+        if (tokenUser.user.role !== 'admin') {
             throw new UnauthorizedException('Access denied: Admin only.');
         }
-        return this.userService.hardDeleteOne(user_id, tokenUser.user_id);
+        return this.userService.hardDeleteOne(user_id, tokenUser.user.user_id);
     }
     
     @UseGuards(AuthorizeGuard)
@@ -135,7 +135,7 @@ export class UserController {
         @Req() req: AuthenticatedRequest
     ): Promise<UserCleanupResponse> {
         const tokenUser = req.user;
-        if (tokenUser.user_id !== user_id && tokenUser.role !== 'admin') {
+        if (tokenUser.user.user_id !== user_id && tokenUser.user.role !== 'admin') {
             throw new UnauthorizedException('Access denied: Not authorized to update this user.');
         }
         return this.userService.updateOne(user_id, updateUserDto);
