@@ -34,7 +34,10 @@ export class UserController {
     }
 
     @Post('loginEmail')
-    async loginEmail(@Body() credentials: { email: string; password: string }) 
+    async loginEmail(@Body() credentials: { 
+        email: string; 
+        password: string; 
+        rememberMe: boolean }) 
     : Promise<{
         status: string;
         message: string;
@@ -51,7 +54,7 @@ export class UserController {
     }
 
     @Post('loginUsername')
-    async loginUsername(@Body() credentials: { username: string; password: string })
+    async loginUsername(@Body() credentials: { username: string; password: string, rememberMe: boolean })
     : Promise<{
         status: string;
         message: string;

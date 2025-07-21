@@ -15,9 +15,9 @@ export class AuthService {
         private readonly authTokenRepository: Repository<AuthTokenEntity>
     ){}
 
-      // Generate Access Token (short-lived)
     generateAccessToken(user: User): string {
         const payload: TokenPayload = {
+        user,
         sub: user.user_id.toString(),
         type: 'access',
         jti: crypto.randomUUID(),
@@ -28,9 +28,9 @@ export class AuthService {
         });
     }
 
-    generateJWT(user: User): Observable <String>{
-        const payload = { user }; // You can include more data in the payload if needed.
-        return of(this.jwtService.sign(payload)); 
+    generateJWT(user: User): string{
+        const payload = { user }; 
+        return this.jwtService.sign(payload); 
     }
 
     hashPassword(password: string): Observable <String>{
@@ -41,14 +41,15 @@ export class AuthService {
         return from<any | boolean>(bcrypt.compare(newPassword, passwordHash)); 
     }
 
-    generateRefreshToken(refreshToken: string, ipAddress: string, user: User): string {
+    generateRefreshToken(user: User, rememberMe: boolean): string {
         const payload: TokenPayload = {
+        user,
         sub: user.user_id.toString(),
         type: 'refresh',
         jti: crypto.randomUUID(),
         };
         return this.jwtService.sign(payload, {
-        expiresIn: '7d',
+        expiresIn: rememberMe ? '7d' : '1d',
         secret: process.env.JWT_SECRET
         });
     }

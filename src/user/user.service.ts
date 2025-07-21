@@ -263,7 +263,7 @@ export class UserService {
       }
     }
 
-    async loginEmail(credentials: { email: string; password: string }): Promise<
+    async loginEmail(credentials: { email: string; password: string, rememberMe: boolean }): Promise<
     {
       status: string;
       message: string;
@@ -283,16 +283,17 @@ export class UserService {
       
       try {
         const validatedUser = await this.validateUser(email, password);
-        const jwt = await this.authService.generateJWT(validatedUser).toPromise();
+        const jwt = await this.authService.generateAccessToken(validatedUser);
         if (!jwt) {
           throw new Error('Failed to generate JWT token');
         }
+        const refreshToken = await this.authService.generateRefreshToken(validatedUser, credentials.rememberMe);
         return {
           status: 'success',
           message: 'Login successful',
           data: {
             access_token: jwt.toString(),
-            refresh_token: jwt.toString(),
+            refresh_token: refreshToken.toString(),
             expires_in: 3600
           },
           error: null
@@ -302,7 +303,7 @@ export class UserService {
       }
     }
 
-    async loginUsername(credentials: { username: string; password: string }): Promise<{
+    async loginUsername(credentials: { username: string; password: string, rememberMe: boolean }): Promise<{
       status: string;
       message: string;
       data?: {
@@ -320,16 +321,17 @@ export class UserService {
       
       try {
         const validatedUser = await this.validateUser(username, password);
-        const jwt = await this.authService.generateJWT(validatedUser).toPromise();
+        const jwt = await this.authService.generateAccessToken(validatedUser);
         if (!jwt) {
           throw new Error('Failed to generate JWT token');
         }
+        const refreshToken = await this.authService.generateRefreshToken(validatedUser, credentials.rememberMe);
         return {
           status: 'success',
           message: 'Login successful',
           data: {
             access_token: jwt.toString(),
-            refresh_token: jwt.toString(),
+            refresh_token: refreshToken.toString(),
             expires_in: 3600
           },
           error: null
