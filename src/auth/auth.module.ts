@@ -5,6 +5,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { AuthTokenEntity } from './models/auth.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { UserEntity } from 'src/user/models/user.entity';
 
 @Module({
     imports: [
@@ -16,7 +17,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
                 signOptions: {expiresIn: '1d'} //Token expires in 1d
             })
         }),
-        TypeOrmModule.forFeature([AuthTokenEntity]),
+        TypeOrmModule.forFeature([AuthTokenEntity, UserEntity]),
     ],
     providers: [AuthService],
     exports: [AuthService, JwtModule],

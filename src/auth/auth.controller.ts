@@ -23,6 +23,6 @@ export class AuthController {
       @Body('refreshToken') refreshToken: string,
       @Ip() ipAddress: string
     ) {
-      // return this.authService.generateRefreshToken(refreshToken, ipAddress);
+      return this.authService.refreshAccessToken(refreshToken, ipAddress);
     }
 }

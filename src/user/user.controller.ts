@@ -9,7 +9,8 @@ import {
   NotFoundException, 
   UseGuards, 
   Req, 
-  UnauthorizedException 
+  UnauthorizedException, 
+  Ip
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { UserCleanupResponse } from './models/userCleanupResponse';
@@ -34,11 +35,16 @@ export class UserController {
     }
 
     @Post('loginEmail')
-    async loginEmail(@Body() credentials: { 
+    async loginEmail(
+        @Body() credentials: { 
         email: string; 
         password: string; 
-        rememberMe: boolean }) 
+        rememberMe: boolean
+        ipAddress: string
+    },
+    ) 
     : Promise<{
+        
         status: string;
         message: string;
         data?: {
@@ -54,7 +60,13 @@ export class UserController {
     }
 
     @Post('loginUsername')
-    async loginUsername(@Body() credentials: { username: string; password: string, rememberMe: boolean })
+    async loginUsername(
+        @Body() credentials: { 
+        username: string; 
+        password: string; 
+        rememberMe: boolean; 
+        ipAddress: string },
+    )
     : Promise<{
         status: string;
         message: string;
