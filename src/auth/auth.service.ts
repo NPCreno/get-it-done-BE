@@ -126,7 +126,15 @@ export class AuthService {
         );
     }
 
-    async refreshAccessToken(refreshToken: string, ipAddress: string): Promise<string> {
+    async refreshAccessToken(refreshToken: string, ipAddress: string): Promise<{
+        status: string,
+        message: string;
+        data?: {
+            access_token: string;
+        };
+        error?: any;
+    }> {
+        try {
         // Validate the refresh token
         const { userId, tokenId } = await this.validateRefreshToken(refreshToken, ipAddress);
         
@@ -155,6 +163,19 @@ export class AuthService {
         // If using refresh token rotation, generate a new refresh token here
         // const newRefreshToken = await this.generateRefreshToken(user, ipAddress);
         
-        return accessToken;
+        return {
+            status: 'success',
+            message: 'Access token generated successfully',
+            data: {
+                access_token: accessToken
+            }
+        };
+    } catch (error: any) {
+        return {
+            status: 'error',
+            message: 'Failed to generate access token',
+            error: error
+        };
     }
+}
 }

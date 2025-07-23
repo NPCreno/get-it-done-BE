@@ -20,8 +20,7 @@ export class AuthController {
 
     @Post('refresh')
     async refreshToken(
-      @Body('refreshToken') refreshToken: string,
-      @Ip() ipAddress: string
+      @Body() {refreshToken, ipAddress}: {refreshToken: string, ipAddress: string},
     ) {
       return this.authService.refreshAccessToken(refreshToken, ipAddress);
     }
