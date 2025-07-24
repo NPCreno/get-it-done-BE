@@ -133,6 +133,7 @@ export class AuthService {
         data?: {
             access_token: string;
             refresh_token: string;
+            expires_in: number;
         };
         error?: any;
     }> {
@@ -171,7 +172,8 @@ export class AuthService {
             message: 'Access token generated successfully',
             data: {
                 access_token: accessToken,
-                refresh_token: newRefreshToken
+                refresh_token: newRefreshToken,
+                expires_in: 3600,
             }
         };
     } catch (error: any) {
