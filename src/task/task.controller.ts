@@ -109,6 +109,24 @@ export class TaskController {
   }
 
   @UseGuards(AuthorizeGuard)
+  @Delete('deleteRecurringTasks/:taskTemplate_id')
+  async deleteRecurringTasks(
+    @Param('taskTemplate_id') taskTemplate_id: string,
+    @Req() req: AuthenticatedRequest,
+  ):  Promise<{
+          status: string;
+          message: string;
+          data?: { 
+            deletedInstances: TaskInstanceEntity[]; 
+            deletedTemplate: TaskTemplateEntity | null; 
+          } | null;
+          error?: any;
+        }> {
+    const tokenUserId = req['user'];
+    return this.taskService.deleteRecurringTasks(taskTemplate_id, tokenUserId.user.user_id);
+  }
+
+  @UseGuards(AuthorizeGuard)
   @Get('getDashboardData/:user_id')
   getDashboardData(
     @Req() req: AuthenticatedRequest,

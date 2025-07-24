@@ -3,6 +3,9 @@ import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  Inject,
+  forwardRef,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, IsNull, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
@@ -22,6 +25,8 @@ import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
 import { CalendarHeatmap } from './interfaces/calendarHeatmap';
 @Injectable()
 export class TaskService implements OnModuleInit {
+  private readonly logger = new Logger('TaskService');
+
   constructor(
     @InjectRepository(TaskTemplateEntity)
     private readonly taskTemplateRepository: Repository<TaskTemplateEntity>,
@@ -31,6 +36,7 @@ export class TaskService implements OnModuleInit {
     private readonly usersRepository: Repository<UserEntity>,
     @InjectRepository(ProjectEntity)
     private readonly projectsRepository: Repository<ProjectEntity>,
+    @Inject(forwardRef(() => TaskGeneratorService))
     private readonly taskGeneratorService: TaskGeneratorService,
   ) {}
   async onModuleInit() {
@@ -207,7 +213,7 @@ export class TaskService implements OnModuleInit {
 
     const data = await this.taskInstanceRepository.find({
       where,
-      relations: ['user', 'project'],  // include project relation here
+      relations: ['user', 'project', 'template'],  // include template relation
       withDeleted: false,
     });
 
@@ -216,10 +222,11 @@ export class TaskService implements OnModuleInit {
     }
 
     const sortedData = data
-      .map(({ user, project, ...rest }) => ({
+      .map(({ user, project, template, ...rest }) => ({
         ...rest,
         user_id: user.user_id,
         project_title: project?.title ?? null,
+        template_id: template?.taskTemplate_id ?? null,
       }))
       .sort((a, b) => {
         if (a.status === "Complete" && b.status !== "Complete") return 1;
@@ -239,7 +246,6 @@ export class TaskService implements OnModuleInit {
         error: error?.message || error,
       };
     }
-    
   }
 
   async getTasksByProj(
@@ -384,6 +390,93 @@ export class TaskService implements OnModuleInit {
       };
     }
   }
+
+  async deleteRecurringTasks(taskTemplate_id: string, tokenUserId: string): Promise<{
+    status: string;
+    message: string;
+    data?: {
+      deletedInstances: TaskInstanceEntity[];
+      deletedTemplate: TaskTemplateEntity | null;
+    } | null;
+    error?: any;
+  }> {
+    const queryRunner = this.taskInstanceRepository.manager.connection.createQueryRunner();
+    
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    
+    try {
+      // Get the template with required fields in a single query
+      const template = await this.taskTemplateRepository.findOne({
+        where: { taskTemplate_id },
+        select: ['id', 'taskTemplate_id', 'user_id']
+      });
+
+      if (!template) {
+        throw new NotFoundException(`Task template with ID ${taskTemplate_id} not found`);
+      }
+
+      if (template.user_id !== tokenUserId) {
+        throw new UnauthorizedException('Access denied: Not your data.');
+      }
+
+      // Find all task instances with the given template ID
+      const tasks = await this.taskInstanceRepository.find({
+        where: { template: { id: template.id } },
+        relations: ['user'],
+        select: {
+          id: true,
+          task_id: true,
+          user: {
+            user_id: true,
+          },
+          template: {
+            taskTemplate_id: true,
+          }
+        }
+      });
+
+      // Hard delete all task instances with the given template ID
+      if (tasks.length > 0) {
+        // Log each task being deleted
+        tasks.forEach(task => {
+          this.logger.debug(`Hard deleting task instance ${task.task_id} for template ${taskTemplate_id} with due date ${task.due_date}`);
+        });
+        
+        await this.taskInstanceRepository.delete({ template: { id: template.id } });
+        this.logger.debug(`Successfully hard deleted ${tasks.length} task instances for template ${taskTemplate_id}`);
+      }
+
+      // Hard delete the template to prevent it from generating new instances
+      await this.taskTemplateRepository.delete({ taskTemplate_id });
+      this.logger.debug(`Successfully hard deleted template ${taskTemplate_id}`);
+
+      // Return the tasks that were just deleted (they won't be in the DB anymore)
+      const deletedTasks = [...tasks];
+      const deletedTemplate = template;
+
+      await queryRunner.commitTransaction();
+
+      return {
+        status: 'success',
+        message: `Successfully deleted ${deletedTasks.length} task instances and the task template`,
+        data: {
+          deletedInstances: deletedTasks,
+          deletedTemplate
+        },
+      };
+    } catch (error: any) {
+      await queryRunner.rollbackTransaction();
+      return {
+        status: 'error',
+        message: 'Failed to delete recurring tasks',
+        error: error?.message || error,
+      };
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   async hardDeleteOne(task_id: string, tokenUserId: string): Promise<TaskInstanceEntity> {
     const task = await this.taskInstanceRepository.findOne({
       where: { task_id },
