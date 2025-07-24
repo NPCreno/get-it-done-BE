@@ -108,6 +108,7 @@ export class AuthService {
 
             return { userId: tokenRecord.user_id, tokenId: tokenRecord.token_id };
         } catch (error) {
+            console.error("Error validating refresh token: ", error);
             throw new Error('Invalid refresh token');
         }
     }
@@ -131,6 +132,7 @@ export class AuthService {
         message: string;
         data?: {
             access_token: string;
+            refresh_token: string;
         };
         error?: any;
     }> {
@@ -161,16 +163,19 @@ export class AuthService {
         // Generate new tokens
         const accessToken = this.generateAccessToken(userForToken as User);
         // If using refresh token rotation, generate a new refresh token here
-        // const newRefreshToken = await this.generateRefreshToken(user, ipAddress);
+        const newRefreshToken = await this.generateRefreshToken(userForToken as User, ipAddress, true);
         
+        console.log("newRefreshToken: ", newRefreshToken);
         return {
             status: 'success',
             message: 'Access token generated successfully',
             data: {
-                access_token: accessToken
+                access_token: accessToken,
+                refresh_token: newRefreshToken
             }
         };
     } catch (error: any) {
+        console.error("Error refreshing access token: ", error);
         return {
             status: 'error',
             message: 'Failed to generate access token',

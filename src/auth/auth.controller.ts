@@ -22,6 +22,7 @@ export class AuthController {
     async refreshToken(
       @Body() {refreshToken, ipAddress}: {refreshToken: string, ipAddress: string},
     ) {
+      console.log("refreshToken triggered")
       return this.authService.refreshAccessToken(refreshToken, ipAddress);
     }
 }
