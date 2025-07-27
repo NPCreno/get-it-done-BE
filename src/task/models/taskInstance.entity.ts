@@ -52,7 +52,7 @@ export class TaskInstanceEntity {
 
   @ManyToOne(() => TaskTemplateEntity, (template) => template.instances, {
     nullable: true,
-    onDelete: 'CASCADE',
+    onDelete: 'SET NULL'
   })
   template!: TaskTemplateEntity | null;
 

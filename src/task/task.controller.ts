@@ -123,7 +123,7 @@ export class TaskController {
           error?: any;
         }> {
     const tokenUserId = req['user'];
-    return this.taskService.deleteRecurringTasks(taskTemplate_id, tokenUserId.user.user_id);
+    return this.taskService.deleteRecurringTasks(taskTemplate_id, tokenUserId.user.user_id, false);
   }
 
   @UseGuards(AuthorizeGuard)

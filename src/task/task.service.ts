@@ -8,7 +8,13 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, IsNull, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+import { 
+  Between, 
+  In, 
+  IsNull, 
+  MoreThanOrEqual, 
+  Repository 
+} from 'typeorm';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
 import { TaskTemplateEntity } from './models/taskTemplate.entity';
 import { CreateTaskDto } from './dto/create-task-dto';
@@ -391,7 +397,7 @@ export class TaskService implements OnModuleInit {
     }
   }
 
-  async deleteRecurringTasks(taskTemplate_id: string, tokenUserId: string): Promise<{
+  async deleteRecurringTasks(taskTemplate_id: string, tokenUserId: string, includeCompleted: boolean): Promise<{
     status: string;
     message: string;
     data?: {
@@ -402,78 +408,107 @@ export class TaskService implements OnModuleInit {
   }> {
     const queryRunner = this.taskInstanceRepository.manager.connection.createQueryRunner();
     
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-    
     try {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+      
       // Get the template with required fields in a single query
-      const template = await this.taskTemplateRepository.findOne({
+      const template = await queryRunner.manager.findOne(TaskTemplateEntity, {
         where: { taskTemplate_id },
         select: ['id', 'taskTemplate_id', 'user_id']
       });
-
+  
       if (!template) {
         throw new NotFoundException(`Task template with ID ${taskTemplate_id} not found`);
       }
-
+  
       if (template.user_id !== tokenUserId) {
         throw new UnauthorizedException('Access denied: Not your data.');
       }
-
-      // Find all task instances with the given template ID
-      const tasks = await this.taskInstanceRepository.find({
+  
+      this.logger.debug(`Deleting tasks for template ${taskTemplate_id}, includeCompleted: ${includeCompleted}`);
+      
+      // Get all tasks for this template
+      const allTasks = await queryRunner.manager.find(TaskInstanceEntity, {
         where: { template: { id: template.id } },
-        relations: ['user'],
-        select: {
-          id: true,
-          task_id: true,
-          user: {
-            user_id: true,
-          },
-          template: {
-            taskTemplate_id: true,
-          }
-        }
+        select: ['id', 'task_id', 'status', 'title', 'due_date'],
+        withDeleted: false
       });
-
-      // Hard delete all task instances with the given template ID
-      if (tasks.length > 0) {
-        // Log each task being deleted
-        tasks.forEach(task => {
-          this.logger.debug(`Hard deleting task instance ${task.task_id} for template ${taskTemplate_id} with due date ${task.due_date}`);
-        });
+      
+      this.logger.debug(`Found ${allTasks.length} total tasks for template ${taskTemplate_id}`);
+      
+      let deletedInstances: TaskInstanceEntity[] = [];
+      
+      if (includeCompleted) {
+        // Delete all instances - template deletion with SET NULL will handle this automatically
+        deletedInstances = allTasks;
+        this.logger.debug(`Will delete all ${allTasks.length} tasks along with template`);
+      } else {
+        // Only delete non-completed tasks manually
+        const tasksToDelete = allTasks.filter(task => task.status !== 'Complete');
+        const tasksToKeep = allTasks.filter(task => task.status === 'Complete');
         
-        await this.taskInstanceRepository.delete({ template: { id: template.id } });
-        this.logger.debug(`Successfully hard deleted ${tasks.length} task instances for template ${taskTemplate_id}`);
+        this.logger.debug(`Will delete ${tasksToDelete.length} non-completed tasks, keeping ${tasksToKeep.length} completed tasks`);
+        
+        if (tasksToDelete.length > 0) {
+          // Delete non-completed tasks first
+          await queryRunner.manager.delete(TaskInstanceEntity, {
+            id: In(tasksToDelete.map(t => t.id))
+          });
+          this.logger.debug(`Successfully deleted ${tasksToDelete.length} non-completed tasks`);
+        }
+        
+        deletedInstances = tasksToDelete;
       }
-
-      // Hard delete the template to prevent it from generating new instances
-      await this.taskTemplateRepository.delete({ taskTemplate_id });
-      this.logger.debug(`Successfully hard deleted template ${taskTemplate_id}`);
-
-      // Return the tasks that were just deleted (they won't be in the DB anymore)
-      const deletedTasks = [...tasks];
-      const deletedTemplate = template;
-
+  
+      // Delete the template 
+      // With SET NULL constraint:
+      // - If includeCompleted=true: remaining instances (if any) will have template set to null
+      // - If includeCompleted=false: completed tasks will have template set to null and become standalone
+      const deleteResult = await queryRunner.manager.delete(TaskTemplateEntity, { taskTemplate_id });
+      
+      if (deleteResult.affected === 0) {
+        throw new Error(`Failed to delete template ${taskTemplate_id}`);
+      }
+      
+      this.logger.debug(`Successfully deleted template ${taskTemplate_id}`);
+      
+      // Commit the transaction
       await queryRunner.commitTransaction();
-
+  
+      const keptCount = allTasks.length - deletedInstances.length;
       return {
         status: 'success',
-        message: `Successfully deleted ${deletedTasks.length} task instances and the task template`,
+        message: `Successfully deleted ${deletedInstances.length} task instances and the task template${keptCount > 0 ? ` (${keptCount} completed tasks converted to standalone)` : ''}`,
         data: {
-          deletedInstances: deletedTasks,
-          deletedTemplate
+          deletedInstances,
+          deletedTemplate: template
         },
       };
     } catch (error: any) {
-      await queryRunner.rollbackTransaction();
+      this.logger.error('Error in deleteRecurringTasks:', error);
+      if (queryRunner.isTransactionActive) {
+        try {
+          await queryRunner.rollbackTransaction();
+          this.logger.debug('Transaction rolled back successfully');
+        } catch (rollbackError) {
+          this.logger.error('Failed to rollback transaction', rollbackError);
+        }
+      }
+      
       return {
         status: 'error',
         message: 'Failed to delete recurring tasks',
-        error: error?.message || error,
+        error: error?.message || 'An unexpected error occurred',
       };
     } finally {
-      await queryRunner.release();
+      try {
+        if (queryRunner.isReleased === false) {
+          await queryRunner.release();
+        }
+      } catch (releaseError) {
+        this.logger.error('Failed to release query runner', releaseError);
+      }
     }
   }
 
@@ -880,7 +915,7 @@ export class TaskService implements OnModuleInit {
     }
   }
 
-  async updateTaskStatus(task_id: string, status: string, user_id: string){
+  async updateTaskStatus(task_id: string, status: string, user_id: string) {
     try {
       const task = await this.taskInstanceRepository.findOne({
         where: { task_id },
@@ -890,19 +925,43 @@ export class TaskService implements OnModuleInit {
           task_id: true,
           user: {
             user_id: true,
-          }
+          },
+          status: true,
         }
       });
-      if (!task) throw new NotFoundException(`Task with ID ${task_id} not found`);
+
+      if (!task) {
+        this.logger.warn(`Task with ID ${task_id} not found`);
+        throw new NotFoundException(`Task with ID ${task_id} not found`);
+      }
+
       if (user_id !== task.user.user_id) {
+        this.logger.warn(`Unauthorized status update attempt for task ${task_id} by user ${user_id}`);
         throw new UnauthorizedException('Access denied: Not your data.');
       }
-      await this.taskInstanceRepository.update({ task_id }, { status: status as 'Complete' | 'Pending' | 'Overdue' });
+
+      // Log the status change
+      if (task.status !== status) {
+        this.logger.log(`Task ${task_id} (${task.title || 'No title'}) status changing from '${task.status}' to '${status}'`);
+        if (status === 'Complete') {
+          this.logger.log(`Marking task ${task_id} as Complete`);
+        }
+      } else {
+        this.logger.debug(`Task ${task_id} status already set to '${status}', no change needed`);
+      }
+
+      await this.taskInstanceRepository.update(
+        { task_id },
+        { status: status as 'Complete' | 'Pending' | 'Overdue' }
+      );
+
+      this.logger.log(`Successfully updated task ${task_id} status to '${status}'`);
       return {
         status: 'success',
         message: `Task updated to ${status} successfully`,
       };
     } catch (error: any) {
+      this.logger.error(`Failed to update task ${task_id} status: ${error.message}`, error.stack);
       return {
         status: 'error',
         message: 'Failed to update task status',

@@ -7,10 +7,9 @@ import {
   addDays,
 } from 'date-fns';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, IsNull } from 'typeorm';
+import { Repository } from 'typeorm';
 import { TaskTemplateEntity } from './models/taskTemplate.entity';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
-
 
 @Injectable()
 export class TaskGeneratorService {
@@ -25,7 +24,7 @@ export class TaskGeneratorService {
   ) {}
 
   private generateTaskId(): string {
-  return `generated_task-${Math.floor(Math.random() * 1_000_000_000)}`;
+    return `generatedTask-${Math.floor(Math.random() * 1_000_000_000)}`;
   }
 
   @Cron('0 0 * * *') // Every day at midnight
@@ -122,10 +121,10 @@ export class TaskGeneratorService {
         for (const due of taskDates) {
           const dueDate = new Date(due.setHours(23, 59, 0, 0));
 
-          // Check if task already exists (including soft-deleted ones)
+          // Check if task already exists using taskTemplate_id (including soft-deleted ones)
           const existing = await this.taskInstanceRepository.findOne({
             where: {
-              template: { id: template.id },
+              template: { taskTemplate_id: template.taskTemplate_id }, // Use taskTemplate_id instead of id
               due_date: dueDate,
             },
             withDeleted: true, // Include soft-deleted records in the search
@@ -134,7 +133,7 @@ export class TaskGeneratorService {
           // Skip if task exists (either active or soft-deleted)
           if (existing) {
             this.logger.debug(
-              `Skipping generation - task already exists for template ${template.id} on ${dueDate}`
+              `Skipping generation - task already exists for template ${template.taskTemplate_id} on ${dueDate}`
             );
             continue;
           }
@@ -148,7 +147,7 @@ export class TaskGeneratorService {
             priority: 'Medium',
             status: 'Pending',
             due_date: dueDate,
-            template,
+            template, // This will still link to the full template entity
           });
 
           await this.taskInstanceRepository.save(instance);
@@ -165,12 +164,12 @@ export class TaskGeneratorService {
           }).format(dueDate);
 
           this.logger.log(
-            `Generated task instance: ${instance.task_id} due on ${formattedDate} (${timeZone})`
+            `Generated task instance: ${instance.task_id} for template ${template.taskTemplate_id} due on ${formattedDate} (${timeZone})`
           );
         }
-        this.logger.log(`Successfully processed template ${template.id}`);
+        this.logger.log(`Successfully processed template ${template.taskTemplate_id}`);
       } catch (error) {
-        this.logger.error(`Error processing template ${template.id}: ${error instanceof Error ? error.message : String(error)}`);
+        this.logger.error(`Error processing template ${template.taskTemplate_id}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   }
