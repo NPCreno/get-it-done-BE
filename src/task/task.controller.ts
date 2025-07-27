@@ -14,22 +14,23 @@ import {
 } from '@nestjs/common';
 import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task-dto';
-import { TaskInstance } from './models/taskInstance.entity';
+import { TaskInstanceEntity } from './models/taskInstance.entity';
 import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
-import { TaskTemplate } from './models/taskTemplate.entity';
+import { TaskTemplateEntity } from './models/taskTemplate.entity';
 import { UpdateTaskDto } from './dto/update-task-dto';
 import { IDashboardData } from './interfaces/dashboardData';
-import { StatusValidationPipe } from 'src/common/pipes/status-validation.pipe';
+import { StatusValidationPipe } from 'src/pipes/status-validation.pipe';
+import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
 @Controller('api/tasks')
 export class TaskController {
   constructor(private taskService: TaskService) {}
 
   @UseGuards(AuthorizeGuard)
   @Post('create')
-  async create(@Body() dto: CreateTaskDto, @Req() req: Request): Promise<{
+  async create(@Body() dto: CreateTaskDto, @Req() req: AuthenticatedRequest): Promise<{
     status: string;
     message: string;
-    data?: TaskInstance | TaskTemplate;
+    data?: TaskInstanceEntity | TaskTemplateEntity;
     error?: any;
   }> {
     const tokenUserId = req['user'];
@@ -42,7 +43,7 @@ export class TaskController {
   @UseGuards(AuthorizeGuard)
   @Get('getTasksByUser/:user_id')
   getTasksByUser(
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
     @Param('user_id') user_id: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -57,7 +58,7 @@ export class TaskController {
   @UseGuards(AuthorizeGuard)
   @Get('getTasksByProj/:project_id')
   getTasksByProj(
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
     @Param('project_id') project_id: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -71,11 +72,11 @@ export class TaskController {
   async update(
     @Param('task_id') task_id: string,
     @Body() updateTaskDto: UpdateTaskDto,
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
   ): Promise<{
           status: string;
           message: string;
-          data?: TaskInstance;
+          data?: TaskInstanceEntity;
           error?: any;
         }> {
     const tokenUserId = req['user'];
@@ -86,11 +87,11 @@ export class TaskController {
   @Delete(':task_id')
   async softDeleteOne(
     @Param('task_id') task_id: string,
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
   ):  Promise<{
           status: string;
           message: string;
-          data?: TaskInstance | null;
+          data?: TaskInstanceEntity | null;
           error?: any;
         }> {
     const tokenUserId = req['user'];
@@ -101,16 +102,34 @@ export class TaskController {
   @Delete(':task_id/hard')
   async hardDeleteOne(
     @Param('task_id') task_id: string,
-    @Req() req: Request,
-  ): Promise<TaskInstance> {
+    @Req() req: AuthenticatedRequest,
+  ): Promise<TaskInstanceEntity> {
     const tokenUserId = req['user'];
     return this.taskService.hardDeleteOne(task_id, tokenUserId.user.user_id);
   }
 
   @UseGuards(AuthorizeGuard)
+  @Delete('deleteRecurringTasks/:taskTemplate_id')
+  async deleteRecurringTasks(
+    @Param('taskTemplate_id') taskTemplate_id: string,
+    @Req() req: AuthenticatedRequest,
+  ):  Promise<{
+          status: string;
+          message: string;
+          data?: { 
+            deletedInstances: TaskInstanceEntity[]; 
+            deletedTemplate: TaskTemplateEntity | null; 
+          } | null;
+          error?: any;
+        }> {
+    const tokenUserId = req['user'];
+    return this.taskService.deleteRecurringTasks(taskTemplate_id, tokenUserId.user.user_id, false);
+  }
+
+  @UseGuards(AuthorizeGuard)
   @Get('getDashboardData/:user_id')
   getDashboardData(
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
     @Param('user_id') user_id: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -130,7 +149,7 @@ export class TaskController {
   @UseGuards(AuthorizeGuard)
   @Get('completion-trend/:user_id')
   async getCompletionTrend(
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
     @Param('user_id') user_id: string,
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string
@@ -166,7 +185,7 @@ export class TaskController {
   @UseGuards(AuthorizeGuard)
   @Get('task-distribution/:user_id')
   async getTaskDistribution(
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
     @Param('user_id') user_id: string,
     @Query('month') month: string,
     @Query('year') year: string
@@ -191,7 +210,7 @@ export class TaskController {
   @UseGuards(AuthorizeGuard)
   @Get('calendar-heatmap/:user_id')
   async getCalendarHeatmap(
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
     @Param('user_id') user_id: string,
     @Query('month') month: string,
     @Query('year') year: string
@@ -217,7 +236,7 @@ export class TaskController {
   @Get('streak/:user_id')
   async getStreakCount(
     @Param('user_id') user_id: string,
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
   ) {
     const tokenUserId = req['user'];
     if (tokenUserId.user.user_id !== user_id) {
@@ -233,7 +252,7 @@ export class TaskController {
   @UseGuards(AuthorizeGuard)
   @Patch('update-task-status/:task_id/status/:status')
   async updateTaskStatus(
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
     @Param('task_id') task_id: string,
     @Param('status', new StatusValidationPipe()) status: string
   ) {

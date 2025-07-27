@@ -14,4 +14,5 @@ export interface TaskInstanceResponse {
     user?: User;
     project_title?: string;
     user_id?: string;
+    template_id?: string | null;
 }

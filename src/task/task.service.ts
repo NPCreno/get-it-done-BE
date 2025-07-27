@@ -3,15 +3,24 @@ import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  Inject,
+  forwardRef,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, IsNull, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
-import { TaskInstance } from './models/taskInstance.entity';
-import { TaskTemplate } from './models/taskTemplate.entity';
+import { 
+  Between, 
+  In, 
+  IsNull, 
+  MoreThanOrEqual, 
+  Repository 
+} from 'typeorm';
+import { TaskInstanceEntity } from './models/taskInstance.entity';
+import { TaskTemplateEntity } from './models/taskTemplate.entity';
 import { CreateTaskDto } from './dto/create-task-dto';
 import { DeepPartial } from 'typeorm';
-import { Users } from 'src/user/models/user.entity';
-import { Projects } from 'src/projects/models/projects.entity';
+import { UserEntity } from 'src/user/models/user.entity';
+import { ProjectEntity } from 'src/projects/models/projects.entity';
 import { TaskGeneratorService } from './taskGenerator.service';
 import { OnModuleInit } from '@nestjs/common';
 import { UpdateTaskDto } from './dto/update-task-dto';
@@ -22,15 +31,18 @@ import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
 import { CalendarHeatmap } from './interfaces/calendarHeatmap';
 @Injectable()
 export class TaskService implements OnModuleInit {
+  private readonly logger = new Logger('TaskService');
+
   constructor(
-    @InjectRepository(TaskTemplate)
-    private readonly taskTemplateRepository: Repository<TaskTemplate>,
-    @InjectRepository(TaskInstance)
-    private readonly taskInstanceRepository: Repository<TaskInstance>,
-    @InjectRepository(Users)
-    private readonly usersRepository: Repository<Users>,
-    @InjectRepository(Projects)
-    private readonly projectsRepository: Repository<Projects>,
+    @InjectRepository(TaskTemplateEntity)
+    private readonly taskTemplateRepository: Repository<TaskTemplateEntity>,
+    @InjectRepository(TaskInstanceEntity)
+    private readonly taskInstanceRepository: Repository<TaskInstanceEntity>,
+    @InjectRepository(UserEntity)
+    private readonly usersRepository: Repository<UserEntity>,
+    @InjectRepository(ProjectEntity)
+    private readonly projectsRepository: Repository<ProjectEntity>,
+    @Inject(forwardRef(() => TaskGeneratorService))
     private readonly taskGeneratorService: TaskGeneratorService,
   ) {}
   async onModuleInit() {
@@ -50,7 +62,7 @@ export class TaskService implements OnModuleInit {
   async createTask(taskDto: CreateTaskDto): Promise<{
     status: string;
     message: string;
-    data?: TaskInstance | TaskTemplate;
+    data?: TaskInstanceEntity | TaskTemplateEntity;
     error?: any;
   }> {
     try {
@@ -122,7 +134,7 @@ export class TaskService implements OnModuleInit {
           start_date,
           end_date,
           project_id,
-        } as DeepPartial<TaskTemplate>);
+        } as DeepPartial<TaskTemplateEntity>);
 
         const savedTaskTemplate =
           await this.taskTemplateRepository.save(taskTemplate);
@@ -143,7 +155,7 @@ export class TaskService implements OnModuleInit {
         } while (exists);
 
         // Create and save the new project
-        let taskInstance: TaskInstance;
+        let taskInstance: TaskInstanceEntity;
         if (taskDto.project_id) {
           taskInstance = this.taskInstanceRepository.create({
             ...taskDto,
@@ -168,10 +180,10 @@ export class TaskService implements OnModuleInit {
         return {
           status: 'success',
           message: 'Task created successfully',
-          data: savedTask,
+          data: savedTask,  
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating task:', error);
       return {
         status: 'error',
@@ -207,7 +219,7 @@ export class TaskService implements OnModuleInit {
 
     const data = await this.taskInstanceRepository.find({
       where,
-      relations: ['user', 'project'],  // include project relation here
+      relations: ['user', 'project', 'template'],  // include template relation
       withDeleted: false,
     });
 
@@ -216,10 +228,11 @@ export class TaskService implements OnModuleInit {
     }
 
     const sortedData = data
-      .map(({ user, project, ...rest }) => ({
+      .map(({ user, project, template, ...rest }) => ({
         ...rest,
         user_id: user.user_id,
         project_title: project?.title ?? null,
+        template_id: template?.taskTemplate_id ?? null,
       }))
       .sort((a, b) => {
         if (a.status === "Complete" && b.status !== "Complete") return 1;
@@ -232,14 +245,13 @@ export class TaskService implements OnModuleInit {
         message: 'Tasks fetched successfully',
         data: sortedData,
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to fetch tasks',
         error: error?.message || error,
       };
     }
-    
   }
 
   async getTasksByProj(
@@ -282,7 +294,7 @@ export class TaskService implements OnModuleInit {
         if (a.status !== "Complete" && b.status === "Complete") return -1;
         return 0;
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error fetching tasks for project ${project_id}:`, error);
       return []; // Return empty array on error
     }
@@ -296,7 +308,7 @@ export class TaskService implements OnModuleInit {
     {
     status: string;
     message: string;
-    data?: TaskInstance;
+    data?: TaskInstanceEntity;
     error?: any;
     }
   > {
@@ -331,7 +343,7 @@ export class TaskService implements OnModuleInit {
             message: 'Task updated successfully',
             data: updatedTask,
             };
-    } catch (error) {
+    } catch (error: any) {
       return {
             status: 'error',
             message: 'Failed to update task',
@@ -342,7 +354,7 @@ export class TaskService implements OnModuleInit {
   async softDeleteOne(task_id: string, tokenUserId: string): Promise<{
     status: string;
     message: string;
-    data?: TaskInstance | null;
+    data?: TaskInstanceEntity | null;
     error?: any;
   }> {
     try {
@@ -376,7 +388,7 @@ export class TaskService implements OnModuleInit {
         message: 'Task deleted successfully',
         data: deletedTask,
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to delete task',
@@ -384,7 +396,123 @@ export class TaskService implements OnModuleInit {
       };
     }
   }
-  async hardDeleteOne(task_id: string, tokenUserId: string): Promise<TaskInstance> {
+
+  async deleteRecurringTasks(taskTemplate_id: string, tokenUserId: string, includeCompleted: boolean): Promise<{
+    status: string;
+    message: string;
+    data?: {
+      deletedInstances: TaskInstanceEntity[];
+      deletedTemplate: TaskTemplateEntity | null;
+    } | null;
+    error?: any;
+  }> {
+    const queryRunner = this.taskInstanceRepository.manager.connection.createQueryRunner();
+    
+    try {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+      
+      // Get the template with required fields in a single query
+      const template = await queryRunner.manager.findOne(TaskTemplateEntity, {
+        where: { taskTemplate_id },
+        select: ['id', 'taskTemplate_id', 'user_id']
+      });
+  
+      if (!template) {
+        throw new NotFoundException(`Task template with ID ${taskTemplate_id} not found`);
+      }
+  
+      if (template.user_id !== tokenUserId) {
+        throw new UnauthorizedException('Access denied: Not your data.');
+      }
+  
+      this.logger.debug(`Deleting tasks for template ${taskTemplate_id}, includeCompleted: ${includeCompleted}`);
+      
+      // Get all tasks for this template
+      const allTasks = await queryRunner.manager.find(TaskInstanceEntity, {
+        where: { template: { id: template.id } },
+        select: ['id', 'task_id', 'status', 'title', 'due_date'],
+        withDeleted: false
+      });
+      
+      this.logger.debug(`Found ${allTasks.length} total tasks for template ${taskTemplate_id}`);
+      
+      let deletedInstances: TaskInstanceEntity[] = [];
+      
+      if (includeCompleted) {
+        // Delete all instances - template deletion with SET NULL will handle this automatically
+        deletedInstances = allTasks;
+        this.logger.debug(`Will delete all ${allTasks.length} tasks along with template`);
+      } else {
+        // Only delete non-completed tasks manually
+        const tasksToDelete = allTasks.filter(task => task.status !== 'Complete');
+        const tasksToKeep = allTasks.filter(task => task.status === 'Complete');
+        
+        this.logger.debug(`Will delete ${tasksToDelete.length} non-completed tasks, keeping ${tasksToKeep.length} completed tasks`);
+        
+        if (tasksToDelete.length > 0) {
+          // Delete non-completed tasks first
+          await queryRunner.manager.delete(TaskInstanceEntity, {
+            id: In(tasksToDelete.map(t => t.id))
+          });
+          this.logger.debug(`Successfully deleted ${tasksToDelete.length} non-completed tasks`);
+        }
+        
+        deletedInstances = tasksToDelete;
+      }
+  
+      // Delete the template 
+      // With SET NULL constraint:
+      // - If includeCompleted=true: remaining instances (if any) will have template set to null
+      // - If includeCompleted=false: completed tasks will have template set to null and become standalone
+      const deleteResult = await queryRunner.manager.delete(TaskTemplateEntity, { taskTemplate_id });
+      
+      if (deleteResult.affected === 0) {
+        throw new Error(`Failed to delete template ${taskTemplate_id}`);
+      }
+      
+      this.logger.debug(`Successfully deleted template ${taskTemplate_id}`);
+      
+      // Commit the transaction
+      await queryRunner.commitTransaction();
+  
+      const keptCount = allTasks.length - deletedInstances.length;
+      return {
+        status: 'success',
+        message: `Successfully deleted ${deletedInstances.length} task instances and the task template${keptCount > 0 ? ` (${keptCount} completed tasks converted to standalone)` : ''}`,
+        data: {
+          deletedInstances,
+          deletedTemplate: template
+        },
+      };
+    } catch (error: any) {
+      this.logger.error('Error in deleteRecurringTasks:', error);
+      if (queryRunner.isTransactionActive) {
+        try {
+          await queryRunner.rollbackTransaction();
+          this.logger.debug('Transaction rolled back successfully');
+        } catch (rollbackError) {
+          this.logger.error('Failed to rollback transaction', rollbackError);
+        }
+      }
+      
+      return {
+        status: 'error',
+        message: 'Failed to delete recurring tasks',
+        error: error?.message || 'An unexpected error occurred',
+      };
+    } finally {
+      try {
+        if (queryRunner.isReleased === false) {
+          await queryRunner.release();
+        }
+      } catch (releaseError) {
+        this.logger.error('Failed to release query runner', releaseError);
+      }
+    }
+  }
+
+  async hardDeleteOne(task_id: string, tokenUserId: string): Promise<TaskInstanceEntity> {
     const task = await this.taskInstanceRepository.findOne({
       where: { task_id },
       withDeleted: true,
@@ -452,7 +580,7 @@ export class TaskService implements OnModuleInit {
           all_projects: projects.length,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to fetch dashboard data',
@@ -554,7 +682,7 @@ export class TaskService implements OnModuleInit {
         message: 'Task completion trend retrieved successfully',
         data: result
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to fetch task completion trend',
@@ -622,7 +750,7 @@ export class TaskService implements OnModuleInit {
         message: 'Task distribution retrieved successfully',
         data: distributionData,
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to fetch project distribution',
@@ -702,7 +830,7 @@ export class TaskService implements OnModuleInit {
         message: 'Calendar heatmap data retrieved successfully',
         data: allDays,
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to fetch calendar heatmap data',
@@ -778,7 +906,7 @@ export class TaskService implements OnModuleInit {
           count: hasCompletedToday ? streak + 1 : streak,
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'error',
         message: 'Failed to retrieve streak count',
@@ -787,7 +915,7 @@ export class TaskService implements OnModuleInit {
     }
   }
 
-  async updateTaskStatus(task_id: string, status: string, user_id: string){
+  async updateTaskStatus(task_id: string, status: string, user_id: string) {
     try {
       const task = await this.taskInstanceRepository.findOne({
         where: { task_id },
@@ -797,19 +925,43 @@ export class TaskService implements OnModuleInit {
           task_id: true,
           user: {
             user_id: true,
-          }
+          },
+          status: true,
         }
       });
-      if (!task) throw new NotFoundException(`Task with ID ${task_id} not found`);
+
+      if (!task) {
+        this.logger.warn(`Task with ID ${task_id} not found`);
+        throw new NotFoundException(`Task with ID ${task_id} not found`);
+      }
+
       if (user_id !== task.user.user_id) {
+        this.logger.warn(`Unauthorized status update attempt for task ${task_id} by user ${user_id}`);
         throw new UnauthorizedException('Access denied: Not your data.');
       }
-      await this.taskInstanceRepository.update({ task_id }, { status: status as 'Complete' | 'Pending' | 'Overdue' });
+
+      // Log the status change
+      if (task.status !== status) {
+        this.logger.log(`Task ${task_id} (${task.title || 'No title'}) status changing from '${task.status}' to '${status}'`);
+        if (status === 'Complete') {
+          this.logger.log(`Marking task ${task_id} as Complete`);
+        }
+      } else {
+        this.logger.debug(`Task ${task_id} status already set to '${status}', no change needed`);
+      }
+
+      await this.taskInstanceRepository.update(
+        { task_id },
+        { status: status as 'Complete' | 'Pending' | 'Overdue' }
+      );
+
+      this.logger.log(`Successfully updated task ${task_id} status to '${status}'`);
       return {
         status: 'success',
         message: `Task updated to ${status} successfully`,
       };
-    } catch (error) {
+    } catch (error: any) {
+      this.logger.error(`Failed to update task ${task_id} status: ${error.message}`, error.stack);
       return {
         status: 'error',
         message: 'Failed to update task status',

@@ -1,170 +1,160 @@
 import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Users } from './models/user.entity';
+import { UserEntity } from './models/user.entity';
 import { Repository } from 'typeorm';
-import { catchError, from, map, Observable, of, switchMap, throwError } from 'rxjs';
-import { User } from './models/user.interface';
 import { CreateUserDto } from './dto/create-user-dto';
 import { UpdateUserDto } from './dto/update-user-dto';
 import { AuthService } from 'src/auth/auth.service';
+import { UserCleanupResponse } from './models/userCleanupResponse';
+import { User } from './models/user.interface';
 
 @Injectable()
 export class UserService {
-    constructor (
-        @InjectRepository(Users) private readonly userRepository: Repository<Users>,
-        private readonly authService: AuthService,
-    ){}
-    
-    private generateUserId(): string {
-      const randomNumber = Math.floor(Math.random() * 1_000_000_000); // 0 to 999,999,999
-      return 'user-' + randomNumber.toString().padStart(9, '0');
-    }
+  constructor (
+      @InjectRepository(UserEntity) private readonly userRepository: Repository<UserEntity>,
+      private readonly authService: AuthService,
+  ){}
+  
+  private generateUserId(): string {
+    const randomNumber = Math.floor(Math.random() * 1_000_000_000); // 0 to 999,999,999
+    return 'user-' + randomNumber.toString().padStart(9, '0');
+  }
 
-    async createUser(userDto: CreateUserDto): Promise<{
+  async createUser(userDto: CreateUserDto): Promise<{
+    status: string;
+    message: string;
+    data?: UserCleanupResponse | null;
+    error?: any;
+  }> {
+    try {
+      // Ensure password is a primitive string
+      const password = String(userDto.password);
+      
+      // Hash the password
+      const passwordHash = await this.authService.hashPassword(password).toPromise();
+      if (!passwordHash) {
+        throw new Error('Failed to hash password');
+      }
+
+      const user_id = this.generateUserId();
+      
+      // Create a new user instance with explicit typing
+      const newUser = this.userRepository.create({
+        fullname: String(userDto.fullname),
+        username: String(userDto.username),
+        email: String(userDto.email).toLowerCase(),
+        password: String(passwordHash),  // Ensure it's a primitive string
+        tier: userDto.tier || 'free',
+        role: 'standard',
+        user_id,
+        status: 'active',
+      });
+  
+      // Save the new user with the hashed password
+      const savedUser = await this.userRepository.save(newUser);
+      
+      // Remove password from the returned object
+      const { password: _, ...userWithoutPassword } = savedUser;
+  
+      return {
+        status: 'success',
+        message: 'User created successfully',
+        data: userWithoutPassword
+      };
+    } catch (error: any) {
+      console.error('Error creating user:', error);
+      
+      if (error.code === '23505') { // Postgres unique violation
+        const detail = error.detail || '';
+        let message = 'Duplicate entry.';
+        
+        if (detail.includes('username')) {
+          message = 'Username already exists.';
+        } else if (detail.includes('email')) {
+          message = 'Email already exists.';
+        }
+  
+        return {
+          status: 'error',
+          message,
+          error: { message }
+        };
+      }
+  
+      return {
+        status: 'error',
+        message: 'Failed to create user.',
+        error: { message: error.message || 'Internal server error' }
+      };
+    }
+  }
+
+  async findOne(user_id: string): Promise<UserCleanupResponse | null> {
+    const user = await this.userRepository.findOne({ where: { user_id } });
+    if (!user) return null;
+    const { password, ...result } = user;
+    return result;
+  }
+
+  async findAll(): Promise<UserCleanupResponse[]> {
+    const users = await this.userRepository.find();
+    return users.map(({ password, ...user }) => user);
+  }
+
+  async softDeleteOne(user_id: string, tokenUserId: string): Promise<{
       status: string;
       message: string;
-      data?: User | null;
       error?: any;
     }> {
       try {
-        // Ensure password is a primitive string
-        const password = String(userDto.password);
-        
-        // Hash the password
-        const passwordHash = await this.authService.hashPassword(password).toPromise();
-        if (!passwordHash) {
-          throw new Error('Failed to hash password');
-        }
-
-        const user_id = this.generateUserId();
-        
-        // Create a new user instance with explicit typing
-        const newUser = this.userRepository.create({
-          fullname: String(userDto.fullname),
-          username: String(userDto.username),
-          email: String(userDto.email).toLowerCase(),
-          password: String(passwordHash),  // Ensure it's a primitive string
-          tier: userDto.tier || 'free',
-          role: 'standard',
-          user_id,
-          status: 'active',
-        });
-    
-        // Save the new user with the hashed password
-        const savedUser = await this.userRepository.save(newUser);
-        
-        // Remove password from the returned object
-        const { password: _, ...userWithoutPassword } = savedUser;
-    
-        return {
-          status: 'success',
-          message: 'User created successfully',
-          data: userWithoutPassword
-        };
-      } catch (error) {
-        console.error('Error creating user:', error);
-        
-        if (error.code === '23505') { // Postgres unique violation
-          const detail = error.detail || '';
-          let message = 'Duplicate entry.';
-          
-          if (detail.includes('username')) {
-            message = 'Username already exists.';
-          } else if (detail.includes('email')) {
-            message = 'Email already exists.';
-          }
-    
-          return {
-            status: 'error',
-            message,
-            error: { message }
-          };
-        }
-    
-        return {
-          status: 'error',
-          message: 'Failed to create user.',
-          error: { message: error.message || 'Internal server error' }
-        };
+        const user = await this.userRepository.findOne({ where: { user_id } });
+      if (!user) {
+          throw new NotFoundException(`User with ID ${user_id} not found`);
       }
-    }
+      if (user.user_id !== tokenUserId) {
+          throw new UnauthorizedException('Access denied: Not your data.');
+      }
+      await this.userRepository.softDelete({ user_id });
+      const updatedUser = await this.userRepository.findOne({
+          where: { user_id },
+          withDeleted: true
+      });
+      if (!updatedUser) throw new NotFoundException(`Updated user not found`);
+      return {
+          status: 'success',
+          message: `User with ID ${user_id} soft deleted successfully`,
+          error: null
+      };
+      } catch (error) {
+        throw new InternalServerErrorException('Failed to soft delete user');
+      }
+  }
 
-    findOne(user_id: string): Observable<User | null> {
-      return from(this.userRepository.findOne({ where: { user_id } })).pipe(
-        map((user: User | null) => {
-          if (!user) return null; // Or throw NotFoundException in service if you prefer
-          const { password, ...result } = user; // Exclude password
-          return result;
-        })
-      );
-    }
+  async hardDeleteOne(user_id: string, tokenUserId: string): Promise<{
+      status: string;
+      message: string;
+      error?: any;
+    }> {
+      try {
+        const user = await this.userRepository.findOne({ where: { user_id } });
+      if (!user) {
+          throw new NotFoundException(`User with ID ${user_id} not found`);
+      }
+      if (user.user_id !== tokenUserId) {
+          throw new UnauthorizedException('Access denied: Not your data.');
+      }
+      await this.userRepository.delete({ user_id });
+      return {
+          status: 'success',
+          message: `User with ID ${user_id} permanently deleted`,
+          error: null
+      };
+      } catch (error) {
+        throw new InternalServerErrorException('Failed to delete user');
+      }
+  }
 
-    findAll(): Observable<User[]>{
-      return from(this.userRepository.find()).pipe(
-        map((users: User[]) => { 
-          return users.map((user: User) => {
-            const { password, ...result } = user; // Exclude password from each user
-            return result;
-          });
-        })
-      );
-    }
-
-    async softDeleteOne(user_id: string, tokenUserId: string): Promise<{
-        status: string;
-        message: string;
-        error?: any;
-      }> {
-        try {
-          const user = await this.userRepository.findOne({ where: { user_id } });
-        if (!user) {
-            throw new NotFoundException(`User with ID ${user_id} not found`);
-        }
-        if (user.user_id !== tokenUserId) {
-            throw new UnauthorizedException('Access denied: Not your data.');
-        }
-        await this.userRepository.softDelete({ user_id });
-        const updatedUser = await this.userRepository.findOne({
-            where: { user_id },
-            withDeleted: true
-        });
-        if (!updatedUser) throw new NotFoundException(`Updated user not found`);
-        return {
-            status: 'success',
-            message: `User with ID ${user_id} soft deleted successfully`,
-            error: null
-        };
-        } catch (error) {
-          throw new InternalServerErrorException('Failed to soft delete user');
-        }
-    }
-
-    async hardDeleteOne(user_id: string, tokenUserId: string): Promise<{
-        status: string;
-        message: string;
-        error?: any;
-      }> {
-        try {
-          const user = await this.userRepository.findOne({ where: { user_id } });
-        if (!user) {
-            throw new NotFoundException(`User with ID ${user_id} not found`);
-        }
-        if (user.user_id !== tokenUserId) {
-            throw new UnauthorizedException('Access denied: Not your data.');
-        }
-        await this.userRepository.delete({ user_id });
-        return {
-            status: 'success',
-            message: `User with ID ${user_id} permanently deleted`,
-            error: null
-        };
-        } catch (error) {
-          throw new InternalServerErrorException('Failed to delete user');
-        }
-    }
-
-
-  async updateOne(user_id: string, updateUserDto: UpdateUserDto): Promise<User> {
+  async updateOne(user_id: string, updateUserDto: UpdateUserDto): Promise<UserCleanupResponse> {
     const user = await this.userRepository.findOne({ where: { user_id } });
     if (!user) {
       throw new NotFoundException(`User with ID ${user_id} not found`);
@@ -196,72 +186,157 @@ export class UserService {
     return sanitizedUser;
   }
 
-    validateUser(emailOrUsername: string, password: string): Observable<User> {
-      return this.findByEmailOrUsername(emailOrUsername).pipe(
-        switchMap((user: User) => {
-          if (!user || !user.password) {
-            throw new Error('Password not found for user');
-          }
-          
-          return this.authService.comparePasswords(password, user.password).pipe(
-            map((match: boolean) => {
-              if (match) {
-                const { password, ...result } = user; // Don't include password in the response
-                return result;
-              } else {
-                throw new UnauthorizedException('Invalid credentials');
-              }
-            })
-          );
-        })
-      );
+  private toUser(userEntity: UserEntity): User {
+    const sanitizedUser = this.sanitizeUser(userEntity) as any;
+    const [firstname, ...lastnameParts] = userEntity.fullname?.split(' ') || [];
+    
+    return {
+      ...sanitizedUser,
+      firstname: firstname || '',
+      lastname: lastnameParts.join(' ') || '',
+      enableNotifications: userEntity.enableNotifications,
+      theme: userEntity.theme,
+      soundFx: userEntity.soundFx,
+      emailToLowerCase: function() {
+        this.email = this.email.toLowerCase();
+      }
+    } as User;
+  }
+
+  private sanitizeUser(user: UserEntity): UserCleanupResponse {
+    return {
+      user_id: user.user_id,
+      fullname: user.fullname,
+      username: user.username,
+      email: user.email,
+      tier: user.tier,
+      role: user.role,
+      status: user.status,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    };
+  }
+
+  async validateUser(emailOrUsername: string, password: string): Promise<User> {
+    // Get user with password for validation
+    const user = await this.findByEmailOrUsername(emailOrUsername, true);
+    
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
     }
-
-    findByEmailOrUsername(emailOrUsername: string): Observable<User | null> {
-      const isEmail = /\S+@\S+\.\S+/.test(emailOrUsername);
-      
-      if (isEmail) {
-        return from(this.userRepository.findOne({ where: { email: emailOrUsername } }));
-      } else {
-        return  from(this.userRepository.findOne({ where: { username: emailOrUsername } }));
-      }
+    
+    const isMatch = await this.authService.comparePasswords(password, user.password).toPromise();
+    
+    if (!isMatch) {
+      throw new UnauthorizedException('Invalid credentials');
     }
+    
+    // Return sanitized user without password
+    return this.toUser(user);
+  }
 
-    loginEmail(user: User): Observable<string>{
-      const { email, password } = user;
-
-      if (!email || !password) {
-        throw new Error('Email and password are required.');
+  async findByEmailOrUsername(emailOrUsername: string, includePassword = false): Promise<User | UserEntity> {
+    const isEmail = /\S+@\S+\.\S+/.test(emailOrUsername);
+    
+    if (isEmail) {
+      const user = await this.userRepository.findOne({ where: { email: emailOrUsername } });
+      if (!user) {
+          throw new NotFoundException(`User with email ${emailOrUsername} not found`);
       }
-      return this.validateUser(email, password).pipe(
-        switchMap((user: User)=>{
-          if(user){
-            return this.authService.generateJWT(user).pipe(
-              map((jwt: string) => jwt)
-            )
-          }
-          else{
-            throw new UnauthorizedException('Invalid credentials');
-          }
-        })
-      )}
-
-    loginUsername(user: User): Observable<string>{
-      const { username, password } = user;
-
-      if (!username || !password) {
-        throw new Error('username and password are required.');
+      return includePassword ? user : this.toUser(user);
+    } else {
+      const user = await this.userRepository.findOne({ where: { username: emailOrUsername } });
+      if (!user) {
+          throw new NotFoundException(`User with username ${emailOrUsername} not found`);
       }
-      return this.validateUser(username, password).pipe(
-        switchMap((user: User)=>{
-          if(user){
-            return this.authService.generateJWT(user).pipe(
-              map((jwt: string) => jwt)
-            )
-          }
-          else{
-            throw new UnauthorizedException('Invalid credentials');
-          }
-        })
-    )}
+      return includePassword ? user : this.toUser(user);
+    }
+  }
+
+  async loginEmail(credentials: { 
+    email: string, 
+    password: string, 
+    rememberMe: boolean, 
+    ipAddress: string}): Promise<
+  {
+    status: string;
+    message: string;
+    data?: {
+      access_token: string;
+      refresh_token: string;
+      expires_in: number;
+    };
+    error?: any;
+  }
+  > {
+    const { email, password } = credentials;
+
+    if (!email || !password) {
+      throw new Error('Email and password are required.');
+    }
+    
+    try {
+      const validatedUser = await this.validateUser(email, password);
+      const jwt = await this.authService.generateAccessToken(validatedUser);
+      if (!jwt) {
+        throw new Error('Failed to generate JWT token');
+      }
+      const refreshToken = await this.authService.generateRefreshToken(validatedUser, credentials.ipAddress, credentials.rememberMe);
+      return {
+        status: 'success',
+        message: 'Login successful',
+        data: {
+          access_token: jwt.toString(),
+          refresh_token: refreshToken.toString(),
+          expires_in: 3600
+        },
+        error: null
+      };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+  }
+
+  async loginUsername(credentials: { 
+    username: string; 
+    password: string, 
+    rememberMe: boolean, 
+    ipAddress: string 
+  }): Promise<{
+    status: string;
+    message: string;
+    data?: {
+      access_token: string;
+      refresh_token: string;
+      expires_in: number;
+    };
+    error?: any;
+  }> {
+    const { username, password } = credentials;
+
+    if (!username || !password) {
+      throw new Error('Username and password are required.');
+    }
+    
+    try {
+      const validatedUser = await this.validateUser(username, password);
+      const jwt = await this.authService.generateAccessToken(validatedUser);
+      if (!jwt) {
+        throw new Error('Failed to generate JWT token');
+      }
+      const refreshToken = await this.authService.generateRefreshToken(validatedUser, credentials.ipAddress, credentials.rememberMe);
+      return {
+        status: 'success',
+        message: 'Login successful',
+        data: {
+          access_token: jwt.toString(),
+          refresh_token: refreshToken.toString(),
+          expires_in: 3600
+        },
+        error: null
+      };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+  }
 }
