@@ -1,4 +1,3 @@
-// task-instance.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -8,45 +7,24 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
-  OneToMany,
 } from 'typeorm';
-import { TaskTemplateEntity } from './taskTemplate.entity';
-import { ProjectEntity } from 'src/projects/models/projects.entity';
+import { TaskInstanceEntity } from './taskInstance.entity';
 import { UserEntity } from 'src/user/models/user.entity';
-import { TaskSubInstanceEntity } from './taskSubInstance.entity';
 
 @Entity()
-export class TaskInstanceEntity {
+export class TaskSubInstanceEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
   @Column({ unique: true })
-  task_id!: string;
+  taskSubInstance_id!: string;
 
   @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id', referencedColumnName: 'user_id' })
   user!: UserEntity;
 
-  @ManyToOne(() => ProjectEntity, { onDelete: 'CASCADE', nullable: true })
-  @JoinColumn({ name: 'project_id', referencedColumnName: 'project_id' })
-  project!: ProjectEntity;
-
-  @OneToMany('TaskSubInstanceEntity', 'instance', {
-    nullable: true,
-  })
-  subInstances!: TaskSubInstanceEntity[];
-
   @Column()
   title!: string;
-
-  @Column({ nullable: true })
-  description!: string;
-
-  @Column({
-    type: 'enum',
-    enum: ['Low', 'Medium', 'High'],
-  })
-  priority!: 'Low' | 'Medium' | 'High';
 
   @Column({
     type: 'enum',
@@ -57,11 +35,13 @@ export class TaskInstanceEntity {
   @Column({ type: 'timestamp', nullable: true })
   due_date!: Date;
 
-  @ManyToOne(() => TaskTemplateEntity, (template) => template.instances, {
+  @ManyToOne('TaskInstanceEntity', 'subInstances', {
     nullable: true,
-    onDelete: 'SET NULL'
+    onDelete: 'CASCADE'
   })
-  template!: TaskTemplateEntity | null;
+
+  @JoinColumn({ name: 'task_id', referencedColumnName: 'task_id' })
+  instance!: TaskInstanceEntity;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;
