@@ -284,7 +284,7 @@ export class TaskService implements OnModuleInit {
 
     const data = await this.taskInstanceRepository.find({
       where,
-      relations: ['user', 'project', 'template'],  // include template relation
+      relations: ['user', 'project', 'template', 'subInstances'],
       withDeleted: false,
     });
 
@@ -292,12 +292,48 @@ export class TaskService implements OnModuleInit {
       throw new NotFoundException(`No tasks found for user ID ${user_id}`);
     }
 
+    // Get all task IDs to fetch their sub-instances in a single query
+    const taskIds = data.map(task => task.task_id);
+    const allSubInstances = await this.taskSubInstanceRepository.find({
+      where: {
+        instance: {
+          task_id: In(taskIds)
+        }
+      },
+      relations: ['instance'],  // Include the instance relation
+      order: {
+        createdAt: 'ASC'
+      }
+    });
+
+    // Group sub-instances by task_id
+    const subInstancesByTaskId = allSubInstances.reduce((acc, subInstance) => {
+      // Safely access task_id with optional chaining
+      const taskId = subInstance.instance?.task_id;
+      if (!taskId) return acc;  // Skip if no task_id found
+      
+      if (!acc[taskId]) {
+        acc[taskId] = [];
+      }
+      acc[taskId].push({
+        id: subInstance.id,
+        taskSubInstance_id: subInstance.taskSubInstance_id,
+        title: subInstance.title,
+        status: subInstance.status,
+        due_date: subInstance.due_date,
+        createdAt: subInstance.createdAt,
+        updatedAt: subInstance.updatedAt
+      });
+      return acc;
+    }, {} as Record<string, any[]>);
+
     const sortedData = data
       .map(({ user, project, template, ...rest }) => ({
         ...rest,
         user_id: user.user_id,
         project_title: project?.title ?? null,
         template_id: template?.taskTemplate_id ?? null,
+        subInstances: subInstancesByTaskId[rest.task_id] || []
       }))
       .sort((a, b) => {
         if (a.status === "Complete" && b.status !== "Complete") return 1;

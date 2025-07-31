@@ -1,4 +1,5 @@
 import { User } from "src/user/models/user.interface";
+import { TaskSubInstanceResponse } from "./taskSubInstanceResponse";
 
 export interface TaskInstanceResponse {
     id: string;
@@ -15,4 +16,5 @@ export interface TaskInstanceResponse {
     project_title?: string;
     user_id?: string;
     template_id?: string | null;
+    subInstances?: TaskSubInstanceResponse[];
 }
