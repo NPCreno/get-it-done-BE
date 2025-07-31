@@ -29,6 +29,8 @@ import { TaskCompletionTrend } from './interfaces/taskCompletionTrend';
 import { TaskDistribution } from './interfaces/taskDistribution';
 import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
 import { CalendarHeatmap } from './interfaces/calendarHeatmap';
+import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
+import { CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
 @Injectable()
 export class TaskService implements OnModuleInit {
   private readonly logger = new Logger('TaskService');
@@ -38,6 +40,8 @@ export class TaskService implements OnModuleInit {
     private readonly taskTemplateRepository: Repository<TaskTemplateEntity>,
     @InjectRepository(TaskInstanceEntity)
     private readonly taskInstanceRepository: Repository<TaskInstanceEntity>,
+    @InjectRepository(TaskSubInstanceEntity)
+    private readonly taskSubInstanceRepository: Repository<TaskSubInstanceEntity>,
     @InjectRepository(UserEntity)
     private readonly usersRepository: Repository<UserEntity>,
     @InjectRepository(ProjectEntity)
@@ -55,8 +59,11 @@ export class TaskService implements OnModuleInit {
   }
 
   private generateTaskTemplateId(): string {
-    const randomNumber = Math.floor(Math.random() * 1_000_000_000); // 0 to 999,999,999
-    return 'taskTemplate-' + randomNumber.toString().padStart(9, '0');
+    return `TMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  }
+
+  private generateTaskSubInstanceId(): string {
+    return `subTask-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   }
 
   async createTask(taskDto: CreateTaskDto): Promise<{
@@ -188,6 +195,64 @@ export class TaskService implements OnModuleInit {
       return {
         status: 'error',
         message: 'Failed to create task',
+        error: error?.message || error,
+      };
+    }
+  }
+
+  async createTaskSubInstance(
+    createDto: CreateTaskSubInstanceDto,
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: TaskSubInstanceEntity;
+    error?: any;
+  }> {
+    try {
+      // Verify the parent task exists and belongs to the user
+      const parentTask = await this.taskInstanceRepository.findOne({
+        where: { task_id: createDto.task_id, user: { user_id: createDto.user_id } },
+      });
+
+      if (!parentTask) {
+        throw new NotFoundException(
+          `Task with ID ${createDto.task_id} not found or access denied`,
+        );
+      }
+
+      // Generate unique ID for the sub-instance
+      let taskSubInstanceId: string;
+      let exists = true;
+      do {
+        taskSubInstanceId = this.generateTaskSubInstanceId();
+        const existing = await this.taskSubInstanceRepository.findOne({
+          where: { taskSubInstance_id: taskSubInstanceId },
+        });
+        exists = !!existing;
+      } while (exists);
+
+      // Create and save the sub-instance
+      const subInstance = this.taskSubInstanceRepository.create({
+        taskSubInstance_id: taskSubInstanceId,
+        title: createDto.title,
+        status: createDto.status,
+        due_date: createDto.due_date ? new Date(createDto.due_date) : null,
+        user: { user_id: createDto.user_id } as UserEntity,
+        instance: { task_id: createDto.task_id } as TaskInstanceEntity,
+      } as DeepPartial<TaskSubInstanceEntity>);
+
+      const savedSubInstance = await this.taskSubInstanceRepository.save(subInstance);
+
+      return {
+        status: 'success',
+        message: 'Task sub-instance created successfully',
+        data: savedSubInstance,
+      };
+    } catch (error: any) {
+      console.error('Error creating task sub-instance:', error);
+      return {
+        status: 'error',
+        message: 'Failed to create task sub-instance',
         error: error?.message || error,
       };
     }

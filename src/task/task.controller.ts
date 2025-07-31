@@ -21,6 +21,8 @@ import { UpdateTaskDto } from './dto/update-task-dto';
 import { IDashboardData } from './interfaces/dashboardData';
 import { StatusValidationPipe } from 'src/pipes/status-validation.pipe';
 import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
+import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
+import { CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
 @Controller('api/tasks')
 export class TaskController {
   constructor(private taskService: TaskService) {}
@@ -38,6 +40,22 @@ export class TaskController {
         throw new UnauthorizedException('Access denied: Not your data.');
     }
     return this.taskService.createTask(dto);
+  }
+
+  
+  @UseGuards(AuthorizeGuard)
+  @Post('createSubTask')
+  async createSubTask(@Body() dto: CreateTaskSubInstanceDto, @Req() req: AuthenticatedRequest): Promise<{
+    status: string;
+    message: string;
+    data?: TaskSubInstanceEntity;
+    error?: any;
+  }> {
+    const tokenUserId = req['user'];
+    if (tokenUserId.user.user_id !== dto.user_id) {
+        throw new UnauthorizedException('Access denied: Not your data.');
+    }
+    return this.taskService.createTaskSubInstance(dto);
   }
 
   @UseGuards(AuthorizeGuard)
