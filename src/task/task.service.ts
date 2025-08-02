@@ -1070,4 +1070,59 @@ export class TaskService implements OnModuleInit {
       };
     }
   }
+
+  async updateSubTaskStatus(taskSubInstance_id: string, status: string, user_id: string) {
+    try {
+      const subTask = await this.taskSubInstanceRepository.findOne({
+        where: { taskSubInstance_id },
+        relations: ['user'],
+        select: {
+          id: true,
+          taskSubInstance_id: true,
+          user: {
+            user_id: true,
+          },
+          status: true,
+        }
+      });
+
+      if (!subTask) {
+        this.logger.warn(`SubTask with ID ${taskSubInstance_id} not found`);
+        throw new NotFoundException(`SubTask with ID ${taskSubInstance_id} not found`);
+      }
+
+      if (user_id !== subTask.user.user_id) {
+        this.logger.warn(`Unauthorized status update attempt for subTask ${taskSubInstance_id} by user ${user_id}`);
+        throw new UnauthorizedException('Access denied: Not your data.');
+      }
+
+      // Log the status change
+      if (subTask.status !== status) {
+        this.logger.log(`SubTask ${taskSubInstance_id} (${subTask.title || 'No title'}) status changing from '${subTask.status}' to '${status}'`);
+        if (status === 'Complete') {
+          this.logger.log(`Marking subTask ${taskSubInstance_id} as Complete`);
+        }
+      } else {
+        this.logger.debug(`SubTask ${taskSubInstance_id} status already set to '${status}', no change needed`);
+      }
+
+      await this.taskSubInstanceRepository.update(
+        { taskSubInstance_id },
+        { status: status as 'Complete' | 'Pending' | 'Overdue' }
+      );
+
+      this.logger.log(`Successfully updated subTask ${taskSubInstance_id} status to '${status}'`);
+      return {
+        status: 'success',
+        message: `SubTask updated to ${status} successfully`,
+      };
+    } catch (error: any) {
+      this.logger.error(`Failed to update subTask ${taskSubInstance_id} status: ${error.message}`, error.stack);
+      return {
+        status: 'error',
+        message: 'Failed to update subTask status',
+        error: error?.message || error,
+      };
+    }
+  }
 }

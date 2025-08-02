@@ -284,4 +284,22 @@ export class TaskController {
     
     return data;
   }
+
+  @UseGuards(AuthorizeGuard)
+  @Patch('update-subTask-status/:taskSubInstance_id/status/:status')
+  async updateSubTaskStatus(
+    @Req() req: AuthenticatedRequest,
+    @Param('taskSubInstance_id') taskSubInstance_id: string,
+    @Param('status', new StatusValidationPipe()) status: string
+  ) {
+    const tokenUserId = req['user'];
+    
+    const data = await this.taskService.updateSubTaskStatus(
+      taskSubInstance_id,
+      status,
+      tokenUserId.user.user_id
+    );
+    
+    return data;
+  }
 }
