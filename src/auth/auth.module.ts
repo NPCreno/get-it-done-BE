@@ -14,7 +14,7 @@ import { UserEntity } from 'src/user/models/user.entity';
             inject: [ConfigService],
             useFactory: async (configService: ConfigService) => ({
                 secret: configService.get('JWT_SECRET'),
-                signOptions: {expiresIn: '1d'} //Token expires in 1d
+                signOptions: {expiresIn:  configService.get('JWT_ACCESS_EXPIRATION')} 
             })
         }),
         TypeOrmModule.forFeature([AuthTokenEntity, UserEntity]),

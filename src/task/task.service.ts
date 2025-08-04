@@ -658,10 +658,6 @@ export class TaskService implements OnModuleInit {
         withDeleted: false,
       });
 
-      if (projects.length === 0) {
-        throw new NotFoundException(`No projects found for user ID ${user_id}`);
-      }
-
       const data = await this.taskInstanceRepository.find({
         where,
         relations: ['user', 'project'],

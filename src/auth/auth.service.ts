@@ -6,7 +6,6 @@ import { TokenPayload } from './Interfaces/tokenPayload';
 import { AuthTokenEntity } from './models/auth.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { UserService } from 'src/user/user.service';
 import { UserEntity } from 'src/user/models/user.entity';
 const bcrypt = require('bcrypt');
 @Injectable()
@@ -28,7 +27,7 @@ export class AuthService {
         jti: crypto.randomUUID(),
         };
         return this.jwtService.sign(payload, {
-        expiresIn: '15m',
+        expiresIn: process.env.JWT_ACCESS_EXPIRATION,
         secret: process.env.JWT_SECRET
         });
     }
