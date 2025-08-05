@@ -117,6 +117,21 @@ export class TaskController {
   }
 
   @UseGuards(AuthorizeGuard)
+  @Delete('/subTask/:subTask_id')
+  async softDeleteSubTask(
+    @Param('subTask_id') subTask_id: string,
+    @Req() req: AuthenticatedRequest,
+  ):  Promise<{
+          status: string;
+          message: string;
+          data?: TaskSubInstanceEntity | null;
+          error?: any;
+        }> {
+    const tokenUserId = req['user'];
+    return this.taskService.softDeleteSubTask(subTask_id, tokenUserId.user.user_id);
+  }
+
+  @UseGuards(AuthorizeGuard)
   @Delete(':task_id/hard')
   async hardDeleteOne(
     @Param('task_id') task_id: string,

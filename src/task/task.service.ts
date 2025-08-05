@@ -498,6 +498,53 @@ export class TaskService implements OnModuleInit {
     }
   }
 
+  async softDeleteSubTask(taskSubInstance_id: string, tokenUserId: string): Promise<{
+    status: string;
+    message: string;
+    data?: TaskSubInstanceEntity | null;
+    error?: any;
+  }> {
+    try {
+      const subTask = await this.taskSubInstanceRepository.findOne({
+        where: { taskSubInstance_id },
+        relations: ['user', 'instance'],
+        select: {
+          id: true,
+          taskSubInstance_id: true,
+          user: {
+            user_id: true,
+          },
+          instance: {
+            task_id: true,
+          }
+        }
+      });
+      if (!subTask) throw new NotFoundException(`SubTask with ID ${taskSubInstance_id} not found`);
+      if (tokenUserId !== subTask.user.user_id) {
+        throw new UnauthorizedException('Access denied: Not your data.');
+      }
+      await this.taskSubInstanceRepository.softDelete({ taskSubInstance_id });
+
+      const deletedSubTask = await this.taskSubInstanceRepository.findOne({
+        where: { taskSubInstance_id },
+        withDeleted: true,
+      });
+
+      return {
+        status: 'success',
+        message: 'SubTask deleted successfully',
+        data: deletedSubTask,
+      };
+    } catch (error: any) {
+      return {
+        status: 'error',
+        message: 'Failed to delete task',
+        error: error?.message || error,
+      };
+    }
+  }
+
+
   async deleteRecurringTasks(taskTemplate_id: string, tokenUserId: string, includeCompleted: boolean): Promise<{
     status: string;
     message: string;
