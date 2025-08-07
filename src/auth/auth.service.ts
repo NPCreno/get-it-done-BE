@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { from, Observable, of } from 'rxjs';
 import { User } from 'src/user/models/user.interface';
@@ -13,6 +14,7 @@ export class AuthService {
 
     constructor(
         private readonly jwtService: JwtService,
+        private readonly configService: ConfigService,
         @InjectRepository(AuthTokenEntity)
         private readonly authTokenRepository: Repository<AuthTokenEntity>,
         @InjectRepository(UserEntity)
@@ -27,8 +29,8 @@ export class AuthService {
         jti: crypto.randomUUID(),
         };
         return this.jwtService.sign(payload, {
-        expiresIn: process.env.JWT_ACCESS_EXPIRATION,
-        secret: process.env.JWT_SECRET
+            expiresIn: this.configService.get('JWT_ACCESS_EXPIRATION'),
+            secret: this.configService.get('JWT_SECRET')
         });
     }
 

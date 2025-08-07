@@ -35,11 +35,10 @@ export class TaskSubInstanceEntity {
   @Column({ type: 'timestamp', nullable: true })
   due_date!: Date;
 
-  @ManyToOne('TaskInstanceEntity', 'subInstances', {
+  @ManyToOne(() => TaskInstanceEntity, 'subInstances', {
     nullable: true,
     onDelete: 'CASCADE'
   })
-
   @JoinColumn({ name: 'task_id', referencedColumnName: 'task_id' })
   instance!: TaskInstanceEntity;
 
