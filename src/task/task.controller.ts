@@ -21,6 +21,8 @@ import { UpdateTaskDto } from './dto/update-task-dto';
 import { IDashboardData } from './interfaces/dashboardData';
 import { StatusValidationPipe } from 'src/pipes/status-validation.pipe';
 import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
+import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
+import { CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
 @Controller('api/tasks')
 export class TaskController {
   constructor(private taskService: TaskService) {}
@@ -38,6 +40,22 @@ export class TaskController {
         throw new UnauthorizedException('Access denied: Not your data.');
     }
     return this.taskService.createTask(dto);
+  }
+
+  
+  @UseGuards(AuthorizeGuard)
+  @Post('createSubTask')
+  async createSubTask(@Body() dto: CreateTaskSubInstanceDto, @Req() req: AuthenticatedRequest): Promise<{
+    status: string;
+    message: string;
+    data?: TaskSubInstanceEntity;
+    error?: any;
+  }> {
+    const tokenUserId = req['user'];
+    if (tokenUserId.user.user_id !== dto.user_id) {
+        throw new UnauthorizedException('Access denied: Not your data.');
+    }
+    return this.taskService.createTaskSubInstance(dto);
   }
 
   @UseGuards(AuthorizeGuard)
@@ -96,6 +114,21 @@ export class TaskController {
         }> {
     const tokenUserId = req['user'];
     return this.taskService.softDeleteOne(task_id, tokenUserId.user.user_id);
+  }
+
+  @UseGuards(AuthorizeGuard)
+  @Delete('/subTask/:subTask_id')
+  async softDeleteSubTask(
+    @Param('subTask_id') subTask_id: string,
+    @Req() req: AuthenticatedRequest,
+  ):  Promise<{
+          status: string;
+          message: string;
+          data?: TaskSubInstanceEntity | null;
+          error?: any;
+        }> {
+    const tokenUserId = req['user'];
+    return this.taskService.softDeleteSubTask(subTask_id, tokenUserId.user.user_id);
   }
 
   @UseGuards(AuthorizeGuard)
@@ -260,6 +293,24 @@ export class TaskController {
     
     const data = await this.taskService.updateTaskStatus(
       task_id,
+      status,
+      tokenUserId.user.user_id
+    );
+    
+    return data;
+  }
+
+  @UseGuards(AuthorizeGuard)
+  @Patch('update-subTask-status/:taskSubInstance_id/status/:status')
+  async updateSubTaskStatus(
+    @Req() req: AuthenticatedRequest,
+    @Param('taskSubInstance_id') taskSubInstance_id: string,
+    @Param('status', new StatusValidationPipe()) status: string
+  ) {
+    const tokenUserId = req['user'];
+    
+    const data = await this.taskService.updateSubTaskStatus(
+      taskSubInstance_id,
       status,
       tokenUserId.user.user_id
     );

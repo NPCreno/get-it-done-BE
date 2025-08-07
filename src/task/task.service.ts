@@ -29,6 +29,8 @@ import { TaskCompletionTrend } from './interfaces/taskCompletionTrend';
 import { TaskDistribution } from './interfaces/taskDistribution';
 import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
 import { CalendarHeatmap } from './interfaces/calendarHeatmap';
+import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
+import { CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
 @Injectable()
 export class TaskService implements OnModuleInit {
   private readonly logger = new Logger('TaskService');
@@ -38,6 +40,8 @@ export class TaskService implements OnModuleInit {
     private readonly taskTemplateRepository: Repository<TaskTemplateEntity>,
     @InjectRepository(TaskInstanceEntity)
     private readonly taskInstanceRepository: Repository<TaskInstanceEntity>,
+    @InjectRepository(TaskSubInstanceEntity)
+    private readonly taskSubInstanceRepository: Repository<TaskSubInstanceEntity>,
     @InjectRepository(UserEntity)
     private readonly usersRepository: Repository<UserEntity>,
     @InjectRepository(ProjectEntity)
@@ -55,8 +59,11 @@ export class TaskService implements OnModuleInit {
   }
 
   private generateTaskTemplateId(): string {
-    const randomNumber = Math.floor(Math.random() * 1_000_000_000); // 0 to 999,999,999
-    return 'taskTemplate-' + randomNumber.toString().padStart(9, '0');
+    return `TMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  }
+
+  private generateTaskSubInstanceId(): string {
+    return `subTask-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   }
 
   async createTask(taskDto: CreateTaskDto): Promise<{
@@ -193,6 +200,64 @@ export class TaskService implements OnModuleInit {
     }
   }
 
+  async createTaskSubInstance(
+    createDto: CreateTaskSubInstanceDto,
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: TaskSubInstanceEntity;
+    error?: any;
+  }> {
+    try {
+      // Verify the parent task exists and belongs to the user
+      const parentTask = await this.taskInstanceRepository.findOne({
+        where: { task_id: createDto.task_id, user: { user_id: createDto.user_id } },
+      });
+
+      if (!parentTask) {
+        throw new NotFoundException(
+          `Task with ID ${createDto.task_id} not found or access denied`,
+        );
+      }
+
+      // Generate unique ID for the sub-instance
+      let taskSubInstanceId: string;
+      let exists = true;
+      do {
+        taskSubInstanceId = this.generateTaskSubInstanceId();
+        const existing = await this.taskSubInstanceRepository.findOne({
+          where: { taskSubInstance_id: taskSubInstanceId },
+        });
+        exists = !!existing;
+      } while (exists);
+
+      // Create and save the sub-instance
+      const subInstance = this.taskSubInstanceRepository.create({
+        taskSubInstance_id: taskSubInstanceId,
+        title: createDto.title,
+        status: createDto.status,
+        due_date: createDto.due_date ? new Date(createDto.due_date) : null,
+        user: { user_id: createDto.user_id } as UserEntity,
+        instance: { task_id: createDto.task_id } as TaskInstanceEntity,
+      } as DeepPartial<TaskSubInstanceEntity>);
+
+      const savedSubInstance = await this.taskSubInstanceRepository.save(subInstance);
+
+      return {
+        status: 'success',
+        message: 'Task sub-instance created successfully',
+        data: savedSubInstance,
+      };
+    } catch (error: any) {
+      console.error('Error creating task sub-instance:', error);
+      return {
+        status: 'error',
+        message: 'Failed to create task sub-instance',
+        error: error?.message || error,
+      };
+    }
+  }
+
   async getTasksByUser(
     user_id: string,
     startDate?: string,
@@ -219,7 +284,7 @@ export class TaskService implements OnModuleInit {
 
     const data = await this.taskInstanceRepository.find({
       where,
-      relations: ['user', 'project', 'template'],  // include template relation
+      relations: ['user', 'project', 'template', 'subInstances'],
       withDeleted: false,
     });
 
@@ -227,12 +292,48 @@ export class TaskService implements OnModuleInit {
       throw new NotFoundException(`No tasks found for user ID ${user_id}`);
     }
 
+    // Get all task IDs to fetch their sub-instances in a single query
+    const taskIds = data.map(task => task.task_id);
+    const allSubInstances = await this.taskSubInstanceRepository.find({
+      where: {
+        instance: {
+          task_id: In(taskIds)
+        }
+      },
+      relations: ['instance'],  // Include the instance relation
+      order: {
+        createdAt: 'ASC'
+      }
+    });
+
+    // Group sub-instances by task_id
+    const subInstancesByTaskId = allSubInstances.reduce((acc, subInstance) => {
+      // Safely access task_id with optional chaining
+      const taskId = subInstance.instance?.task_id;
+      if (!taskId) return acc;  // Skip if no task_id found
+      
+      if (!acc[taskId]) {
+        acc[taskId] = [];
+      }
+      acc[taskId].push({
+        id: subInstance.id,
+        taskSubInstance_id: subInstance.taskSubInstance_id,
+        title: subInstance.title,
+        status: subInstance.status,
+        due_date: subInstance.due_date,
+        createdAt: subInstance.createdAt,
+        updatedAt: subInstance.updatedAt
+      });
+      return acc;
+    }, {} as Record<string, any[]>);
+
     const sortedData = data
       .map(({ user, project, template, ...rest }) => ({
         ...rest,
         user_id: user.user_id,
         project_title: project?.title ?? null,
         template_id: template?.taskTemplate_id ?? null,
+        subInstances: subInstancesByTaskId[rest.task_id] || []
       }))
       .sort((a, b) => {
         if (a.status === "Complete" && b.status !== "Complete") return 1;
@@ -397,6 +498,53 @@ export class TaskService implements OnModuleInit {
     }
   }
 
+  async softDeleteSubTask(taskSubInstance_id: string, tokenUserId: string): Promise<{
+    status: string;
+    message: string;
+    data?: TaskSubInstanceEntity | null;
+    error?: any;
+  }> {
+    try {
+      const subTask = await this.taskSubInstanceRepository.findOne({
+        where: { taskSubInstance_id },
+        relations: ['user', 'instance'],
+        select: {
+          id: true,
+          taskSubInstance_id: true,
+          user: {
+            user_id: true,
+          },
+          instance: {
+            task_id: true,
+          }
+        }
+      });
+      if (!subTask) throw new NotFoundException(`SubTask with ID ${taskSubInstance_id} not found`);
+      if (tokenUserId !== subTask.user.user_id) {
+        throw new UnauthorizedException('Access denied: Not your data.');
+      }
+      await this.taskSubInstanceRepository.softDelete({ taskSubInstance_id });
+
+      const deletedSubTask = await this.taskSubInstanceRepository.findOne({
+        where: { taskSubInstance_id },
+        withDeleted: true,
+      });
+
+      return {
+        status: 'success',
+        message: 'SubTask deleted successfully',
+        data: deletedSubTask,
+      };
+    } catch (error: any) {
+      return {
+        status: 'error',
+        message: 'Failed to delete task',
+        error: error?.message || error,
+      };
+    }
+  }
+
+
   async deleteRecurringTasks(taskTemplate_id: string, tokenUserId: string, includeCompleted: boolean): Promise<{
     status: string;
     message: string;
@@ -556,10 +704,6 @@ export class TaskService implements OnModuleInit {
         relations: ['user'],
         withDeleted: false,
       });
-
-      if (projects.length === 0) {
-        throw new NotFoundException(`No projects found for user ID ${user_id}`);
-      }
 
       const data = await this.taskInstanceRepository.find({
         where,
@@ -965,6 +1109,61 @@ export class TaskService implements OnModuleInit {
       return {
         status: 'error',
         message: 'Failed to update task status',
+        error: error?.message || error,
+      };
+    }
+  }
+
+  async updateSubTaskStatus(taskSubInstance_id: string, status: string, user_id: string) {
+    try {
+      const subTask = await this.taskSubInstanceRepository.findOne({
+        where: { taskSubInstance_id },
+        relations: ['user'],
+        select: {
+          id: true,
+          taskSubInstance_id: true,
+          user: {
+            user_id: true,
+          },
+          status: true,
+        }
+      });
+
+      if (!subTask) {
+        this.logger.warn(`SubTask with ID ${taskSubInstance_id} not found`);
+        throw new NotFoundException(`SubTask with ID ${taskSubInstance_id} not found`);
+      }
+
+      if (user_id !== subTask.user.user_id) {
+        this.logger.warn(`Unauthorized status update attempt for subTask ${taskSubInstance_id} by user ${user_id}`);
+        throw new UnauthorizedException('Access denied: Not your data.');
+      }
+
+      // Log the status change
+      if (subTask.status !== status) {
+        this.logger.log(`SubTask ${taskSubInstance_id} (${subTask.title || 'No title'}) status changing from '${subTask.status}' to '${status}'`);
+        if (status === 'Complete') {
+          this.logger.log(`Marking subTask ${taskSubInstance_id} as Complete`);
+        }
+      } else {
+        this.logger.debug(`SubTask ${taskSubInstance_id} status already set to '${status}', no change needed`);
+      }
+
+      await this.taskSubInstanceRepository.update(
+        { taskSubInstance_id },
+        { status: status as 'Complete' | 'Pending' | 'Overdue' }
+      );
+
+      this.logger.log(`Successfully updated subTask ${taskSubInstance_id} status to '${status}'`);
+      return {
+        status: 'success',
+        message: `SubTask updated to ${status} successfully`,
+      };
+    } catch (error: any) {
+      this.logger.error(`Failed to update subTask ${taskSubInstance_id} status: ${error.message}`, error.stack);
+      return {
+        status: 'error',
+        message: 'Failed to update subTask status',
         error: error?.message || error,
       };
     }

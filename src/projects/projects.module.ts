@@ -9,10 +9,17 @@ import { TaskTemplateEntity } from 'src/task/models/taskTemplate.entity';
 import { TaskInstanceEntity } from 'src/task/models/taskInstance.entity';
 import { UserEntity } from 'src/user/models/user.entity';
 import { TaskModule } from 'src/task/task.module';
+import { TaskSubInstanceEntity } from 'src/task/models/taskSubInstance.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ProjectEntity, TaskTemplateEntity, TaskInstanceEntity, UserEntity]),
+    TypeOrmModule.forFeature([
+      ProjectEntity, 
+      TaskTemplateEntity, 
+      TaskInstanceEntity, 
+      UserEntity,
+      TaskSubInstanceEntity
+    ]),
     AuthModule,
     TaskModule,
   ],
