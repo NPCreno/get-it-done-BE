@@ -22,16 +22,21 @@ export class AuthService {
     ){}
 
     generateAccessToken(user: User): string {
-        const payload: TokenPayload = {
-        user,
-        sub: user.user_id.toString(),
-        type: 'access',
-        jti: crypto.randomUUID(),
-        };
-        return this.jwtService.sign(payload, {
-            expiresIn: this.configService.get('JWT_ACCESS_EXPIRATION'),
-            secret: this.configService.get('JWT_SECRET')
-        });
+        try {
+            const payload: TokenPayload = {
+            user,
+            sub: user.user_id.toString(),
+            type: 'access',
+            jti: crypto.randomUUID(),
+            };
+            return this.jwtService.sign(payload, {
+                expiresIn: this.configService.get('JWT_ACCESS_EXPIRATION') || '1h',
+                secret: this.configService.get('JWT_SECRET') || 'secretKey'
+            });
+        } catch (error) {
+            console.error('Error generating access token:', error);
+            throw new Error('Failed to generate access token');
+        }
     }
 
     generateJWT(user: User): string{
