@@ -29,9 +29,16 @@ export class AuthService {
             type: 'access',
             jti: crypto.randomUUID(),
             };
+
+            const expiresIn = this.configService.get<string>('JWT_ACCESS_EXPIRATION');
+            const secret = this.configService.get<string>('JWT_SECRET');
+            if (!expiresIn || !secret) {
+                throw new Error('JWT configuration missing: ensure JWT_ACCESS_EXPIRATION and JWT_SECRET are set');
+            }
+            
             return this.jwtService.sign(payload, {
-                expiresIn: this.configService.get('JWT_ACCESS_EXPIRATION') || '1h',
-                secret: this.configService.get('JWT_SECRET') || 'secretKey'
+                expiresIn,
+                secret
             });
         } catch (error) {
             console.error('Error generating access token:', error);
