@@ -25,7 +25,7 @@ export class AuthService {
         try {
             const payload: TokenPayload = {
             user,
-            sub: user.user_id.toString(),
+            sub: String(user.user_id),
             type: 'access',
             jti: crypto.randomUUID(),
             };
@@ -40,9 +40,9 @@ export class AuthService {
                 expiresIn,
                 secret
             });
-        } catch (error) {
-            console.error('Error generating access token:', error);
-            throw new Error('Failed to generate access token');
+        } catch (error: any) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            throw new Error('Failed to generate access token', { cause: err });
         }
     }
 
