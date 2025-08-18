@@ -17,7 +17,7 @@ import {
 } from 'typeorm';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
 import { TaskTemplateEntity } from './models/taskTemplate.entity';
-import { CreateTaskDto } from './dto/create-task-dto';
+import { CreateBulkTasksDto, CreateTaskDto } from './dto/create-task-dto';
 import { DeepPartial } from 'typeorm';
 import { UserEntity } from 'src/user/models/user.entity';
 import { ProjectEntity } from 'src/projects/models/projects.entity';
@@ -30,7 +30,7 @@ import { TaskDistribution } from './interfaces/taskDistribution';
 import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
 import { CalendarHeatmap } from './interfaces/calendarHeatmap';
 import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
-import { CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
+import { CreateBulkSubTasksDto, CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
 @Injectable()
 export class TaskService implements OnModuleInit {
   private readonly logger = new Logger('TaskService');
@@ -64,6 +64,68 @@ export class TaskService implements OnModuleInit {
 
   private generateTaskSubInstanceId(): string {
     return `subTask-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  }
+
+  async createBulkTasks(tasks: CreateBulkTasksDto, userId: string): Promise<{
+    status: string;
+    message: string;
+    data?: (TaskInstanceEntity | TaskTemplateEntity)[];
+    error?: any;
+  }> {
+    try {
+      const results = [];
+      const errors = [];
+
+      for (const taskDto of tasks) {
+        if (taskDto.user_id !== userId) {
+          errors.push({ 
+            task: taskDto.title || 'Untitled Task',
+            error: 'User ID mismatch' 
+          });
+          continue;
+        }
+
+        try {
+          const result = await this.createTask(taskDto);
+          if (result.status === 'success' && result.data) {
+            results.push(result.data);
+          } else {
+            errors.push({
+              task: taskDto.title || 'Untitled Task',
+              error: result.error || 'Failed to create task'
+            });
+          }
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to create task';
+          errors.push({
+            task: taskDto.title || 'Untitled Task',
+            error: errorMessage
+          });
+        }
+      }
+
+      if (results.length === 0 && errors.length > 0) {
+        return {
+          status: 'error',
+          message: 'Failed to create any tasks',
+          error: errors
+        };
+      }
+
+      return {
+        status: 'success',
+        message: `Successfully created ${results.length} task(s)${errors.length > 0 ? `, failed to create ${errors.length} task(s)` : ''}`,
+        data: results,
+        ...(errors.length > 0 && { error: errors })
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process bulk task creation';
+      return {
+        status: 'error',
+        message: 'Failed to process bulk task creation',
+        error: errorMessage
+      };
+    }
   }
 
   async createTask(taskDto: CreateTaskDto): Promise<{
@@ -196,6 +258,117 @@ export class TaskService implements OnModuleInit {
         status: 'error',
         message: 'Failed to create task',
         error: error?.message || error,
+      };
+    }
+  }
+
+  private async validateParentTask(taskId: string, userId: string): Promise<boolean> {
+    try {
+      const parentTask = await this.taskInstanceRepository.findOne({
+        where: { task_id: taskId, user: { user_id: userId } },
+      });
+      return !!parentTask;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async createBulkTaskSubInstances(createBulkDto: CreateBulkSubTasksDto, userId: string): Promise<{
+    status: string;
+    message: string;
+    data?: TaskSubInstanceEntity[];
+    error?: any;
+  }> {
+    try {
+      const results = [];
+      const errors = [];
+      const taskValidations = new Map<string, boolean>();
+
+      // Ensure subtasks array exists and is an array
+      if (!Array.isArray(createBulkDto)) {
+        return {
+          status: 'error',
+          message: 'Invalid subtasks data',
+          error: 'Expected an array of subtasks'
+        };
+      }
+
+      // First pass: validate all parent tasks
+      for (const subTaskDto of createBulkDto) {
+        if (subTaskDto.user_id !== userId) {
+          errors.push({
+            subTask: subTaskDto.title || 'Untitled Sub-Task',
+            error: 'User ID mismatch',
+            taskId: subTaskDto.task_id
+          });
+          continue;
+        }
+
+        // Skip validation if we've already checked this task
+        if (taskValidations.has(subTaskDto.task_id)) {
+          continue;
+        }
+
+        const isValid = await this.validateParentTask(subTaskDto.task_id, userId);
+        taskValidations.set(subTaskDto.task_id, isValid);
+      }
+
+      // Second pass: create subtasks with validated parent tasks
+      for (const subTaskDto of createBulkDto) {
+        // Skip if user ID was invalid
+        if (subTaskDto.user_id !== userId) continue;
+
+        const isParentValid = taskValidations.get(subTaskDto.task_id);
+        if (!isParentValid) {
+          errors.push({
+            subTask: subTaskDto.title || 'Untitled Sub-Task',
+            error: `Parent task with ID ${subTaskDto.task_id} not found or access denied`,
+            taskId: subTaskDto.task_id
+          });
+          continue;
+        }
+
+        try {
+          const result = await this.createTaskSubInstance(subTaskDto);
+          if (result.status === 'success' && result.data) {
+            results.push(result.data);
+          } else {
+            errors.push({
+              subTask: subTaskDto.title || 'Untitled Sub-Task',
+              error: result.error || 'Failed to create sub-task',
+              taskId: subTaskDto.task_id
+            });
+          }
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to create sub-task';
+          errors.push({
+            subTask: subTaskDto.title || 'Untitled Sub-Task',
+            error: errorMessage,
+            taskId: subTaskDto.task_id
+          });
+        }
+      }
+
+      if (results.length === 0 && errors.length > 0) {
+        return {
+          status: 'error',
+          message: 'Failed to create any sub-tasks',
+          error: errors
+        };
+      }
+
+      return {
+        status: 'success',
+        message: `Successfully created ${results.length} sub-task(s)${errors.length > 0 ? `, failed to create ${errors.length} sub-task(s)` : ''}`,
+        data: results,
+        ...(errors.length > 0 && { error: errors })
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process bulk sub-task creation';
+      return {
+        status: 'error',
+        message: 'Failed to process bulk sub-task creation',
+        error: errorMessage
       };
     }
   }
