@@ -8,7 +8,8 @@ import { AuthModule } from './auth/auth.module';
 import { ProjectsModule } from './projects/projects.module';
 import { TaskModule } from './task/task.module';
 import { ScheduleModule } from '@nestjs/schedule';
-
+import { NotificationsModule } from './notifications/notifications.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -22,7 +23,9 @@ import { ScheduleModule } from '@nestjs/schedule';
     UserModule,
     AuthModule,
     ProjectsModule,
-    TaskModule
+    TaskModule,
+    NotificationsModule,
+    EventEmitterModule.forRoot()
   ],
   controllers: [AppController],
   providers: [AppService],

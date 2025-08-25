@@ -12,6 +12,7 @@ import {
   Between, 
   In, 
   IsNull, 
+  LessThan, 
   MoreThanOrEqual, 
   Repository 
 } from 'typeorm';
@@ -31,6 +32,8 @@ import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
 import { CalendarHeatmap } from './interfaces/calendarHeatmap';
 import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
 import { CreateBulkSubTasksDto, CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+
 @Injectable()
 export class TaskService implements OnModuleInit {
   private readonly logger = new Logger('TaskService');
@@ -48,6 +51,7 @@ export class TaskService implements OnModuleInit {
     private readonly projectsRepository: Repository<ProjectEntity>,
     @Inject(forwardRef(() => TaskGeneratorService))
     private readonly taskGeneratorService: TaskGeneratorService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
   async onModuleInit() {
     await this.taskGeneratorService.generateInstancesForCurrentMonth(); //trigger cronjob for generating task instances from task template
@@ -65,6 +69,28 @@ export class TaskService implements OnModuleInit {
   private generateTaskSubInstanceId(): string {
     return `subTask-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   }
+
+  async countCompletedTasks(user_id: string): Promise<number> {
+    try {
+      const user = await this.usersRepository.findOne({ where: { user_id } });
+      if (!user) {
+        throw new NotFoundException(`User with ID ${user_id} not found`);
+      }
+      
+      const data = await this.taskInstanceRepository.find({
+        where: {user: { user_id }},
+        relations: ['user', 'project', 'template', 'subInstances'],
+        withDeleted: false,
+      });
+      const completedTasks = data.filter((task) => task.status === 'Complete');
+      return completedTasks.length;
+      
+    } catch (error: any) {
+      this.logger.error(`Failed to count completed tasks for user ${user_id}: ${error.message}`);
+      throw error;
+    }
+  }
+  
 
   async createBulkTasks(tasks: CreateBulkTasksDto, userId: string): Promise<{
     status: string;
@@ -447,13 +473,23 @@ export class TaskService implements OnModuleInit {
       throw new NotFoundException(`User with ID ${user_id} not found`);
     }
 
-    const where: any[] = [{ user: { user_id }, due_date: IsNull() }];
+    const where: any[] = [
+      { user: { user_id }, due_date: IsNull() },
+    ];
+    
     if (startDate && endDate) {
       where.push({
         user: { user_id },
         due_date: Between(new Date(startDate), new Date(endDate)),
       });
+    
+      // also include overdue tasks (missed deadlines)
+      where.push({
+        user: { user_id },
+        due_date: LessThan(new Date(startDate)),
+      });
     }
+    
 
     const data = await this.taskInstanceRepository.find({
       where,
@@ -864,11 +900,20 @@ export class TaskService implements OnModuleInit {
         throw new NotFoundException(`User with ID ${user_id} not found`);
       }
 
-      const where: any[] = [{ user: { user_id }, due_date: IsNull() }];
+      const where: any[] = [
+        { user: { user_id }, due_date: IsNull() },
+      ];
+      
       if (startDate && endDate) {
         where.push({
           user: { user_id },
           due_date: Between(new Date(startDate), new Date(endDate)),
+        });
+      
+        // also include overdue tasks (missed deadlines)
+        where.push({
+          user: { user_id },
+          due_date: LessThan(new Date(startDate)),
         });
       }
 
@@ -885,7 +930,7 @@ export class TaskService implements OnModuleInit {
       });
 
       const pendingTasks = data.filter(task => task.status === 'Pending');
-      const completeTasks = data.filter(task => task.status === 'Complete');
+      const completeTasks = await this.countCompletedTasks(user_id);
 
       return {
         status: 'success',
@@ -893,7 +938,7 @@ export class TaskService implements OnModuleInit {
         data: {
           all_tasks: data.length,
           pending_tasks: pendingTasks.length,
-          complete_tasks: completeTasks.length,
+          complete_tasks: completeTasks,
           all_projects: projects.length,
         },
       };
@@ -1262,6 +1307,12 @@ export class TaskService implements OnModuleInit {
         this.logger.log(`Task ${task_id} (${task.title || 'No title'}) status changing from '${task.status}' to '${status}'`);
         if (status === 'Complete') {
           this.logger.log(`Marking task ${task_id} as Complete`);
+           
+          // Emit event for notification system
+           this.eventEmitter.emit('task.completed', {
+            userId: task.user.user_id,
+            taskId: task.task_id,
+          });
         }
       } else {
         this.logger.debug(`Task ${task_id} status already set to '${status}', no change needed`);
