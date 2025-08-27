@@ -1,0 +1,100 @@
+{
+    "milestones": [
+      {
+        "condition": { "equals": 1 },
+        "type": "achievement",
+        "title": "First Task Completed!",
+        "message": "🎯 Great start! Your productivity journey begins now!",
+        "actionType": "acknowledge",
+        "actionTarget": "/tasks",
+        "metadata": {
+          "completedCount": "{count}",
+          "lastTaskId": "{taskId}",
+          "badge": "first-task"
+        }
+      },
+      {
+        "condition": { "equals": 50 },
+        "type": "achievement",
+        "title": "Half Century!",
+        "message": "🔥 50 tasks completed! You're on fire!",
+        "actionType": "claim",
+        "actionTarget": "/rewards",
+        "metadata": {
+          "completedCount": "{count}",
+          "lastTaskId": "{taskId}",
+          "badge": "50-tasks"
+        }
+      },
+      {
+        "condition": { "equals": 100 },
+        "type": "levelUp",
+        "title": "Century!",
+        "message": "💯 Wow! 100 tasks completed! You're unstoppable!",
+        "actionType": "acknowledge",
+        "actionTarget": "/profile/achievements",
+        "metadata": {
+          "completedCount": "{count}",
+          "lastTaskId": "{taskId}",
+          "level": "Pro",
+          "badge": "centurion"
+        }
+      },
+      {
+        "condition": { "equals": 250 },
+        "type": "achievement",
+        "title": "Quarter K!",
+        "message": "🚀 250 tasks! You're a productivity machine!",
+        "actionType": "acknowledge",
+        "actionTarget": "/profile/achievements",
+        "metadata": {
+          "completedCount": "{count}",
+          "lastTaskId": "{taskId}",
+          "level": "Elite",
+          "badge": "quarter-k"
+        }
+      },
+      {
+        "condition": { "equals": 500 },
+        "type": "achievement",
+        "title": "500 Tasks!",
+        "message": "🌟 Half a thousand tasks completed! Incredible dedication!",
+        "actionType": "claim",
+        "actionTarget": "/rewards",
+        "metadata": {
+          "completedCount": "{count}",
+          "lastTaskId": "{taskId}",
+          "level": "Master",
+          "badge": "500-club"
+        }
+      },
+      {
+        "condition": { "equals": 1000 },
+        "type": "levelUp",
+        "title": "Grand Master!",
+        "message": "🏆 1,000 TASKS COMPLETED! You've reached Grand Master status!",
+        "actionType": "acknowledge",
+        "actionTarget": "/profile/achievements",
+        "metadata": {
+          "completedCount": "{count}",
+          "lastTaskId": "{taskId}",
+          "level": "Grand Master",
+          "badge": "grand-master"
+        }
+      },
+      {
+        "condition": { "every": 10 },
+        "type": "milestone",
+        "title": "Milestone Achieved!",
+        "message": "🏆 You've completed {count} tasks! Keep up the great work!",
+        "actionType": "acknowledge",
+        "actionTarget": "/achievements",
+        "metadata": {
+          "completedCount": "{count}",
+          "lastTaskId": "{taskId}",
+          "milestone": "{milestone}"
+        }
+      }
+    ]
+  }
+  

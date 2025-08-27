@@ -3,17 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Subject, Observable } from 'rxjs';
 import { TaskService } from 'src/task/task.service';
 import { NotificationsEntity } from './models/notifications.entity';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import { OnEvent } from '@nestjs/event-emitter';
-import { notificationRules } from './notification.rules';
+import * as notificationRulesJson from './notification.rules.json';
 import { User } from 'src/user/models/user.interface';
-
-export interface NotificationEvent {
-  type: string;
-  message: string;
-  data?: any;
-  timestamp: Date;
-}
+import { NotificationEvent, NotificationRule } from './models/notification.interfaces';
 
 @Injectable()
 export class NotificationsService {
@@ -30,36 +24,46 @@ export class NotificationsService {
         return 'notif-' + randomNumber.toString().padStart(9, '0');
       }
     
+    private checkCondition(condition: NotificationRule['condition'], completedCount: number): boolean {
+      if (condition.every && completedCount % condition.every === 0 && completedCount > 0) return true;
+      if (condition.equals && completedCount === condition.equals) return true;
+      return false;
+    }
+
     @OnEvent('task.completed')
     async handleTaskCompletion(payload: { userId: string; taskId: string;}) {
         const { userId, taskId } = payload;
         const completedCount = await this.taskService.countCompletedTasks(payload.userId);
-        
-        for (const rule of notificationRules.milestones) {
-            if (rule.condition(completedCount)) {
-            const notification = this.notificationsRepository.create({
+
+        for (const rule of notificationRulesJson.milestones) {
+          if (this.checkCondition(rule.condition, completedCount)) {
+            const notification = this.notificationsRepository.create(
+              {
                 notif_id: this.generateNotifId(),
                 user: { user_id: userId } as User,
-                type: rule.type as 'achievement' | 'milestone' | 'streak' | 'levelUp' | 'reward' | 'taskDue',
-                title: rule.title,
-                message: rule.message(completedCount),
-                read: false,
-                actionType: rule.actionType as 'acknowledge' | 'complete' | 'claim',
-                actionTarget: rule.actionTarget,
-                metadata: rule.metadata(completedCount, taskId),
-                createdAt: new Date(),
-                updatedAt: new Date()
-            });
-        
-            await this.notificationsRepository.save(notification);
-        
-            this.sendNotification({
                 type: rule.type,
-                message: notification.message,
-                data: notification.metadata,
+                title: rule.title,
+                message: rule.message.replace('{count}', String(completedCount)),
+                read: false,
+                actionType: rule.actionType,
+                actionTarget: rule.actionTarget,
+                metadata: {
+                  ...rule.metadata,
+                  completedCount,
+                  taskId,
+                },
+              } as DeepPartial<NotificationsEntity>
+            );
+            
+            await this.notificationsRepository.save(notification);
+      
+            this.sendNotification({
+              type: rule.type,
+              message: notification.message,
+              data: notification.metadata,
             });
             break;
-            }
+          }
         }
     }       
 
