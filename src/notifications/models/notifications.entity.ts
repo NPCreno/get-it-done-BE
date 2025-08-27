@@ -41,8 +41,8 @@ export class NotificationsEntity{
      @Column()
      read!: boolean;
 
-     @Column({ type: 'enum', enum: ['navigate', 'complete', 'claim'], nullable: true })
-     actionType?: 'navigate' | 'complete' | 'claim';
+     @Column({ type: 'enum', enum: ['acknowledge', 'complete', 'claim'], nullable: true })
+     actionType?: 'acknowledge' | 'complete' | 'claim';
      
      @Column({ nullable: true })
      actionTarget?: string;

@@ -5,6 +5,8 @@ import { TaskService } from 'src/task/task.service';
 import { NotificationsEntity } from './models/notifications.entity';
 import { Repository } from 'typeorm';
 import { OnEvent } from '@nestjs/event-emitter';
+import { notificationRules } from './notification.rules';
+import { User } from 'src/user/models/user.interface';
 
 export interface NotificationEvent {
   type: string;
@@ -16,7 +18,6 @@ export interface NotificationEvent {
 @Injectable()
 export class NotificationsService {
   private notificationSubject = new Subject<MessageEvent>();
-  private readonly logger = new Logger(NotificationsService.name);
 
   constructor(
     private readonly taskService: TaskService,
@@ -30,40 +31,37 @@ export class NotificationsService {
       }
     
     @OnEvent('task.completed')
-    async handleTaskCompleted(payload: { userId: string; taskId: string }) {
-        this.logger.log(`Received event: task.completed for user ${payload.userId}, task ${payload.taskId}`);
+    async handleTaskCompletion(payload: { userId: string; taskId: string;}) {
+        const { userId, taskId } = payload;
         const completedCount = await this.taskService.countCompletedTasks(payload.userId);
-
-        // 2. Example logic: milestone every 10 completed tasks
-        if (completedCount % 6 === 0) {
-            this.logger.log(`🎉 User ${payload.userId} reached milestone: ${completedCount} completed tasks`);
-    
-            // 3. Create a notification in DB
+        
+        for (const rule of notificationRules.milestones) {
+            if (rule.condition(completedCount)) {
             const notification = this.notificationsRepository.create({
                 notif_id: this.generateNotifId(),
-                user: { user_id: payload.userId } as any,
-                type: 'achievement',
-                title: 'Milestone Achieved!',
-                message: `🎉 Congrats! You’ve completed ${completedCount} tasks!`,
+                user: { user_id: userId } as User,
+                type: rule.type as 'achievement' | 'milestone' | 'streak' | 'levelUp' | 'reward' | 'taskDue',
+                title: rule.title,
+                message: rule.message(completedCount),
                 read: false,
-                actionType: 'navigate',
-                actionTarget: '/dashboard',
-                metadata: {
-                completedCount,
-                lastTaskId: payload.taskId,
-                },
+                actionType: rule.actionType as 'acknowledge' | 'complete' | 'claim',
+                actionTarget: rule.actionTarget,
+                metadata: rule.metadata(completedCount, taskId),
+                createdAt: new Date(),
+                updatedAt: new Date()
             });
         
             await this.notificationsRepository.save(notification);
-    
-            // 4. Send to SSE clients
+        
             this.sendNotification({
-                type: 'achievement',
+                type: rule.type,
                 message: notification.message,
-                data: { completedCount, taskId: payload.taskId },
+                data: notification.metadata,
             });
+            break;
+            }
         }
-        }
+    }       
 
     getNotificationStream(): Observable<MessageEvent> {
         return this.notificationSubject.asObservable();
@@ -81,6 +79,6 @@ export class NotificationsService {
     }
 
     async clearNotifications(user_id: string) {
-       await this.notificationsRepository.delete(user_id);
-    }
+        await this.notificationsRepository.delete({ user: { user_id } });
+      }
 }
