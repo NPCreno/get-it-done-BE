@@ -1307,27 +1307,34 @@ export class TaskService implements OnModuleInit {
         this.logger.log(`Task ${task_id} (${task.title || 'No title'}) status changing from '${task.status}' to '${status}'`);
         if (status === 'Complete') {
           this.logger.log(`Marking task ${task_id} as Complete`);
-           
-          // Emit event for notification system
-           this.eventEmitter.emit('task.completed', {
-            userId: task.user.user_id,
-            taskId: task.task_id,
-          });
         }
       } else {
         this.logger.debug(`Task ${task_id} status already set to '${status}', no change needed`);
       }
 
-      await this.taskInstanceRepository.update(
+      const response = await this.taskInstanceRepository.update(
         { task_id },
         { status: status as 'Complete' | 'Pending' | 'Overdue' }
       );
-
-      this.logger.log(`Successfully updated task ${task_id} status to '${status}'`);
-      return {
-        status: 'success',
-        message: `Task updated to ${status} successfully`,
-      };
+      // Emit event for notification system
+      if (response.affected && response.affected > 0) {
+        if(status === 'Complete') {
+          this.logger.log(`Successfully updated task ${task_id} status to '${status}'`);
+          this.eventEmitter.emit('task.completed', {
+            userId: task.user.user_id,
+            taskId: task.task_id,
+          });
+        }
+        return {
+          status: 'success',
+          message: `Task updated to ${status} successfully`,
+        };
+      } else {
+        return {
+          status: 'success',
+          message: `Task status already set to '${status}', no change needed`,
+        };
+      }
     } catch (error: any) {
       this.logger.error(`Failed to update task ${task_id} status: ${error.message}`, error.stack);
       return {
