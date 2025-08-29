@@ -1,5 +1,21 @@
 {
+  "notifTypes": [{
     "milestones": [
+      {
+        "condition": { "every": 10 },
+        "type": "milestone",
+        "title": "Milestone Achieved!",
+        "message": "🏆 You've completed {count} tasks! Keep up the great work!",
+        "actionType": "acknowledge",
+        "actionTarget": "/achievements",
+        "metadata": {
+          "completedCount": "{count}",
+          "lastTaskId": "{taskId}",
+          "milestone": "{milestone}"
+        }
+      }
+    ],
+    "achievements": [
       {
         "condition": { "equals": 1 },
         "type": "achievement",
@@ -28,17 +44,11 @@
       },
       {
         "condition": { "equals": 100 },
-        "type": "levelUp",
-        "title": "Century!",
-        "message": "💯 Wow! 100 tasks completed! You're unstoppable!",
-        "actionType": "acknowledge",
-        "actionTarget": "/profile/achievements",
-        "metadata": {
-          "completedCount": "{count}",
-          "lastTaskId": "{taskId}",
-          "level": "Pro",
-          "badge": "centurion"
-        }
+        "type": "achievement",
+        "title": "Task Master",
+        "message": "🏅 100 tasks completed! You're on fire!",
+        "actionType": "claim",
+        "actionTarget": "/rewards"
       },
       {
         "condition": { "equals": 250 },
@@ -70,31 +80,82 @@
       },
       {
         "condition": { "equals": 1000 },
+        "type": "achievement",
+        "title": "Productivity Legend",
+        "message": "👑 1000 tasks — legendary dedication!",
+        "actionType": "claim",
+        "actionTarget": "/rewards"
+      }
+    ],
+    "streaks": [
+      {
+        "condition": { "equals": 3 },
+        "type": "streak",
+        "title": "3-Day Streak",
+        "message": "🔥 You're on a roll — 3 days in a row!",
+        "actionType": "acknowledge"
+      },
+      {
+        "condition": { "equals": 7 },
+        "type": "streak",
+        "title": "One Week Strong",
+        "message": "💪 7-day streak — keep the momentum alive!",
+        "actionType": "acknowledge"
+      }
+    ],
+  
+    "levelUps": [
+      {
+        "condition": { "equals": 1 },
         "type": "levelUp",
-        "title": "Grand Master!",
-        "message": "🏆 1,000 TASKS COMPLETED! You've reached Grand Master status!",
+        "title": "Level Up!",
+        "message": "⬆️ Welcome to Level 1 — The Journey Begins.",
+        "actionType": "acknowledge"
+      },
+      {
+        "condition": { "equals": 5 },
+        "type": "levelUp",
+        "title": "Level 5 Unlocked!",
+        "message": "🌟 You're now a Task Pro!",
+        "actionType": "acknowledge"
+      },
+      {
+        "condition": { "equals": 100 },
+        "type": "levelUp",
+        "title": "Century!",
+        "message": "💯 Wow! 100 tasks completed! You're unstoppable!",
         "actionType": "acknowledge",
         "actionTarget": "/profile/achievements",
         "metadata": {
           "completedCount": "{count}",
           "lastTaskId": "{taskId}",
-          "level": "Grand Master",
-          "badge": "grand-master"
-        }
-      },
-      {
-        "condition": { "every": 10 },
-        "type": "milestone",
-        "title": "Milestone Achieved!",
-        "message": "🏆 You've completed {count} tasks! Keep up the great work!",
-        "actionType": "acknowledge",
-        "actionTarget": "/achievements",
-        "metadata": {
-          "completedCount": "{count}",
-          "lastTaskId": "{taskId}",
-          "milestone": "{milestone}"
+          "level": "Pro",
+          "badge": "centurion"
         }
       }
+    ],
+  
+    "rewards": [
+      {
+        "condition": { "equals": 20 },
+        "type": "reward",
+        "title": "Surprise Reward 🎁",
+        "message": "You earned a badge for staying consistent!",
+        "actionType": "claim",
+        "actionTarget": "/badges"
+      }
+    ],
+  
+    "taskDue": [
+      {
+        "condition": { "equals": 0 },
+        "type": "taskDue",
+        "title": "Task Reminder",
+        "message": "⏰ Task '{taskName}' is due today.",
+        "actionType": "complete",
+        "actionTarget": "/tasks/{taskId}"
+      }
     ]
+    }]
   }
   

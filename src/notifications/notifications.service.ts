@@ -31,19 +31,22 @@ export class NotificationsService {
     }
 
     @OnEvent('task.completed')
-    async handleTaskCompletion(payload: { userId: string; taskId: string;}) {
-        const { userId, taskId } = payload;
-        const completedCount = await this.taskService.countCompletedTasks(payload.userId);
-
-        for (const rule of notificationRulesJson.milestones) {
-          if (this.checkCondition(rule.condition, completedCount)) {
-            const notification = this.notificationsRepository.create(
-              {
+    async handleTaskCompletion(payload: { userId: string; taskId: string }) {
+      const { userId, taskId } = payload;
+      const completedCount = await this.taskService.countCompletedTasks(payload.userId);
+    
+      for (const notifType of notificationRulesJson.notifTypes) {
+        for (const [_, rules] of Object.entries(notifType)) {
+          for (const rule of rules as any[]) {
+            if (this.checkCondition(rule.condition, completedCount)) {
+              const notification = this.notificationsRepository.create({
                 notif_id: this.generateNotifId(),
                 user: { user_id: userId } as User,
                 type: rule.type,
                 title: rule.title,
-                message: rule.message.replace('{count}', String(completedCount)),
+                message: rule.message
+                  .replace('{count}', String(completedCount))
+                  .replace('{taskId}', taskId),
                 read: false,
                 actionType: rule.actionType,
                 actionTarget: rule.actionTarget,
@@ -52,20 +55,21 @@ export class NotificationsService {
                   completedCount,
                   taskId,
                 },
-              } as DeepPartial<NotificationsEntity>
-            );
-            
-            await this.notificationsRepository.save(notification);
-      
-            this.sendNotification({
-              type: rule.type,
-              message: notification.message,
-              data: notification.metadata,
-            });
-            break;
+              } as DeepPartial<NotificationsEntity>);
+    
+              await this.notificationsRepository.save(notification);
+    
+              this.sendNotification({
+                type: rule.type,
+                message: notification.message,
+                data: notification.metadata,
+              });
+            }
           }
         }
-    }       
+      }
+    }
+    
 
     getNotificationStream(): Observable<MessageEvent> {
         return this.notificationSubject.asObservable();
