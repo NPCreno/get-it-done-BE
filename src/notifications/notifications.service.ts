@@ -24,21 +24,27 @@ export class NotificationsService {
         return 'notif-' + randomNumber.toString().padStart(9, '0');
       }
     
-    private checkCondition(condition: NotificationRule['condition'], completedCount: number): boolean {
-      if (condition.every && completedCount % condition.every === 0 && completedCount > 0) return true;
-      if (condition.equals && completedCount === condition.equals) return true;
+    private checkCondition(
+      condition: NotificationRule['condition'],
+      value: number
+    ): boolean {
+      if (condition.every && value % condition.every === 0 && value > 0) return true;
+      if (condition.equals && value === condition.equals) return true;
       return false;
     }
 
     @OnEvent('task.completed')
     async handleTaskCompletion(payload: { userId: string; taskId: string }) {
       const { userId, taskId } = payload;
-      const completedCount = await this.taskService.countCompletedTasks(payload.userId);
+      const completedCount = await this.taskService.countCompletedTasks(userId);
+      const currentStreak = (await this.taskService.getStreakCount(userId)).data?.count;
     
       for (const notifType of notificationRulesJson.notifTypes) {
         for (const [_, rules] of Object.entries(notifType)) {
-          for (const rule of rules as any[]) {
-            if (this.checkCondition(rule.condition, completedCount)) {
+          for (const rule of rules as NotificationRule[]) {
+            const metricValue = rule.type === 'streak' ? currentStreak : completedCount;
+    
+            if (this.checkCondition(rule.condition, metricValue ?? 0)) {
               const notification = this.notificationsRepository.create({
                 notif_id: this.generateNotifId(),
                 user: { user_id: userId } as User,
@@ -46,6 +52,7 @@ export class NotificationsService {
                 title: rule.title,
                 message: rule.message
                   .replace('{count}', String(completedCount))
+                  .replace('{streak}', String(currentStreak ?? 0))
                   .replace('{taskId}', taskId),
                 read: false,
                 actionType: rule.actionType,
@@ -53,12 +60,12 @@ export class NotificationsService {
                 metadata: {
                   ...rule.metadata,
                   completedCount,
+                  currentStreak,
                   taskId,
                 },
               } as DeepPartial<NotificationsEntity>);
     
               await this.notificationsRepository.save(notification);
-    
               this.sendNotification({
                 type: rule.type,
                 message: notification.message,
@@ -69,7 +76,6 @@ export class NotificationsService {
         }
       }
     }
-    
 
     getNotificationStream(): Observable<MessageEvent> {
         return this.notificationSubject.asObservable();

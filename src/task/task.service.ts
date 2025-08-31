@@ -1201,7 +1201,7 @@ export class TaskService implements OnModuleInit {
     }
   }
   
-  async getStreakCount(user_id: string): Promise<{
+  public async getStreakCount(user_id: string): Promise<{
     status: 'success' | 'error';
     message: string;
     data?: { 

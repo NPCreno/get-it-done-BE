@@ -89,6 +89,13 @@
     ],
     "streaks": [
       {
+        "condition": { "equals": 1 },
+        "type": "streak",
+        "title": "1-Day Streak",
+        "message": "✅ You showed up today — that's 1 day in a row! Keep it going! 🔥",
+        "actionType": "acknowledge"
+      },
+      {
         "condition": { "equals": 3 },
         "type": "streak",
         "title": "3-Day Streak",
