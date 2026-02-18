@@ -60,7 +60,7 @@ export class AuthService {
     }
 
 
-    async generateRefreshToken(user: User, ipAddress: string, rememberMe: boolean): Promise<string> {
+    async generateRefreshToken(user: User, ipAddress?: string, rememberMe?: boolean): Promise<string> {
         const tokenId = crypto.randomUUID();
         const refreshToken = this.jwtService.sign(
             {
@@ -81,7 +81,7 @@ export class AuthService {
         authToken.token = await bcrypt.hash(refreshToken, 10); // Store hashed token
         authToken.expires_at = rememberMe ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : new Date(Date.now() + 1 * 24 * 60 * 60 * 1000);
         authToken.is_revoked = false;
-        authToken.ip_address = ipAddress;
+        authToken.ip_address = ipAddress || '';
         authToken.family_id = crypto.randomUUID(); // For token rotation
 
         await this.authTokenRepository.save(authToken);
