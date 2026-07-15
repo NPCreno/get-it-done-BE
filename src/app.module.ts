@@ -18,7 +18,9 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
       type: 'postgres',
       url: process.env.DATABASE_URL,
       autoLoadEntities: true,
-      synchronize: true,
+      // Only local Compose development may opt into automatic schema changes.
+      // Staging and production must run explicit TypeORM migrations instead.
+      synchronize: process.env.DATABASE_SYNCHRONIZE === 'true',
     }),
     UserModule,
     AuthModule,
