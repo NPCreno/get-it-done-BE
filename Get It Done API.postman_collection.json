@@ -1,0 +1,202 @@
+{
+  "info": {
+    "_postman_id": "a3330a55-1575-4c74-92fc-5f76a6f312ee",
+    "name": "Get It Done API",
+    "description": "Backend API collection. Log in first; successful login requests save access_token and refresh_token to collection variables. Protected requests inherit the Bearer token configured on this collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000", "type": "string" },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "refresh_token", "value": "", "type": "string" },
+    { "key": "user_id", "value": "user-000000001", "type": "string" },
+    { "key": "project_id", "value": "PRJ-000000001", "type": "string" },
+    { "key": "task_id", "value": "task-000000001", "type": "string" },
+    { "key": "subtask_id", "value": "subtask-000000001", "type": "string" },
+    { "key": "task_template_id", "value": "template-000000001", "type": "string" },
+    { "key": "start_date", "value": "2026-09-01", "type": "string" },
+    { "key": "end_date", "value": "2026-09-30", "type": "string" },
+    { "key": "month", "value": "9", "type": "string" },
+    { "key": "year", "value": "2026", "type": "string" },
+    { "key": "ip_address", "value": "127.0.0.1", "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Get API Root",
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{base_url}}/", "description": "Returns the Nest application greeting." }
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Refresh Access Token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\",\n  \"ipAddress\": \"{{ip_address}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/api/auth/refresh"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code >= 200 && pm.response.code < 300) {", "  const body = pm.response.json();", "  if (body.data?.access_token) pm.collectionVariables.set('access_token', body.data.access_token);", "  if (body.data?.refresh_token) pm.collectionVariables.set('refresh_token', body.data.refresh_token);", "}"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Create User",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fullname\": \"Jamie Doe\",\n  \"username\": \"jamiedoe\",\n  \"email\": \"jamie@example.com\",\n  \"password\": \"ChangeMe123!\",\n  \"tier\": \"free\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/api/user/create"
+          }
+        },
+        {
+          "name": "Login with Email",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"jamie@example.com\",\n  \"password\": \"ChangeMe123!\",\n  \"rememberMe\": true,\n  \"ipAddress\": \"{{ip_address}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/api/user/loginEmail"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code >= 200 && pm.response.code < 300) {", "  const body = pm.response.json();", "  if (body.data?.access_token) pm.collectionVariables.set('access_token', body.data.access_token);", "  if (body.data?.refresh_token) pm.collectionVariables.set('refresh_token', body.data.refresh_token);", "}"] } }]
+        },
+        {
+          "name": "Login with Username",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"jamiedoe\",\n  \"password\": \"ChangeMe123!\",\n  \"rememberMe\": true,\n  \"ipAddress\": \"{{ip_address}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/api/user/loginUsername"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if (pm.response.code >= 200 && pm.response.code < 300) {", "  const body = pm.response.json();", "  if (body.data?.access_token) pm.collectionVariables.set('access_token', body.data.access_token);", "  if (body.data?.refresh_token) pm.collectionVariables.set('refresh_token', body.data.refresh_token);", "}"] } }]
+        },
+        { "name": "Get User by ID", "request": { "method": "GET", "url": "{{base_url}}/api/user/get/{{user_id}}" } },
+        { "name": "Get All Users (Admin)", "request": { "method": "GET", "url": "{{base_url}}/api/user/getAll" } },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fullname\": \"Jamie Taylor Doe\",\n  \"username\": \"jamietaylor\",\n  \"enableNotifications\": \"true\",\n  \"theme\": \"dark\",\n  \"soundFx\": \"true\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/api/user/update/{{user_id}}"
+          }
+        },
+        { "name": "Soft Delete User", "request": { "method": "DELETE", "url": "{{base_url}}/api/user/{{user_id}}" } },
+        { "name": "Hard Delete User (Admin)", "request": { "method": "DELETE", "url": "{{base_url}}/api/user/{{user_id}}/hard" } }
+      ]
+    },
+    {
+      "name": "Projects",
+      "item": [
+        { "name": "Get All Projects (Admin)", "request": { "method": "GET", "url": "{{base_url}}/api/projects/getAll" } },
+        { "name": "Get Projects for User", "request": { "method": "GET", "url": "{{base_url}}/api/projects/getAll/{{user_id}}" } },
+        { "name": "Get Project by ID", "request": { "method": "GET", "url": "{{base_url}}/api/projects/{{project_id}}" } },
+        {
+          "name": "Create Project",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Website refresh\",\n  \"description\": \"Plan and ship the website refresh.\",\n  \"color\": \"#2563EB\",\n  \"colorLabel\": \"Blue\",\n  \"due_date\": \"2026-10-31T17:00:00.000Z\",\n  \"user_id\": \"{{user_id}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/api/projects/create"
+          }
+        },
+        {
+          "name": "Update Project",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Website refresh phase 1\",\n  \"description\": \"Complete the design and implementation work.\",\n  \"color\": \"#7C3AED\",\n  \"colorLabel\": \"Violet\",\n  \"due_date\": \"2026-11-15T17:00:00.000Z\",\n  \"user_id\": \"{{user_id}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/api/projects/{{project_id}}"
+          }
+        },
+        { "name": "Soft Delete Project", "request": { "method": "DELETE", "url": "{{base_url}}/api/projects/{{project_id}}" } },
+        { "name": "Hard Delete Project", "request": { "method": "DELETE", "url": "{{base_url}}/api/projects/{{project_id}}/hard" } }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "Create Task",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"project_id\": \"{{project_id}}\",\n  \"title\": \"Review homepage copy\",\n  \"description\": \"Review the revised hero and feature copy.\",\n  \"priority\": \"Medium\",\n  \"status\": \"Pending\",\n  \"isRecurring\": false,\n  \"due_date\": \"2026-10-01T09:00:00.000Z\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/api/tasks/create"
+          }
+        },
+        {
+          "name": "Bulk Create Tasks",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "[\n  {\n    \"user_id\": \"{{user_id}}\",\n    \"project_id\": \"{{project_id}}\",\n    \"title\": \"Draft release notes\",\n    \"description\": \"Prepare the initial release notes.\",\n    \"priority\": \"High\",\n    \"status\": \"Pending\",\n    \"isRecurring\": false,\n    \"due_date\": \"2026-10-02T09:00:00.000Z\"\n  },\n  {\n    \"user_id\": \"{{user_id}}\",\n    \"project_id\": \"{{project_id}}\",\n    \"title\": \"Team planning\",\n    \"description\": \"Recurring weekly planning session.\",\n    \"priority\": \"Medium\",\n    \"status\": \"Pending\",\n    \"isRecurring\": true,\n    \"repeat_every\": \"Week\",\n    \"repeat_days\": [\"Monday\"],\n    \"start_date\": \"2026-10-05T09:00:00.000Z\",\n    \"end_date\": \"2026-12-31T09:00:00.000Z\"\n  }\n]", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/api/tasks/bulk-create"
+          }
+        },
+        { "name": "Get Tasks by User", "request": { "method": "GET", "url": "{{base_url}}/api/tasks/getTasksByUser/{{user_id}}?startDate={{start_date}}&endDate={{end_date}}" } },
+        { "name": "Get Tasks by Project", "request": { "method": "GET", "url": "{{base_url}}/api/tasks/getTasksByProj/{{project_id}}?startDate={{start_date}}&endDate={{end_date}}" } },
+        {
+          "name": "Update Task",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Review homepage copy and approve\",\n  \"description\": \"Review the revised hero and feature copy, then approve it.\",\n  \"priority\": \"High\",\n  \"status\": \"Pending\",\n  \"due_date\": \"2026-10-02T17:00:00.000Z\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/api/tasks/{{task_id}}"
+          }
+        },
+        { "name": "Soft Delete Task", "request": { "method": "DELETE", "url": "{{base_url}}/api/tasks/{{task_id}}" } },
+        { "name": "Hard Delete Task", "request": { "method": "DELETE", "url": "{{base_url}}/api/tasks/{{task_id}}/hard" } },
+        { "name": "Delete Recurring Task and Instances", "request": { "method": "DELETE", "url": "{{base_url}}/api/tasks/deleteRecurringTasks/{{task_template_id}}" } },
+        {
+          "name": "Create Subtask",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "{\n  \"user_id\": \"{{user_id}}\",\n  \"task_id\": \"{{task_id}}\",\n  \"title\": \"Check mobile spacing\",\n  \"status\": \"Pending\",\n  \"due_date\": \"2026-10-01T12:00:00.000Z\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/api/tasks/createSubTask"
+          }
+        },
+        {
+          "name": "Bulk Create Subtasks",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json", "type": "text" }],
+            "body": { "mode": "raw", "raw": "[\n  {\n    \"user_id\": \"{{user_id}}\",\n    \"task_id\": \"{{task_id}}\",\n    \"title\": \"Check desktop spacing\",\n    \"status\": \"Pending\",\n    \"due_date\": \"2026-10-01T12:00:00.000Z\"\n  },\n  {\n    \"user_id\": \"{{user_id}}\",\n    \"task_id\": \"{{task_id}}\",\n    \"title\": \"Check mobile spacing\",\n    \"status\": \"Pending\",\n    \"due_date\": \"2026-10-01T12:00:00.000Z\"\n  }\n]", "options": { "raw": { "language": "json" } } },
+            "url": "{{base_url}}/api/tasks/bulk-create-subtasks"
+          }
+        },
+        { "name": "Soft Delete Subtask", "request": { "method": "DELETE", "url": "{{base_url}}/api/tasks/subTask/{{subtask_id}}" } },
+        { "name": "Update Task Status", "request": { "method": "PATCH", "url": "{{base_url}}/api/tasks/update-task-status/{{task_id}}/status/Complete", "description": "Allowed statuses: Pending, Complete, Overdue." } },
+        { "name": "Update Subtask Status", "request": { "method": "PATCH", "url": "{{base_url}}/api/tasks/update-subTask-status/{{subtask_id}}/status/Complete", "description": "Allowed statuses: Pending, Complete, Overdue." } },
+        { "name": "Get Dashboard Data", "request": { "method": "GET", "url": "{{base_url}}/api/tasks/getDashboardData/{{user_id}}?startDate={{start_date}}&endDate={{end_date}}" } },
+        { "name": "Get Completion Trend", "request": { "method": "GET", "url": "{{base_url}}/api/tasks/completion-trend/{{user_id}}?startDate={{start_date}}&endDate={{end_date}}" } },
+        { "name": "Get Task Distribution", "request": { "method": "GET", "url": "{{base_url}}/api/tasks/task-distribution/{{user_id}}?month={{month}}&year={{year}}" } },
+        { "name": "Get Calendar Heatmap", "request": { "method": "GET", "url": "{{base_url}}/api/tasks/calendar-heatmap/{{user_id}}?month={{month}}&year={{year}}" } },
+        { "name": "Get User Streak", "request": { "method": "GET", "url": "{{base_url}}/api/tasks/streak/{{user_id}}" } }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        { "name": "Notification SSE Stream", "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{base_url}}/api/notifications/sse", "description": "Server-sent event stream. Postman may keep the request open while the stream is active." } },
+        { "name": "Clear Notifications", "request": { "auth": { "type": "noauth" }, "method": "DELETE", "url": "{{base_url}}/api/notifications/clear/{{user_id}}" } }
+      ]
+    }
+  ]
+}

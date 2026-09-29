@@ -12,12 +12,13 @@ import {
   Between, 
   In, 
   IsNull, 
+  LessThan, 
   MoreThanOrEqual, 
   Repository 
 } from 'typeorm';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
 import { TaskTemplateEntity } from './models/taskTemplate.entity';
-import { CreateTaskDto } from './dto/create-task-dto';
+import { CreateBulkTasksDto, CreateTaskDto } from './dto/create-task-dto';
 import { DeepPartial } from 'typeorm';
 import { UserEntity } from 'src/user/models/user.entity';
 import { ProjectEntity } from 'src/projects/models/projects.entity';
@@ -30,7 +31,9 @@ import { TaskDistribution } from './interfaces/taskDistribution';
 import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
 import { CalendarHeatmap } from './interfaces/calendarHeatmap';
 import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
-import { CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
+import { CreateBulkSubTasksDto, CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+
 @Injectable()
 export class TaskService implements OnModuleInit {
   private readonly logger = new Logger('TaskService');
@@ -48,6 +51,7 @@ export class TaskService implements OnModuleInit {
     private readonly projectsRepository: Repository<ProjectEntity>,
     @Inject(forwardRef(() => TaskGeneratorService))
     private readonly taskGeneratorService: TaskGeneratorService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
   async onModuleInit() {
     await this.taskGeneratorService.generateInstancesForCurrentMonth(); //trigger cronjob for generating task instances from task template
@@ -64,6 +68,90 @@ export class TaskService implements OnModuleInit {
 
   private generateTaskSubInstanceId(): string {
     return `subTask-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  }
+
+  async countCompletedTasks(user_id: string): Promise<number> {
+    try {
+      const user = await this.usersRepository.findOne({ where: { user_id } });
+      if (!user) {
+        throw new NotFoundException(`User with ID ${user_id} not found`);
+      }
+      
+      const data = await this.taskInstanceRepository.find({
+        where: {user: { user_id }},
+        relations: ['user', 'project', 'template', 'subInstances'],
+        withDeleted: false,
+      });
+      const completedTasks = data.filter((task) => task.status === 'Complete');
+      return completedTasks.length;
+      
+    } catch (error: any) {
+      this.logger.error(`Failed to count completed tasks for user ${user_id}: ${error.message}`);
+      throw error;
+    }
+  }
+  
+
+  async createBulkTasks(tasks: CreateBulkTasksDto, userId: string): Promise<{
+    status: string;
+    message: string;
+    data?: (TaskInstanceEntity | TaskTemplateEntity)[];
+    error?: any;
+  }> {
+    try {
+      const results = [];
+      const errors = [];
+
+      for (const taskDto of tasks) {
+        if (taskDto.user_id !== userId) {
+          errors.push({ 
+            task: taskDto.title || 'Untitled Task',
+            error: 'User ID mismatch' 
+          });
+          continue;
+        }
+
+        try {
+          const result = await this.createTask(taskDto);
+          if (result.status === 'success' && result.data) {
+            results.push(result.data);
+          } else {
+            errors.push({
+              task: taskDto.title || 'Untitled Task',
+              error: result.error || 'Failed to create task'
+            });
+          }
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to create task';
+          errors.push({
+            task: taskDto.title || 'Untitled Task',
+            error: errorMessage
+          });
+        }
+      }
+
+      if (results.length === 0 && errors.length > 0) {
+        return {
+          status: 'error',
+          message: 'Failed to create any tasks',
+          error: errors
+        };
+      }
+
+      return {
+        status: 'success',
+        message: `Successfully created ${results.length} task(s)${errors.length > 0 ? `, failed to create ${errors.length} task(s)` : ''}`,
+        data: results,
+        ...(errors.length > 0 && { error: errors })
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process bulk task creation';
+      return {
+        status: 'error',
+        message: 'Failed to process bulk task creation',
+        error: errorMessage
+      };
+    }
   }
 
   async createTask(taskDto: CreateTaskDto): Promise<{
@@ -200,6 +288,117 @@ export class TaskService implements OnModuleInit {
     }
   }
 
+  private async validateParentTask(taskId: string, userId: string): Promise<boolean> {
+    try {
+      const parentTask = await this.taskInstanceRepository.findOne({
+        where: { task_id: taskId, user: { user_id: userId } },
+      });
+      return !!parentTask;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async createBulkTaskSubInstances(createBulkDto: CreateBulkSubTasksDto, userId: string): Promise<{
+    status: string;
+    message: string;
+    data?: TaskSubInstanceEntity[];
+    error?: any;
+  }> {
+    try {
+      const results = [];
+      const errors = [];
+      const taskValidations = new Map<string, boolean>();
+
+      // Ensure subtasks array exists and is an array
+      if (!Array.isArray(createBulkDto)) {
+        return {
+          status: 'error',
+          message: 'Invalid subtasks data',
+          error: 'Expected an array of subtasks'
+        };
+      }
+
+      // First pass: validate all parent tasks
+      for (const subTaskDto of createBulkDto) {
+        if (subTaskDto.user_id !== userId) {
+          errors.push({
+            subTask: subTaskDto.title || 'Untitled Sub-Task',
+            error: 'User ID mismatch',
+            taskId: subTaskDto.task_id
+          });
+          continue;
+        }
+
+        // Skip validation if we've already checked this task
+        if (taskValidations.has(subTaskDto.task_id)) {
+          continue;
+        }
+
+        const isValid = await this.validateParentTask(subTaskDto.task_id, userId);
+        taskValidations.set(subTaskDto.task_id, isValid);
+      }
+
+      // Second pass: create subtasks with validated parent tasks
+      for (const subTaskDto of createBulkDto) {
+        // Skip if user ID was invalid
+        if (subTaskDto.user_id !== userId) continue;
+
+        const isParentValid = taskValidations.get(subTaskDto.task_id);
+        if (!isParentValid) {
+          errors.push({
+            subTask: subTaskDto.title || 'Untitled Sub-Task',
+            error: `Parent task with ID ${subTaskDto.task_id} not found or access denied`,
+            taskId: subTaskDto.task_id
+          });
+          continue;
+        }
+
+        try {
+          const result = await this.createTaskSubInstance(subTaskDto);
+          if (result.status === 'success' && result.data) {
+            results.push(result.data);
+          } else {
+            errors.push({
+              subTask: subTaskDto.title || 'Untitled Sub-Task',
+              error: result.error || 'Failed to create sub-task',
+              taskId: subTaskDto.task_id
+            });
+          }
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to create sub-task';
+          errors.push({
+            subTask: subTaskDto.title || 'Untitled Sub-Task',
+            error: errorMessage,
+            taskId: subTaskDto.task_id
+          });
+        }
+      }
+
+      if (results.length === 0 && errors.length > 0) {
+        return {
+          status: 'error',
+          message: 'Failed to create any sub-tasks',
+          error: errors
+        };
+      }
+
+      return {
+        status: 'success',
+        message: `Successfully created ${results.length} sub-task(s)${errors.length > 0 ? `, failed to create ${errors.length} sub-task(s)` : ''}`,
+        data: results,
+        ...(errors.length > 0 && { error: errors })
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process bulk sub-task creation';
+      return {
+        status: 'error',
+        message: 'Failed to process bulk sub-task creation',
+        error: errorMessage
+      };
+    }
+  }
+
   async createTaskSubInstance(
     createDto: CreateTaskSubInstanceDto,
   ): Promise<{
@@ -274,13 +473,23 @@ export class TaskService implements OnModuleInit {
       throw new NotFoundException(`User with ID ${user_id} not found`);
     }
 
-    const where: any[] = [{ user: { user_id }, due_date: IsNull() }];
+    const where: any[] = [
+      { user: { user_id }, due_date: IsNull() },
+    ];
+    
     if (startDate && endDate) {
       where.push({
         user: { user_id },
         due_date: Between(new Date(startDate), new Date(endDate)),
       });
+    
+      // also include overdue tasks (missed deadlines)
+      where.push({
+        user: { user_id },
+        due_date: LessThan(new Date(startDate)),
+      });
     }
+    
 
     const data = await this.taskInstanceRepository.find({
       where,
@@ -691,11 +900,20 @@ export class TaskService implements OnModuleInit {
         throw new NotFoundException(`User with ID ${user_id} not found`);
       }
 
-      const where: any[] = [{ user: { user_id }, due_date: IsNull() }];
+      const where: any[] = [
+        { user: { user_id }, due_date: IsNull() },
+      ];
+      
       if (startDate && endDate) {
         where.push({
           user: { user_id },
           due_date: Between(new Date(startDate), new Date(endDate)),
+        });
+      
+        // also include overdue tasks (missed deadlines)
+        where.push({
+          user: { user_id },
+          due_date: LessThan(new Date(startDate)),
         });
       }
 
@@ -712,7 +930,7 @@ export class TaskService implements OnModuleInit {
       });
 
       const pendingTasks = data.filter(task => task.status === 'Pending');
-      const completeTasks = data.filter(task => task.status === 'Complete');
+      const completeTasks = await this.countCompletedTasks(user_id);
 
       return {
         status: 'success',
@@ -720,7 +938,7 @@ export class TaskService implements OnModuleInit {
         data: {
           all_tasks: data.length,
           pending_tasks: pendingTasks.length,
-          complete_tasks: completeTasks.length,
+          complete_tasks: completeTasks,
           all_projects: projects.length,
         },
       };
@@ -983,7 +1201,7 @@ export class TaskService implements OnModuleInit {
     }
   }
   
-  async getStreakCount(user_id: string): Promise<{
+  public async getStreakCount(user_id: string): Promise<{
     status: 'success' | 'error';
     message: string;
     data?: { 
@@ -1094,16 +1312,29 @@ export class TaskService implements OnModuleInit {
         this.logger.debug(`Task ${task_id} status already set to '${status}', no change needed`);
       }
 
-      await this.taskInstanceRepository.update(
+      const response = await this.taskInstanceRepository.update(
         { task_id },
         { status: status as 'Complete' | 'Pending' | 'Overdue' }
       );
-
-      this.logger.log(`Successfully updated task ${task_id} status to '${status}'`);
-      return {
-        status: 'success',
-        message: `Task updated to ${status} successfully`,
-      };
+      // Emit event for notification system
+      if (response.affected && response.affected > 0) {
+        if(status === 'Complete') {
+          this.logger.log(`Successfully updated task ${task_id} status to '${status}'`);
+          this.eventEmitter.emit('task.completed', {
+            userId: task.user.user_id,
+            taskId: task.task_id,
+          });
+        }
+        return {
+          status: 'success',
+          message: `Task updated to ${status} successfully`,
+        };
+      } else {
+        return {
+          status: 'success',
+          message: `Task status already set to '${status}', no change needed`,
+        };
+      }
     } catch (error: any) {
       this.logger.error(`Failed to update task ${task_id} status: ${error.message}`, error.stack);
       return {

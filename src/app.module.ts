@@ -8,7 +8,8 @@ import { AuthModule } from './auth/auth.module';
 import { ProjectsModule } from './projects/projects.module';
 import { TaskModule } from './task/task.module';
 import { ScheduleModule } from '@nestjs/schedule';
-
+import { NotificationsModule } from './notifications/notifications.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -17,12 +18,16 @@ import { ScheduleModule } from '@nestjs/schedule';
       type: 'postgres',
       url: process.env.DATABASE_URL,
       autoLoadEntities: true,
-      synchronize: true,
+      // Only local Compose development may opt into automatic schema changes.
+      // Staging and production must run explicit TypeORM migrations instead.
+      synchronize: process.env.DATABASE_SYNCHRONIZE === 'true',
     }),
     UserModule,
     AuthModule,
     ProjectsModule,
-    TaskModule
+    TaskModule,
+    NotificationsModule,
+    EventEmitterModule.forRoot()
   ],
   controllers: [AppController],
   providers: [AppService],

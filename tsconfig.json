@@ -6,6 +6,7 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
     "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
@@ -21,7 +22,11 @@
     "esModuleInterop": true,
     "moduleResolution": "node",
     "types": ["node"],
-    "lib": ["ES2023"]
+    "lib": ["ES2023"],
+    "typeRoots": [
+      "./node_modules/@types",
+      "./src/types"
+    ]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]

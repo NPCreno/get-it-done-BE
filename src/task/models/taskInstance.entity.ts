@@ -17,8 +17,8 @@ import { TaskSubInstanceEntity } from './taskSubInstance.entity';
 
 @Entity()
 export class TaskInstanceEntity {
-  @PrimaryGeneratedColumn('uuid')
-  id!: string;
+  @PrimaryGeneratedColumn()
+  id!: number;
 
   @Column({ unique: true })
   task_id!: string;

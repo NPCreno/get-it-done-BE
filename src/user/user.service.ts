@@ -256,8 +256,8 @@ export class UserService {
   async loginEmail(credentials: { 
     email: string, 
     password: string, 
-    rememberMe: boolean, 
-    ipAddress: string}): Promise<
+    rememberMe?: boolean, 
+    ipAddress?: string}): Promise<
   {
     status: string;
     message: string;
@@ -281,7 +281,7 @@ export class UserService {
       if (!jwt) {
         throw new Error('Failed to generate JWT token');
       }
-      const refreshToken = await this.authService.generateRefreshToken(validatedUser, credentials.ipAddress, credentials.rememberMe);
+      const refreshToken = await this.authService.generateRefreshToken(validatedUser, credentials?.ipAddress, credentials?.rememberMe);
       return {
         status: 'success',
         message: 'Login successful',
@@ -300,8 +300,8 @@ export class UserService {
   async loginUsername(credentials: { 
     username: string; 
     password: string, 
-    rememberMe: boolean, 
-    ipAddress: string 
+    rememberMe?: boolean, 
+    ipAddress?: string 
   }): Promise<{
     status: string;
     message: string;
@@ -324,7 +324,7 @@ export class UserService {
       if (!jwt) {
         throw new Error('Failed to generate JWT token');
       }
-      const refreshToken = await this.authService.generateRefreshToken(validatedUser, credentials.ipAddress, credentials.rememberMe);
+      const refreshToken = await this.authService.generateRefreshToken(validatedUser, credentials?.ipAddress, credentials?.rememberMe);
       return {
         status: 'success',
         message: 'Login successful',

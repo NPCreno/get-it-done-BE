@@ -39,8 +39,8 @@ export class UserController {
         @Body() credentials: { 
         email: string; 
         password: string; 
-        rememberMe: boolean
-        ipAddress: string
+        rememberMe?: boolean
+        ipAddress?: string
     },
     ) 
     : Promise<{
@@ -64,8 +64,8 @@ export class UserController {
         @Body() credentials: { 
         username: string; 
         password: string; 
-        rememberMe: boolean; 
-        ipAddress: string },
+        rememberMe?: boolean; 
+        ipAddress?: string },
     )
     : Promise<{
         status: string;

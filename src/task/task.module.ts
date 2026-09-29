@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
 import { TaskTemplateEntity } from './models/taskTemplate.entity';
@@ -10,15 +10,17 @@ import { ProjectEntity } from 'src/projects/models/projects.entity';
 import { UserEntity } from 'src/user/models/user.entity';
 import { TaskGeneratorService } from './taskGenerator.service';
 import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   imports: [
+    forwardRef(() => NotificationsModule),
     TypeOrmModule.forFeature([
       TaskInstanceEntity, 
       TaskTemplateEntity, 
       ProjectEntity, 
       UserEntity, 
-      TaskSubInstanceEntity
+      TaskSubInstanceEntity,
     ]),
     AuthModule,
     UserModule,
