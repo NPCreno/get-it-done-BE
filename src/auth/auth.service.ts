@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
 import { from, Observable, of } from 'rxjs';
 import { User } from 'src/user/models/user.interface';
 import { TokenPayload } from './Interfaces/tokenPayload';
@@ -30,7 +30,11 @@ export class AuthService {
             jti: crypto.randomUUID(),
             };
 
-            const expiresIn = this.configService.get<string>('JWT_ACCESS_EXPIRATION');
+            // `jsonwebtoken` accepts a number of seconds or a valid duration
+            // string (for example, "15m"). Keep the environment value aligned
+            // with the JwtSignOptions contract instead of widening it to any
+            // arbitrary string.
+            const expiresIn = this.configService.get<JwtSignOptions['expiresIn']>('JWT_ACCESS_EXPIRATION');
             const secret = this.configService.get<string>('JWT_SECRET');
             if (!expiresIn || !secret) {
                 throw new Error('JWT configuration missing: ensure JWT_ACCESS_EXPIRATION and JWT_SECRET are set');
@@ -38,7 +42,7 @@ export class AuthService {
             
             return this.jwtService.sign(payload, {
                 expiresIn,
-                secret
+                secret,
             });
         } catch (error: any) {
             const err = error instanceof Error ? error : new Error(String(error));
