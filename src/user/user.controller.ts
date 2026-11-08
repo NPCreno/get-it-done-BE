@@ -9,10 +9,11 @@ import {
   NotFoundException, 
   UseGuards, 
   Req, 
-  UnauthorizedException, 
-  Ip
+  UnauthorizedException
 } from '@nestjs/common';
+import { Request } from 'express';
 import { UserService } from './user.service';
+import { getClientIp } from 'src/auth/client-ip';
 import { UserCleanupResponse } from './models/userCleanupResponse';
 import { CreateUserDto } from './dto/create-user-dto';
 import { UpdateUserDto } from './dto/update-user-dto';
@@ -40,9 +41,9 @@ export class UserController {
         email: string; 
         password: string; 
         rememberMe?: boolean
-        ipAddress?: string
     },
-    ) 
+        @Req() req: Request,
+    )
     : Promise<{
         
         status: string;
@@ -55,7 +56,7 @@ export class UserController {
         error?: any;
     }>
     {
-        const authenticatedUser = await this.userService.loginEmail(credentials);
+        const authenticatedUser = await this.userService.loginEmail({ ...credentials, ipAddress: getClientIp(req) });
         return authenticatedUser;
     }
 
@@ -64,8 +65,8 @@ export class UserController {
         @Body() credentials: { 
         username: string; 
         password: string; 
-        rememberMe?: boolean; 
-        ipAddress?: string },
+        rememberMe?: boolean },
+        @Req() req: Request,
     )
     : Promise<{
         status: string;
@@ -77,7 +78,7 @@ export class UserController {
         };
         error?: any;
     }> {
-        const authenticatedUser = await this.userService.loginUsername(credentials);
+        const authenticatedUser = await this.userService.loginUsername({ ...credentials, ipAddress: getClientIp(req) });
         return authenticatedUser;
     }
 
