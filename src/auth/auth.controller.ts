@@ -9,9 +9,10 @@ import {
     NotFoundException, 
     UseGuards, 
     Req, 
-    UnauthorizedException, 
-    Ip } from '@nestjs/common';
+    UnauthorizedException } from '@nestjs/common';
+import { Request } from 'express';
 import { AuthService } from './auth.service';
+import { getClientIp } from './client-ip';
 
 @Controller('api/auth')
 export class AuthController {
@@ -20,9 +21,10 @@ export class AuthController {
 
     @Post('refresh')
     async refreshToken(
-      @Body() {refreshToken, ipAddress}: {refreshToken: string, ipAddress: string},
+      @Body() {refreshToken}: {refreshToken: string},
+      @Req() req: Request,
     ) {
       console.log("refreshToken triggered")
-      return this.authService.refreshAccessToken(refreshToken, ipAddress);
+      return this.authService.refreshAccessToken(refreshToken, getClientIp(req));
     }
 }
