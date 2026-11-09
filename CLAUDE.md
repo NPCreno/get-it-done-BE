@@ -59,6 +59,15 @@ Railway. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`
 - `synchronize` is on only when `DATABASE_SYNCHRONIZE === 'true'` (local development only)
 - Migration scripts exist but `src/migrations/` has no files yet. `src/data-source.ts` serves the TypeORM CLI
 
+## Local database
+Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app runs natively with `pnpm start:dev`). It listens on `127.0.0.1:5433` because 5432 is often taken by a native Postgres. Defaults: user `postgres`, password `dev`, database `getitdone` (override with `POSTGRES_*` in `.env`).
+- `pnpm db:up` / `pnpm db:down` — start / stop the container
+- `pnpm db:logs`, `pnpm db:psql` — logs, psql shell
+- `pnpm db:dump` — back up the local DB to `db_dumps/local_<timestamp>.dump`
+- `pnpm db:restore [file]` — replace the local DB with a dump (newest in `db_dumps/` by default)
+- `pnpm db:pull [label]` — read-only `pg_dump` of the database in `SOURCE_DATABASE_URL` (set in gitignored `scripts/.env.dump`), for example Neon
+- The scripts are bash: run them from Git Bash or WSL. Dumps hold real data and are gitignored; delete them when done. Never point `DATABASE_SYNCHRONIZE=true` at a shared database
+
 ## Environment
 `DATABASE_URL`, `DATABASE_SYNCHRONIZE`, `JWT_SECRET`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_SECRET`, `FRONTEND_URL`, `PORT`
 
