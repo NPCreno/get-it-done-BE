@@ -73,10 +73,6 @@ export class ProjectsService {
         withDeleted: false,
         });
 
-        if (projects.length === 0) {
-        throw new NotFoundException(`No projects found for user ID ${user_id}`);
-        }
-
         const sanitizedProjects: SanitizedProject[] = [];
 
         for (const project of projects) {
@@ -119,7 +115,7 @@ export class ProjectsService {
     return projects;
     }
 
-    async createProject(projectDto: CreateProjectDto): Promise<{ 
+    async createProject(projectDto: CreateProjectDto, userId: string): Promise<{ 
         status: string; 
         message: string; 
         data?: ProjectEntity; 
@@ -138,8 +134,13 @@ export class ProjectsService {
 
         // Create and save the new project
         const project = this.projectsRepository.create({
-        ...projectDto,
         project_id,
+        user_id: userId,
+        title: projectDto.title,
+        description: projectDto.description,
+        color: projectDto.color,
+        colorLabel: projectDto.colorLabel,
+        due_date: projectDto.due_date,
         });
 
         const savedProject = await this.projectsRepository.save(project);
@@ -176,7 +177,13 @@ export class ProjectsService {
     if (project.user_id !== tokenUserId) {
         throw new UnauthorizedException('Access denied: Not your data.');
     }
-    await this.projectsRepository.update({ project_id }, updateProjectsDto);
+    const changes: Record<string, unknown> = {};
+    for (const key of ['title', 'description', 'color', 'colorLabel', 'due_date'] as const) {
+        if (updateProjectsDto[key] !== undefined) changes[key] = updateProjectsDto[key];
+    }
+    if (Object.keys(changes).length > 0) {
+        await this.projectsRepository.update({ project_id }, changes);
+    }
     const updatedProject = await this.projectsRepository.findOne({ where: { project_id } });
     if (!updatedProject) throw new NotFoundException(`Updated user not found`);
     return {

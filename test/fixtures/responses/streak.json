@@ -1,0 +1,7 @@
+{
+  "status": "success",
+  "message": "Streak count retrieved successfully",
+  "data": {
+    "count": 1
+  }
+}

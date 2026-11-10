@@ -72,6 +72,17 @@ Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app run
 - `pnpm db:pull [label]` — read-only `pg_dump` of the database in `SOURCE_DATABASE_URL` (set in gitignored `scripts/.env.dump`), for example Neon
 - The scripts are bash: run them from Git Bash or WSL. Dumps hold real data and are gitignored; delete them when done. Never point `DATABASE_SYNCHRONIZE=true` at a shared database
 
+## API contract and validation
+- `src/common/api-contract.ts` is the canonical contract (enums, limits, patterns). DTO decorators import it. `pnpm contract:export` writes `docs/api-contract.json`, which the FE vendors (`contract:sync` in the FE repo). Changed the contract: export, then sync
+- A global `ValidationPipe` is set up in `src/app.setup.ts` (`configureApp`, used by `main.ts` and tests): `whitelist: true`, `transform: true`, no implicit conversion. Undecorated DTO properties are stripped silently
+- Rule: every `@Body()` is a fully decorated class, or a documented inline type with manual validation (`auth` refresh/logout). `src/common/body-dtos.spec.ts` fails if a body class has an undecorated property
+- Services map DTO fields explicitly. Never spread a body into `create()`/`update()`
+- Identity is server-derived: create endpoints take no `user_id`; use `@AuthUserId()` (the token `sub`). Whitelisting is not authorization: every mutation loads the resource and compares its owner with the token
+- `toTokenUser()` (`src/auth/token-user.ts`) is the only way to build a JWT user. Never spread the entity (it carries the password hash)
+- Notifications: `GET sse` and `DELETE clear/:user_id` are guarded and scoped to the token user
+- Password changes are bcrypt-hashed (cost 12). Migration `HashPlaintextPasswords` fixes old plaintext rows; `npm run db:rehash-passwords` is the idempotent straggler script
+- Tests: `pnpm test` (contract and body-DTO unit specs), `pnpm test:int` (authorization, contract, migration, auth). `WRITE_FIXTURES=1 pnpm test:int` rewrites `test/fixtures/responses/`
+
 ## Environment
 `DATABASE_URL`, `DATABASE_SYNCHRONIZE`, `JWT_SECRET`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRATION`, `JWT_REFRESH_EXPIRATION_SHORT`, `REFRESH_REUSE_GRACE_SECONDS`, `INTERNAL_API_SECRET`, `FRONTEND_URL`, `PORT`
 

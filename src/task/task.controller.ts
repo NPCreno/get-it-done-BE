@@ -13,7 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { TaskService } from './task.service';
-import { CreateBulkTasksDto, CreateTaskDto } from './dto/create-task-dto';
+import { CreateTaskDto } from './dto/create-task-dto';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
 import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
 import { TaskTemplateEntity } from './models/taskTemplate.entity';
@@ -21,84 +21,63 @@ import { UpdateTaskDto } from './dto/update-task-dto';
 import { IDashboardData } from './interfaces/dashboardData';
 import { StatusValidationPipe } from 'src/pipes/status-validation.pipe';
 import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
+import { AuthUserId } from 'src/auth/decorators/auth-user-id.decorator';
+import { ParseArrayPipe } from '@nestjs/common';
 import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
-import { CreateBulkSubTasksDto, CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
+import { CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
 @Controller('api/tasks')
 export class TaskController {
   constructor(private taskService: TaskService) {}
 
   @UseGuards(AuthorizeGuard)
   @Post('create')
-  async create(@Body() dto: CreateTaskDto, @Req() req: AuthenticatedRequest): Promise<{
+  async create(@Body() dto: CreateTaskDto, @AuthUserId() userId: string): Promise<{
     status: string;
     message: string;
     data?: TaskInstanceEntity | TaskTemplateEntity;
     error?: any;
   }> {
-    const tokenUserId = req['user'];
-    if (tokenUserId.user.user_id !== dto.user_id) {
-        throw new UnauthorizedException('Access denied: Not your data.');
-    }
-    return this.taskService.createTask(dto);
+    return this.taskService.createTask(dto, userId);
   }
 
   @UseGuards(AuthorizeGuard)
   @Post('bulk-create')
-  async bulkCreate(@Body() tasks: CreateBulkTasksDto, @Req() req: AuthenticatedRequest): Promise<{
+  async bulkCreate(
+    @Body(new ParseArrayPipe({ items: CreateTaskDto, whitelist: true, forbidNonWhitelisted: false, transformOptions: { enableImplicitConversion: false } })) tasks: CreateTaskDto[],
+    @AuthUserId() userId: string,
+  ): Promise<{
     status: string;
     message: string;
     data?: (TaskInstanceEntity | TaskTemplateEntity)[];
     error?: any;
   }> {
-    const tokenUserId = req['user'];
-    
-    const allTasksBelongToUser = tasks.every((task: { user_id: string }) => 
-      task.user_id === tokenUserId.user.user_id
-    );
-  
-    if (!allTasksBelongToUser) {
-      throw new UnauthorizedException('Access denied: One or more tasks do not belong to your account.');
-    }
-    
-    return this.taskService.createBulkTasks(tasks, tokenUserId.user.user_id);
+    return this.taskService.createBulkTasks(tasks, userId);
   }
 
   
   @UseGuards(AuthorizeGuard)
   @Post('createSubTask')
-  async createSubTask(@Body() dto: CreateTaskSubInstanceDto, @Req() req: AuthenticatedRequest): Promise<{
+  async createSubTask(@Body() dto: CreateTaskSubInstanceDto, @AuthUserId() userId: string): Promise<{
     status: string;
     message: string;
     data?: TaskSubInstanceEntity;
     error?: any;
   }> {
-    const tokenUserId = req['user'];
-    if (tokenUserId.user.user_id !== dto.user_id) {
-        throw new UnauthorizedException('Access denied: Not your data.');
-    }
-    return this.taskService.createTaskSubInstance(dto);
+    return this.taskService.createTaskSubInstance(dto, userId);
   }
 
   @UseGuards(AuthorizeGuard)
   @Post('bulk-create-subtasks')
-  async bulkCreateSubTasks(@Body() bulkDto: CreateBulkSubTasksDto, @Req() req: AuthenticatedRequest): Promise<{
+  async bulkCreateSubTasks(
+    @Body(new ParseArrayPipe({ items: CreateTaskSubInstanceDto, whitelist: true, forbidNonWhitelisted: false, transformOptions: { enableImplicitConversion: false } })) bulkDto: CreateTaskSubInstanceDto[],
+    @AuthUserId() userId: string,
+  ): Promise<{
     status: string;
     message: string;
     data?: TaskSubInstanceEntity[];
     error?: any;
   }> {
-    const tokenUserId = req['user'];
-    
-    // Check if all subtasks belong to the authenticated user
-    const allSubTasksBelongToUser = bulkDto.every((subTask) => 
-      subTask.user_id === tokenUserId.user.user_id
-    );
-  
-    if (!allSubTasksBelongToUser) {
-      throw new UnauthorizedException('Access denied: One or more sub-tasks do not belong to your account.');
-    }
-    
-    return this.taskService.createBulkTaskSubInstances(bulkDto, tokenUserId.user.user_id);
+    return this.taskService.createBulkTaskSubInstances(bulkDto, userId);
   }
 
   @UseGuards(AuthorizeGuard)

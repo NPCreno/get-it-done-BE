@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Subject, Observable } from 'rxjs';
+import { Subject, Observable, filter, map } from 'rxjs';
 import { TaskService } from 'src/task/task.service';
 import { NotificationsEntity } from './models/notifications.entity';
 import { DeepPartial, Repository } from 'typeorm';
@@ -11,7 +11,7 @@ import { NotificationEvent, NotificationRule } from './models/notification.inter
 
 @Injectable()
 export class NotificationsService {
-  private notificationSubject = new Subject<MessageEvent>();
+  private notificationSubject = new Subject<{ userId: string; event: MessageEvent }>();
 
   constructor(
     private readonly taskService: TaskService,
@@ -66,7 +66,7 @@ export class NotificationsService {
               } as DeepPartial<NotificationsEntity>);
     
               await this.notificationsRepository.save(notification);
-              this.sendNotification({
+              this.sendNotification(userId, {
                 type: rule.type,
                 message: notification.message,
                 data: notification.metadata,
@@ -77,20 +77,25 @@ export class NotificationsService {
       }
     }
 
-    getNotificationStream(): Observable<MessageEvent> {
-        return this.notificationSubject.asObservable();
+    /** Only the caller's own events: the subject is shared by every user. */
+    getNotificationStream(userId: string): Observable<MessageEvent> {
+        return this.notificationSubject.pipe(
+          filter((e) => e.userId === userId),
+          map((e) => e.event),
+        );
       }
-    
-    sendNotification(notification: Omit<NotificationEvent, 'timestamp'>) {
+
+    sendNotification(userId: string, notification: Omit<NotificationEvent, 'timestamp'>) {
         const notificationEvent: NotificationEvent = {
             ...notification,
             timestamp: new Date(),
         };
 
         this.notificationSubject.next({
-            data: JSON.stringify(notificationEvent), // SSE needs string data
-        } as MessageEvent);
-    }
+            userId,
+            event: { data: JSON.stringify(notificationEvent) } as MessageEvent, // SSE needs string data
+        });
+      }
 
     async clearNotifications(user_id: string) {
         await this.notificationsRepository.delete({ user: { user_id } });

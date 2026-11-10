@@ -1,0 +1,19 @@
+{
+  "id": 6,
+  "fullname": "Test nulltheme",
+  "user_id": "user-000000001",
+  "username": "user_nulltheme",
+  "email": "user@example.com",
+  "enableNotifications": null,
+  "theme": null,
+  "soundFx": null,
+  "tier": "free",
+  "role": "standard",
+  "status": "active",
+  "createdAt": "2026-01-15T09:00:00.000Z",
+  "updatedAt": "2026-01-15T09:00:00.000Z",
+  "deletedAt": null,
+  "premiumExpiry": null,
+  "lastLoginAt": null,
+  "loginAttempts": null
+}

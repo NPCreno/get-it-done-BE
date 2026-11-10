@@ -12,4 +12,6 @@ export default new DataSource({
   entities: [__dirname + '/**/*.entity{.ts,.js}'],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,
+  // All pending migrations share one transaction: a failure rolls everything back.
+  migrationsTransactionMode: 'all',
 });

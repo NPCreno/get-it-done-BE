@@ -2,6 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
 import { from, Observable } from 'rxjs';
+import { toTokenUser } from './token-user';
 import { User } from 'src/user/models/user.interface';
 import { TokenPayload } from './Interfaces/tokenPayload';
 import { AuthTokenEntity } from './models/auth.entity';
@@ -167,15 +168,6 @@ export class AuthService {
         return safeEqual(sha256Hex(token), stored);
     }
 
-    private toTokenUser(user: UserEntity): User {
-        const [firstname, ...lastnameParts] = user.fullname?.split(' ') || [];
-        return {
-            ...user,
-            firstname: firstname || '',
-            lastname: lastnameParts.join(' '),
-        } as unknown as User;
-    }
-
     private withinGrace(row: AuthTokenEntity, now: number): boolean {
         return !!row.revoked_at && now - row.revoked_at.getTime() <= this.graceMs();
     }
@@ -218,7 +210,7 @@ export class AuthService {
 
             const user = await m.getRepository(UserEntity).findOne({ where: { user_id: row.user_id } });
             if (!user) return { kind: 'invalid' };
-            const tokenUser = this.toTokenUser(user);
+            const tokenUser = toTokenUser(user);
 
             if (!row.is_revoked) {
                 const newRefresh = await this.generateRefreshToken(

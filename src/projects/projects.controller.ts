@@ -17,6 +17,7 @@ import {
   import { UpdateProjectDto } from './dto/update-project-dto';
 import { SanitizedProject } from './interfaces/sanitizedProject';
 import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
+import { AuthUserId } from 'src/auth/decorators/auth-user-id.decorator';
   
   @Controller('api/projects')
   export class ProjectsController {
@@ -60,16 +61,13 @@ import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
   
     @UseGuards(AuthorizeGuard)
     @Post('create')
-    async create(@Body() dto: CreateProjectDto, @Req() req: AuthenticatedRequest): Promise<{
+    async create(@Body() dto: CreateProjectDto, @AuthUserId() userId: string): Promise<{
       status: string;
       message: string;
       data?: ProjectEntity;
       error?: any;
     }> {
-      if (dto.user_id !== req.user.user.user_id) {
-        throw new UnauthorizedException('Access denied: Not your data.');
-      }
-      return this.projectsService.createProject(dto);
+      return this.projectsService.createProject(dto, userId);
     }
   
     @UseGuards(AuthorizeGuard)

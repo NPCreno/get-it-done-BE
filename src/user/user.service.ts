@@ -2,6 +2,9 @@ import { BadRequestException, ConflictException, Injectable, InternalServerError
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserEntity } from './models/user.entity';
 import { Repository } from 'typeorm';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const bcrypt = require('bcrypt');
+import { toTokenUser } from 'src/auth/token-user';
 import { CreateUserDto } from './dto/create-user-dto';
 import { UpdateUserDto } from './dto/update-user-dto';
 import { AuthService, TokenPair } from 'src/auth/auth.service';
@@ -44,7 +47,7 @@ export class UserService {
         username: String(userDto.username),
         email: String(userDto.email).toLowerCase(),
         password: String(passwordHash),  // Ensure it's a primitive string
-        tier: userDto.tier || 'free',
+        tier: 'free',
         role: 'standard',
         user_id,
         status: 'active',
@@ -160,25 +163,42 @@ export class UserService {
       throw new NotFoundException(`User with ID ${user_id} not found`);
     }
 
-    const fieldsTriggeringUpdate = ['fullname', 'username', 'password'] as const;
-    const isSensitiveFieldUpdated = fieldsTriggeringUpdate.some(
-      (field) => field in updateUserDto && updateUserDto[field] !== user[field]
-    );
+    // Only allowlisted, defined fields reach the database.
+    const changes: Partial<UserEntity> = {};
+    if (updateUserDto.fullname !== undefined) changes.fullname = updateUserDto.fullname;
+    if (updateUserDto.username !== undefined) changes.username = updateUserDto.username;
+    if (updateUserDto.enableNotifications !== undefined) changes.enableNotifications = updateUserDto.enableNotifications;
+    if (updateUserDto.theme !== undefined) changes.theme = updateUserDto.theme;
+    if (updateUserDto.soundFx !== undefined) changes.soundFx = updateUserDto.soundFx;
 
-    if (isSensitiveFieldUpdated) {  //go through this function if updates includes the array above
-      const now = new Date();
+    const nameChanged = changes.fullname !== undefined && changes.fullname !== user.fullname;
+    const usernameChanged = changes.username !== undefined && changes.username !== user.username;
+    const passwordChanged = updateUserDto.password !== undefined;
+
+    if (nameChanged || usernameChanged || passwordChanged) {
       const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(now.getMonth() - 6);
-
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
       if (user.updatedAt && user.updatedAt > sixMonthsAgo) {
         throw new BadRequestException(
           `You can only update name, username, or password once every 6 months. Last update: ${user.updatedAt.toISOString()}`
         );
       }
     }
+    if (passwordChanged) {
+      changes.password = await bcrypt.hash(updateUserDto.password as string, 12);
+    }
 
-    await this.userRepository.update({ user_id }, updateUserDto);
-    
+    if (Object.keys(changes).length > 0) {
+      try {
+        await this.userRepository.update({ user_id }, changes);
+      } catch (error: any) {
+        if (error?.code === '23505') {
+          throw new ConflictException('Username already exists.');
+        }
+        throw error;
+      }
+    }
+
     const updatedUser = await this.userRepository.findOne({ where: { user_id } });
     if (!updatedUser) throw new NotFoundException(`Updated user not found`);
 
@@ -187,34 +207,7 @@ export class UserService {
   }
 
   private toUser(userEntity: UserEntity): User {
-    const sanitizedUser = this.sanitizeUser(userEntity) as any;
-    const [firstname, ...lastnameParts] = userEntity.fullname?.split(' ') || [];
-    
-    return {
-      ...sanitizedUser,
-      firstname: firstname || '',
-      lastname: lastnameParts.join(' ') || '',
-      enableNotifications: userEntity.enableNotifications,
-      theme: userEntity.theme,
-      soundFx: userEntity.soundFx,
-      emailToLowerCase: function() {
-        this.email = this.email.toLowerCase();
-      }
-    } as User;
-  }
-
-  private sanitizeUser(user: UserEntity): UserCleanupResponse {
-    return {
-      user_id: user.user_id,
-      fullname: user.fullname,
-      username: user.username,
-      email: user.email,
-      tier: user.tier,
-      role: user.role,
-      status: user.status,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt
-    };
+    return toTokenUser(userEntity);
   }
 
   async validateUser(emailOrUsername: string, password: string): Promise<User> {

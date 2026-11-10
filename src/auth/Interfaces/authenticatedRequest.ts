@@ -1,8 +1,6 @@
-import { UserEntity } from "src/user/models/user.entity";
 import { Request } from 'express';
+import { TokenPayload } from './tokenPayload';
 
 export interface AuthenticatedRequest extends Request {
-    user: {
-        user: UserEntity;
-    }; 
+    user: TokenPayload;
 }
