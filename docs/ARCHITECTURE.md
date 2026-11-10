@@ -17,6 +17,15 @@ Request → (CORS from `FRONTEND_URL`) → route → `AuthorizeGuard` on protect
 ## Client IP
 `src/auth/client-ip.ts` returns `X-Client-IP` only when `X-Internal-Secret` matches `INTERNAL_API_SECRET` (sent by the frontend BFF) and the value passes `net.isIP()`; otherwise `null`. There is no `X-Real-IP` or `req.ip` fallback. It never blocks authentication; the value is audit data only and must never drive an auth decision. The secret is not an auth control, so endpoints stay open to other clients.
 
+## API contract
+- Canonical source: `src/common/api-contract.ts`, exported to `docs/api-contract.json` (`pnpm contract:export`), mirrored by the FE `src/app/contracts/`. Contract tests compare the JSON with the constant and the DTO metadata with the constant.
+- Shapes: timestamps are ISO strings. Heatmap and trend `date` are `YYYY-MM-DD`; trend `day` is a short weekday. Analytics counts are integers. `enableNotifications` and `soundFx` are the strings `'true'` / `'false'`.
+- Nullability as sent: project `title`/`description`/`color`/`colorLabel` and task `description` may be null. Task and sub-task `title` are NOT NULL. User `theme`, `enableNotifications`, `soundFx`, `role`, `status` may be null (key always present).
+- Envelope endpoints return `{status, message, data}`. Raw endpoints: `getTasksByProj`, `user/get/:id`, `user/getAll`, `projects/getAll`. Empty lists are `status: 'success'` with `[]`.
+- Validation: global `ValidationPipe` (whitelist, transform). Dates arrive as ISO strings and are converted by `@Type(() => Date)`. Weekly recurrence needs one or more unique weekday names.
+- Authorization: create endpoints derive the owner from the token (`@AuthUserId()`); a foreign `project_id` or parent task is refused with the same message as a missing one. Admin checks read the JWT `role` claim, so a demotion applies at the next refresh (at most the access TTL).
+- Known limits: access tokens minted before DATA-02 still carry the password hash until they expire; there is no access-token revocation.
+
 ## Entity relationships
 ```
 User ─┬─< Project ─< TaskInstance

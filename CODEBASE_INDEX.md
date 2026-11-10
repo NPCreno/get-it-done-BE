@@ -51,5 +51,14 @@ One line per source file. Paths are relative to the repo root.
 ## pipes (`src/pipes/`)
 - `status-validation.pipe.ts` — validates task status values
 
+## common (`src/common/`)
+- `api-contract.ts` — canonical contract constants
+- `is-after-or-equal.ts` — class-validator `IsAfterOrEqual`
+- `api-contract.spec.ts`, `body-dtos.spec.ts` — unit specs
+- `../app.setup.ts` — `configureApp()` (CORS + global ValidationPipe)
+- `../auth/token-user.ts` — `toTokenUser()` allowlist; `../auth/decorators/auth-user-id.decorator.ts` — `@AuthUserId()`
+- `../auth/rehash-passwords.ts`, `../migrations/1762900000000-HashPlaintextPasswords.ts`, `../../scripts/rehash-plaintext-passwords.ts`, `../../scripts/export-contract.ts`
+- `../../test/` — `int-env.ts`, `int-db.ts`, `int-app.ts`, `int-auth.ts`, `authorization.int-spec.ts`, `api-contract.int-spec.ts`, `password-migration.int-spec.ts`, `fixtures/responses/`
+
 ## Root config
 - `package.json`, `tsconfig.json`, `nest-cli.json`, `codegraph.json`

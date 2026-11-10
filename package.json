@@ -29,6 +29,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/data-source.ts src/migrations/initial",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/data-source.ts",
+    "contract:export": "ts-node -r tsconfig-paths/register scripts/export-contract.ts",
+    "db:rehash-passwords": "ts-node -r tsconfig-paths/register scripts/rehash-plaintext-passwords.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/data-source.ts"
   },
   "dependencies": {
@@ -89,9 +91,17 @@
       "ts"
     ],
     "rootDir": "src",
+    "modulePaths": [
+      "<rootDir>/.."
+    ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.(t|j)s$": [
+        "ts-jest",
+        {
+          "tsconfig": "<rootDir>/../test/tsconfig.int.json"
+        }
+      ]
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

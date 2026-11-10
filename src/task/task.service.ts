@@ -18,7 +18,7 @@ import {
 } from 'typeorm';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
 import { TaskTemplateEntity } from './models/taskTemplate.entity';
-import { CreateBulkTasksDto, CreateTaskDto } from './dto/create-task-dto';
+import { CreateTaskDto } from './dto/create-task-dto';
 import { DeepPartial } from 'typeorm';
 import { UserEntity } from 'src/user/models/user.entity';
 import { ProjectEntity } from 'src/projects/models/projects.entity';
@@ -31,7 +31,7 @@ import { TaskDistribution } from './interfaces/taskDistribution';
 import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
 import { CalendarHeatmap } from './interfaces/calendarHeatmap';
 import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
-import { CreateBulkSubTasksDto, CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
+import { CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
@@ -92,7 +92,7 @@ export class TaskService implements OnModuleInit {
   }
   
 
-  async createBulkTasks(tasks: CreateBulkTasksDto, userId: string): Promise<{
+  async createBulkTasks(tasks: CreateTaskDto[], userId: string): Promise<{
     status: string;
     message: string;
     data?: (TaskInstanceEntity | TaskTemplateEntity)[];
@@ -103,16 +103,8 @@ export class TaskService implements OnModuleInit {
       const errors = [];
 
       for (const taskDto of tasks) {
-        if (taskDto.user_id !== userId) {
-          errors.push({ 
-            task: taskDto.title || 'Untitled Task',
-            error: 'User ID mismatch' 
-          });
-          continue;
-        }
-
         try {
-          const result = await this.createTask(taskDto);
+          const result = await this.createTask(taskDto, userId);
           if (result.status === 'success' && result.data) {
             results.push(result.data);
           } else {
@@ -154,15 +146,15 @@ export class TaskService implements OnModuleInit {
     }
   }
 
-  async createTask(taskDto: CreateTaskDto): Promise<{
+  async createTask(taskDto: CreateTaskDto, userId: string): Promise<{
     status: string;
     message: string;
     data?: TaskInstanceEntity | TaskTemplateEntity;
     error?: any;
   }> {
     try {
-      // find user_id
-      const user_id = taskDto.user_id;
+      // identity comes from the token, never from the body
+      const user_id = userId;
       const userExist = await this.usersRepository.findOne({
         where: { user_id },
       });
@@ -172,12 +164,13 @@ export class TaskService implements OnModuleInit {
 
       // find project_id
       const project_id = taskDto?.project_id;
-      if(project_id !== undefined){
+      if (project_id !== undefined && project_id !== null) {
         const projectExists = await this.projectsRepository.findOne({
           where: { project_id },
         });
-        if (!projectExists) {
-          throw new NotFoundException(`Project with ID ${project_id} not found`);
+        // Same answer for "missing" and "someone else's": no existence oracle.
+        if (!projectExists || projectExists.user_id !== userId) {
+          throw new NotFoundException('Project not found');
         }
       }
 
@@ -208,24 +201,15 @@ export class TaskService implements OnModuleInit {
           });
           exists = !!existing;
         } while (exists);
-        const {
-          user_id,
-          title,
-          description,
-          repeat_every,
-          repeat_days,
-          start_date,
-          end_date,
-          project_id,
-        } = taskDto;
+        const { title, description, repeat_every, repeat_days, start_date, end_date } = taskDto;
 
         const taskTemplate = this.taskTemplateRepository.create({
           taskTemplate_id,
-          user_id,
+          user_id: userId,
           title,
           description,
           repeat_every,
-          repeat_days,
+          repeat_days: repeat_every === 'Week' ? repeat_days : undefined,
           start_date,
           end_date,
           project_id,
@@ -249,26 +233,16 @@ export class TaskService implements OnModuleInit {
           exists = !!existing;
         } while (exists);
 
-        // Create and save the new project
-        let taskInstance: TaskInstanceEntity;
-        if (taskDto.project_id) {
-          taskInstance = this.taskInstanceRepository.create({
-            ...taskDto,
-            priority: taskDto.priority as 'Low' | 'Medium' | 'High',
-            status: taskDto.status as 'Pending' | 'Complete',
-            project: { project_id: taskDto.project_id }, // link project by project_id
-            user: { user_id: taskDto.user_id }, // link user by user_id
-            task_id,
-          });
-        } else {
-          taskInstance = this.taskInstanceRepository.create({
-            ...taskDto,
-            priority: taskDto.priority as 'Low' | 'Medium' | 'High',
-            status: taskDto.status as 'Pending' | 'Complete',
-            user: { user_id: taskDto.user_id }, // link user by user_id
-            task_id,
-          });
-        }
+        const taskInstance = this.taskInstanceRepository.create({
+          task_id,
+          title: taskDto.title,
+          description: taskDto.description,
+          priority: taskDto.priority,
+          status: taskDto.status,
+          due_date: taskDto.due_date,
+          user: { user_id: userId },
+          ...(taskDto.project_id ? { project: { project_id: taskDto.project_id } } : {}),
+        } as DeepPartial<TaskInstanceEntity>);
 
         const savedTask = await this.taskInstanceRepository.save(taskInstance);
 
@@ -299,7 +273,7 @@ export class TaskService implements OnModuleInit {
     }
   }
 
-  async createBulkTaskSubInstances(createBulkDto: CreateBulkSubTasksDto, userId: string): Promise<{
+  async createBulkTaskSubInstances(createBulkDto: CreateTaskSubInstanceDto[], userId: string): Promise<{
     status: string;
     message: string;
     data?: TaskSubInstanceEntity[];
@@ -321,15 +295,6 @@ export class TaskService implements OnModuleInit {
 
       // First pass: validate all parent tasks
       for (const subTaskDto of createBulkDto) {
-        if (subTaskDto.user_id !== userId) {
-          errors.push({
-            subTask: subTaskDto.title || 'Untitled Sub-Task',
-            error: 'User ID mismatch',
-            taskId: subTaskDto.task_id
-          });
-          continue;
-        }
-
         // Skip validation if we've already checked this task
         if (taskValidations.has(subTaskDto.task_id)) {
           continue;
@@ -341,9 +306,6 @@ export class TaskService implements OnModuleInit {
 
       // Second pass: create subtasks with validated parent tasks
       for (const subTaskDto of createBulkDto) {
-        // Skip if user ID was invalid
-        if (subTaskDto.user_id !== userId) continue;
-
         const isParentValid = taskValidations.get(subTaskDto.task_id);
         if (!isParentValid) {
           errors.push({
@@ -355,7 +317,7 @@ export class TaskService implements OnModuleInit {
         }
 
         try {
-          const result = await this.createTaskSubInstance(subTaskDto);
+          const result = await this.createTaskSubInstance(subTaskDto, userId);
           if (result.status === 'success' && result.data) {
             results.push(result.data);
           } else {
@@ -401,6 +363,7 @@ export class TaskService implements OnModuleInit {
 
   async createTaskSubInstance(
     createDto: CreateTaskSubInstanceDto,
+    userId: string,
   ): Promise<{
     status: string;
     message: string;
@@ -410,7 +373,7 @@ export class TaskService implements OnModuleInit {
     try {
       // Verify the parent task exists and belongs to the user
       const parentTask = await this.taskInstanceRepository.findOne({
-        where: { task_id: createDto.task_id, user: { user_id: createDto.user_id } },
+        where: { task_id: createDto.task_id, user: { user_id: userId } },
       });
 
       if (!parentTask) {
@@ -436,7 +399,7 @@ export class TaskService implements OnModuleInit {
         title: createDto.title,
         status: createDto.status,
         due_date: createDto.due_date ? new Date(createDto.due_date) : null,
-        user: { user_id: createDto.user_id } as UserEntity,
+        user: { user_id: userId } as UserEntity,
         instance: { task_id: createDto.task_id } as TaskInstanceEntity,
       } as DeepPartial<TaskSubInstanceEntity>);
 
@@ -497,10 +460,6 @@ export class TaskService implements OnModuleInit {
       withDeleted: false,
     });
 
-    if (data.length === 0) {
-      throw new NotFoundException(`No tasks found for user ID ${user_id}`);
-    }
-
     // Get all task IDs to fetch their sub-instances in a single query
     const taskIds = data.map(task => task.task_id);
     const allSubInstances = await this.taskSubInstanceRepository.find({
@@ -540,6 +499,7 @@ export class TaskService implements OnModuleInit {
       .map(({ user, project, template, ...rest }) => ({
         ...rest,
         user_id: user.user_id,
+        project_id: project?.project_id ?? null,
         project_title: project?.title ?? null,
         template_id: template?.taskTemplate_id ?? null,
         subInstances: subInstancesByTaskId[rest.task_id] || []
@@ -643,7 +603,13 @@ export class TaskService implements OnModuleInit {
     if (tokenUserId !== task.user.user_id) {
       throw new UnauthorizedException('Access denied: Not your data.');
     }
-    await this.taskInstanceRepository.update({ task_id }, updateTaskDto);
+    const changes: Record<string, unknown> = {};
+    for (const key of ['title', 'description', 'priority', 'status', 'due_date'] as const) {
+      if (updateTaskDto[key] !== undefined) changes[key] = updateTaskDto[key];
+    }
+    if (Object.keys(changes).length > 0) {
+      await this.taskInstanceRepository.update({ task_id }, changes);
+    }
     const updatedTask = await this.taskInstanceRepository.findOne({
       where: { task_id },
     });
@@ -872,6 +838,7 @@ export class TaskService implements OnModuleInit {
   async hardDeleteOne(task_id: string, tokenUserId: string): Promise<TaskInstanceEntity> {
     const task = await this.taskInstanceRepository.findOne({
       where: { task_id },
+      relations: ['user'],
       withDeleted: true,
     });
     if (!task) {

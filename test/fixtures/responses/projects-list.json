@@ -1,0 +1,36 @@
+{
+  "status": "success",
+  "message": "Projects fetched successfully",
+  "data": [
+    {
+      "id": 1,
+      "project_id": "PRJ-000000001",
+      "title": "Fixture project",
+      "description": "desc",
+      "color": "#336699",
+      "colorLabel": "Blue",
+      "due_date": null,
+      "createdAt": "2026-01-15T09:00:00.000Z",
+      "updatedAt": "2026-01-15T09:00:00.000Z",
+      "deletedAt": null,
+      "user_id": "user-000000001",
+      "task_count": 1,
+      "task_completed": 1
+    },
+    {
+      "id": 2,
+      "project_id": "PRJ-000000002",
+      "title": null,
+      "description": null,
+      "color": null,
+      "colorLabel": null,
+      "due_date": null,
+      "createdAt": "2026-01-15T09:00:00.000Z",
+      "updatedAt": "2026-01-15T09:00:00.000Z",
+      "deletedAt": null,
+      "user_id": "user-000000001",
+      "task_count": 1,
+      "task_completed": 0
+    }
+  ]
+}

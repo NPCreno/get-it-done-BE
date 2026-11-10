@@ -18,6 +18,7 @@ import { TokenPair } from 'src/auth/auth.service';
 import { UserCleanupResponse } from './models/userCleanupResponse';
 import { CreateUserDto } from './dto/create-user-dto';
 import { UpdateUserDto } from './dto/update-user-dto';
+import { LoginEmailDto, LoginUsernameDto } from './dto/login-dto';
 import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
 import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
 
@@ -38,11 +39,7 @@ export class UserController {
 
     @Post('loginEmail')
     async loginEmail(
-        @Body() credentials: { 
-        email: string; 
-        password: string; 
-        rememberMe?: boolean
-    },
+        @Body() credentials: LoginEmailDto,
         @Req() req: Request,
     )
     : Promise<{
@@ -59,10 +56,7 @@ export class UserController {
 
     @Post('loginUsername')
     async loginUsername(
-        @Body() credentials: { 
-        username: string; 
-        password: string; 
-        rememberMe?: boolean },
+        @Body() credentials: LoginUsernameDto,
         @Req() req: Request,
     )
     : Promise<{

@@ -1,0 +1,10 @@
+{
+  "status": "success",
+  "message": "Dashboard data fetched successfully",
+  "data": {
+    "all_tasks": 0,
+    "pending_tasks": 0,
+    "complete_tasks": 0,
+    "all_projects": 0
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "taskPriorities": [
+    "Low",
+    "Medium",
+    "High"
+  ],
+  "taskStatuses": [
+    "Pending",
+    "Complete",
+    "Overdue"
+  ],
+  "newTaskStatuses": [
+    "Pending",
+    "Complete"
+  ],
+  "repeatEvery": [
+    "Day",
+    "Week",
+    "Month"
+  ],
+  "weekdays": [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "booleanStrings": [
+    "true",
+    "false"
+  ],
+  "limits": {
+    "fullnameMin": 3,
+    "fullnameMax": 50,
+    "usernameMin": 3,
+    "usernameMax": 20,
+    "passwordMin": 6,
+    "passwordMax": 20,
+    "titleMin": 2,
+    "titleMax": 100,
+    "descriptionMax": 500,
+    "colorLabelMax": 50
+  },
+  "patterns": {
+    "username": "^[A-Za-z0-9_]+$",
+    "password": "[0-9]"
+  }
+}
