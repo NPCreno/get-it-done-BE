@@ -22,6 +22,7 @@
     "db:restore": "bash scripts/db-restore.sh",
     "db:pull": "bash scripts/db-pull.sh",
     "test": "jest",
+    "test:int": "jest --config test/jest-int.json --runInBand",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",

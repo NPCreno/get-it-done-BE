@@ -2,7 +2,6 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { JwtService } from '@nestjs/jwt';
 import { AuthenticatedRequest } from '../Interfaces/authenticatedRequest';
 
-
 @Injectable()
 export class AuthorizeGuard implements CanActivate {
   constructor(private readonly jwtService: JwtService) {}
@@ -11,17 +10,34 @@ export class AuthorizeGuard implements CanActivate {
     const request: AuthenticatedRequest = context.switchToHttp().getRequest();
     const authHeader = request.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Bearer token not provided.');
+      throw new UnauthorizedException({
+        statusCode: 401,
+        code: 'TOKEN_MISSING',
+        message: 'Bearer token not provided.',
+      });
     }
 
     const token = authHeader.split(' ')[1];
 
+    let payload: any;
     try {
-      const payload = await this.jwtService.verifyAsync(token);
-      request['user'] = payload; 
-      return true;
-    } catch (err) {
-      throw new UnauthorizedException('Invalid or expired token.');
+      payload = await this.jwtService.verifyAsync(token);
+    } catch {
+      throw new UnauthorizedException({
+        statusCode: 401,
+        code: 'TOKEN_INVALID',
+        message: 'Invalid or expired token.',
+      });
     }
+    // A refresh token must never pass as an access token.
+    if (payload?.type !== 'access') {
+      throw new UnauthorizedException({
+        statusCode: 401,
+        code: 'TOKEN_INVALID',
+        message: 'Invalid or expired token.',
+      });
+    }
+    request['user'] = payload;
+    return true;
   }
 }

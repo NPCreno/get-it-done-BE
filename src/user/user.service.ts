@@ -4,7 +4,7 @@ import { UserEntity } from './models/user.entity';
 import { Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user-dto';
 import { UpdateUserDto } from './dto/update-user-dto';
-import { AuthService } from 'src/auth/auth.service';
+import { AuthService, TokenPair } from 'src/auth/auth.service';
 import { UserCleanupResponse } from './models/userCleanupResponse';
 import { User } from './models/user.interface';
 
@@ -256,16 +256,12 @@ export class UserService {
   async loginEmail(credentials: { 
     email: string, 
     password: string, 
-    rememberMe?: boolean, 
-    ipAddress?: string}): Promise<
+    rememberMe?: boolean,
+    ipAddress?: string | null}): Promise<
   {
     status: string;
     message: string;
-    data?: {
-      access_token: string;
-      refresh_token: string;
-      expires_in: number;
-    };
+    data?: TokenPair;
     error?: any;
   }
   > {
@@ -277,21 +273,7 @@ export class UserService {
     
     try {
       const validatedUser = await this.validateUser(email, password);
-      const jwt = await this.authService.generateAccessToken(validatedUser);
-      if (!jwt) {
-        throw new Error('Failed to generate JWT token');
-      }
-      const refreshToken = await this.authService.generateRefreshToken(validatedUser, credentials?.ipAddress, credentials?.rememberMe);
-      return {
-        status: 'success',
-        message: 'Login successful',
-        data: {
-          access_token: jwt.toString(),
-          refresh_token: refreshToken.toString(),
-          expires_in: 3600
-        },
-        error: null
-      };
+      return await this.issueSession(validatedUser, credentials?.ipAddress, credentials?.rememberMe);
     } catch (error) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -300,16 +282,12 @@ export class UserService {
   async loginUsername(credentials: { 
     username: string; 
     password: string, 
-    rememberMe?: boolean, 
-    ipAddress?: string 
+    rememberMe?: boolean,
+    ipAddress?: string | null
   }): Promise<{
     status: string;
     message: string;
-    data?: {
-      access_token: string;
-      refresh_token: string;
-      expires_in: number;
-    };
+    data?: TokenPair;
     error?: any;
   }> {
     const { username, password } = credentials;
@@ -320,23 +298,24 @@ export class UserService {
     
     try {
       const validatedUser = await this.validateUser(username, password);
-      const jwt = await this.authService.generateAccessToken(validatedUser);
-      if (!jwt) {
-        throw new Error('Failed to generate JWT token');
-      }
-      const refreshToken = await this.authService.generateRefreshToken(validatedUser, credentials?.ipAddress, credentials?.rememberMe);
-      return {
-        status: 'success',
-        message: 'Login successful',
-        data: {
-          access_token: jwt.toString(),
-          refresh_token: refreshToken.toString(),
-          expires_in: 3600
-        },
-        error: null
-      };
+      return await this.issueSession(validatedUser, credentials?.ipAddress, credentials?.rememberMe);
     } catch (error) {
       throw new UnauthorizedException('Invalid credentials');
     }
+  }
+
+  /** Login: new token family, lifetimes reported from the signed tokens. */
+  private async issueSession(user: User, ip: string | null | undefined, rememberMe?: boolean) {
+    const access = this.authService.generateAccessToken(user);
+    const refresh = await this.authService.generateRefreshToken(user, {
+      ip,
+      rememberMe: rememberMe === true,
+    });
+    return {
+      status: 'success',
+      message: 'Login successful',
+      data: this.authService.buildPair(access, refresh),
+      error: null,
+    };
   }
 }
