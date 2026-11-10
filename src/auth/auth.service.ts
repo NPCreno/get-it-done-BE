@@ -1,205 +1,310 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, type JwtSignOptions } from '@nestjs/jwt';
-import { from, Observable, of } from 'rxjs';
+import { from, Observable } from 'rxjs';
 import { User } from 'src/user/models/user.interface';
 import { TokenPayload } from './Interfaces/tokenPayload';
 import { AuthTokenEntity } from './models/auth.entity';
-import { Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserEntity } from 'src/user/models/user.entity';
+import { decryptReplay, encryptReplay, safeEqual, sha256Hex } from './token-crypto';
 const bcrypt = require('bcrypt');
+
+export interface TokenPair {
+    access_token: string;
+    refresh_token: string;
+    access_expires_in: number;
+    refresh_expires_in: number;
+    /** Legacy: kept only so the previously deployed FE keeps working. Remove in cleanup. */
+    expires_in: number;
+}
+
+export interface IssuedRefreshToken {
+    token: string;
+    tokenId: string;
+    expiresIn: number;
+    expiresAt: Date;
+}
+
+type RefreshVerdict =
+    | { kind: 'ok'; pair: TokenPair }
+    | { kind: 'invalid' }
+    | { kind: 'reused' };
+
+const MAX_REFRESH_TOKEN_LENGTH = 4096;
+const MAX_REPLAY_HOPS = 5;
+
 @Injectable()
 export class AuthService {
+    private readonly logger = new Logger(AuthService.name);
 
     constructor(
         private readonly jwtService: JwtService,
         private readonly configService: ConfigService,
+        private readonly dataSource: DataSource,
         @InjectRepository(AuthTokenEntity)
         private readonly authTokenRepository: Repository<AuthTokenEntity>,
         @InjectRepository(UserEntity)
         private readonly usersRepository: Repository<UserEntity>,
     ){}
 
-    generateAccessToken(user: User): string {
+    // ---------------------------------------------------------------- config
+
+    private refreshSecret(): string {
+        const secret = this.configService.get<string>('JWT_REFRESH_SECRET');
+        if (!secret) {
+            throw new Error('JWT configuration missing: ensure JWT_REFRESH_SECRET is set');
+        }
+        return secret;
+    }
+
+    private graceMs(): number {
+        const raw = Number(this.configService.get('REFRESH_REUSE_GRACE_SECONDS') ?? 30);
+        return (Number.isFinite(raw) && raw >= 0 ? raw : 30) * 1000;
+    }
+
+    // ---------------------------------------------------------------- access
+
+    /** Lifetime comes from the signed token itself (`exp - iat`). */
+    generateAccessToken(user: User): { token: string; expiresIn: number } {
         try {
             const payload: TokenPayload = {
-            user,
-            sub: String(user.user_id),
-            type: 'access',
-            jti: crypto.randomUUID(),
+                user,
+                sub: String(user.user_id),
+                type: 'access',
+                jti: crypto.randomUUID(),
             };
 
-            // `jsonwebtoken` accepts a number of seconds or a valid duration
-            // string (for example, "15m"). Keep the environment value aligned
-            // with the JwtSignOptions contract instead of widening it to any
-            // arbitrary string.
             const expiresIn = this.configService.get<JwtSignOptions['expiresIn']>('JWT_ACCESS_EXPIRATION');
             const secret = this.configService.get<string>('JWT_SECRET');
             if (!expiresIn || !secret) {
                 throw new Error('JWT configuration missing: ensure JWT_ACCESS_EXPIRATION and JWT_SECRET are set');
             }
-            
-            return this.jwtService.sign(payload, {
-                expiresIn,
-                secret,
-            });
+
+            const token = this.jwtService.sign(payload, { expiresIn, secret });
+            return { token, expiresIn: this.lifetimeOf(token) };
         } catch (error: any) {
             const err = error instanceof Error ? error : new Error(String(error));
             throw new Error('Failed to generate access token', { cause: err });
         }
     }
 
-    generateJWT(user: User): string{
-        const payload = { user }; 
-        return this.jwtService.sign(payload); 
+    private lifetimeOf(token: string): number {
+        const d = this.jwtService.decode(token) as { exp: number; iat: number } | null;
+        if (!d?.exp || !d?.iat) {
+            throw new Error('Signed token has no exp/iat');
+        }
+        return d.exp - d.iat;
     }
 
     hashPassword(password: string): Observable <String>{
-        return from<String>(bcrypt.hash(password, 12)); 
+        return from<String>(bcrypt.hash(password, 12));
     }
 
     comparePasswords(newPassword: string, passwordHash: string): Observable <any | boolean>{
-        return from<any | boolean>(bcrypt.compare(newPassword, passwordHash)); 
+        return from<any | boolean>(bcrypt.compare(newPassword, passwordHash));
     }
 
+    // --------------------------------------------------------------- refresh
 
-    async generateRefreshToken(user: User, ipAddress?: string, rememberMe?: boolean): Promise<string> {
+    /**
+     * Signs and stores a refresh token. Login starts a new family; rotation
+     * passes `familyId` so the family is inherited.
+     */
+    async generateRefreshToken(
+        user: User,
+        opts: { ip?: string | null; rememberMe?: boolean; familyId?: string },
+        manager?: EntityManager,
+    ): Promise<IssuedRefreshToken> {
+        const rememberMe = opts.rememberMe === true;
         const tokenId = crypto.randomUUID();
-        const refreshToken = this.jwtService.sign(
-            {
-                sub: user.user_id.toString(),
-                jti: tokenId,
-                type: 'refresh',
-            },
-            {
-                expiresIn: rememberMe ? '7d' : '1d',
-                secret: process.env.JWT_REFRESH_SECRET || 'refreshSecretKey',
-            }
+        const expiresInCfg = rememberMe
+            ? (this.configService.get<string>('JWT_REFRESH_EXPIRATION') ?? '7d')
+            : (this.configService.get<string>('JWT_REFRESH_EXPIRATION_SHORT') ?? '1d');
+
+        const token = this.jwtService.sign(
+            { sub: user.user_id.toString(), jti: tokenId, type: 'refresh' },
+            { expiresIn: expiresInCfg as JwtSignOptions['expiresIn'], secret: this.refreshSecret() },
         );
+        const decoded = this.jwtService.decode(token) as { exp: number; iat: number };
+        const expiresAt = new Date(decoded.exp * 1000);
 
-        // Save refresh token to database
-        const authToken = new AuthTokenEntity();
-        authToken.token_id = tokenId;
-        authToken.user_id = user.user_id.toString();
-        authToken.token = await bcrypt.hash(refreshToken, 10); // Store hashed token
-        authToken.expires_at = rememberMe ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : new Date(Date.now() + 1 * 24 * 60 * 60 * 1000);
-        authToken.is_revoked = false;
-        authToken.ip_address = ipAddress || '';
-        authToken.family_id = crypto.randomUUID(); // For token rotation
+        const repo = manager ? manager.getRepository(AuthTokenEntity) : this.authTokenRepository;
+        const row = new AuthTokenEntity();
+        row.token_id = tokenId;
+        row.user_id = user.user_id.toString();
+        row.token = sha256Hex(token);
+        row.expires_at = expiresAt;
+        row.is_revoked = false;
+        row.revoked_at = null;
+        row.replaced_by_token_id = null;
+        row.replay_ciphertext = null;
+        row.remember_me = rememberMe;
+        row.ip_address = opts.ip ?? null;
+        row.family_id = opts.familyId ?? crypto.randomUUID();
+        await repo.save(row);
 
-        await this.authTokenRepository.save(authToken);
-
-        return refreshToken;
+        return { token, tokenId, expiresIn: decoded.exp - decoded.iat, expiresAt };
     }
 
-    async validateRefreshToken(token: string, ipAddress: string): Promise<{ userId: string; tokenId: string }> {
-        try {
-            const payload = this.jwtService.verify(token, {
-                secret: process.env.JWT_REFRESH_SECRET || 'refreshSecretKey',
-            });
+    /** Builds the login/refresh response pair. */
+    buildPair(access: { token: string; expiresIn: number }, refresh: { token: string; expiresIn: number }): TokenPair {
+        return {
+            access_token: access.token,
+            refresh_token: refresh.token,
+            access_expires_in: access.expiresIn,
+            refresh_expires_in: refresh.expiresIn,
+            expires_in: 3600,
+        };
+    }
 
-            if (payload.type !== 'refresh') {
-                throw new Error('Invalid token type');
-            }
-
-            const tokenRecord = await this.authTokenRepository.findOne({
-                where: { token_id: payload.jti, is_revoked: false },
-            });
-
-            if (!tokenRecord) {
-                throw new Error('Token not found or revoked');
-            }
-
-            // Verify the token matches the stored hash
-            const isValid = await bcrypt.compare(token, tokenRecord.token);
-            if (!isValid) {
-                throw new Error('Invalid token');
-            }
-
-            // Update IP address if it's different
-            if (tokenRecord.ip_address !== ipAddress) {
-                tokenRecord.ip_address = ipAddress;
-                await this.authTokenRepository.save(tokenRecord);
-            }
-
-            return { userId: tokenRecord.user_id, tokenId: tokenRecord.token_id };
-        } catch (error) {
-            console.error("Error validating refresh token: ", error);
-            throw new Error('Invalid refresh token');
+    private async hashMatches(token: string, stored: string): Promise<boolean> {
+        if (stored.startsWith('$2')) {
+            // Legacy bcrypt row. Remove in the cleanup PR once all have expired.
+            return bcrypt.compare(token, stored);
         }
+        return safeEqual(sha256Hex(token), stored);
     }
 
-    async revokeRefreshToken(tokenId: string): Promise<void> {
-        await this.authTokenRepository.update(
-            { token_id: tokenId },
-            { is_revoked: true }
-        );
+    private toTokenUser(user: UserEntity): User {
+        const [firstname, ...lastnameParts] = user.fullname?.split(' ') || [];
+        return {
+            ...user,
+            firstname: firstname || '',
+            lastname: lastnameParts.join(' '),
+        } as unknown as User;
+    }
+
+    private withinGrace(row: AuthTokenEntity, now: number): boolean {
+        return !!row.revoked_at && now - row.revoked_at.getTime() <= this.graceMs();
+    }
+
+    /**
+     * Idempotent, rotating refresh. Concurrent calls with the same token
+     * serialize on a row lock; calls inside the grace window get the same
+     * replacement refresh token back (with a fresh access token).
+     */
+    async refresh(refreshToken: unknown, ip: string | null): Promise<TokenPair> {
+        const invalid = () => new UnauthorizedException({
+            statusCode: 401, code: 'REFRESH_INVALID', message: 'Invalid refresh token.',
+        });
+
+        if (typeof refreshToken !== 'string' || !refreshToken || refreshToken.length > MAX_REFRESH_TOKEN_LENGTH) {
+            throw invalid();
+        }
+        let payload: { sub?: string; jti?: string; type?: string };
+        try {
+            payload = this.jwtService.verify(refreshToken, { secret: this.refreshSecret() });
+        } catch (e) {
+            if (e instanceof Error && e.message.includes('JWT configuration')) throw e;
+            throw invalid();
+        }
+        if (payload.type !== 'refresh' || typeof payload.jti !== 'string') {
+            throw invalid();
+        }
+        const jti = payload.jti;
+
+        const verdict = await this.dataSource.transaction<RefreshVerdict>(async (m) => {
+            const repo = m.getRepository(AuthTokenEntity);
+            const row = await repo.findOne({
+                where: { token_id: jti },
+                lock: { mode: 'pessimistic_write' },
+            });
+            const now = Date.now();
+            if (!row || row.expires_at.getTime() <= now || !(await this.hashMatches(refreshToken, row.token))) {
+                return { kind: 'invalid' };
+            }
+
+            const user = await m.getRepository(UserEntity).findOne({ where: { user_id: row.user_id } });
+            if (!user) return { kind: 'invalid' };
+            const tokenUser = this.toTokenUser(user);
+
+            if (!row.is_revoked) {
+                const newRefresh = await this.generateRefreshToken(
+                    tokenUser,
+                    { ip, rememberMe: row.remember_me, familyId: row.family_id },
+                    m,
+                );
+                row.is_revoked = true;
+                row.revoked_at = new Date();
+                row.replaced_by_token_id = newRefresh.tokenId;
+                row.replay_ciphertext = encryptReplay(newRefresh.token, this.refreshSecret());
+                await repo.save(row);
+                return { kind: 'ok', pair: this.buildPair(this.generateAccessToken(tokenUser), newRefresh) };
+            }
+
+            // Revoked row.
+            if (!row.replaced_by_token_id) return { kind: 'invalid' }; // logout / family revoked
+
+            if (!this.withinGrace(row, now)) {
+                // Reuse detected: revoke the whole family.
+                await repo.update(
+                    { family_id: row.family_id, is_revoked: false },
+                    { is_revoked: true, revoked_at: new Date() },
+                );
+                this.logger.warn(`Refresh reuse detected user_id=${row.user_id} family_id=${row.family_id}`);
+                return { kind: 'reused' };
+            }
+
+            // Within grace: walk to the newest revoked row whose replacement is still active.
+            let cur = row;
+            for (let hop = 0; hop < MAX_REPLAY_HOPS; hop++) {
+                if (!cur.replaced_by_token_id || !this.withinGrace(cur, now)) return { kind: 'invalid' };
+                const next = await repo.findOne({ where: { token_id: cur.replaced_by_token_id } });
+                if (!next) return { kind: 'invalid' };
+                if (next.is_revoked) {
+                    cur = next;
+                    continue;
+                }
+                if (next.expires_at.getTime() <= now || !cur.replay_ciphertext) return { kind: 'invalid' };
+                const replay = decryptReplay(cur.replay_ciphertext, this.refreshSecret());
+                if (!replay || !(await this.hashMatches(replay, next.token))) return { kind: 'invalid' };
+                const decoded = this.jwtService.decode(replay) as { exp: number } | null;
+                if (!decoded?.exp) return { kind: 'invalid' };
+                const remaining = Math.floor(decoded.exp - now / 1000);
+                if (remaining <= 0) return { kind: 'invalid' };
+                return {
+                    kind: 'ok',
+                    pair: this.buildPair(this.generateAccessToken(tokenUser), { token: replay, expiresIn: remaining }),
+                };
+            }
+            return { kind: 'invalid' };
+        });
+
+        if (verdict.kind === 'ok') return verdict.pair;
+        if (verdict.kind === 'reused') {
+            throw new UnauthorizedException({
+                statusCode: 401, code: 'REFRESH_REUSED', message: 'Refresh token was already used.',
+            });
+        }
+        throw invalid();
+    }
+
+    /** Revokes the token's whole family. Never throws, no oracle. */
+    async logout(refreshToken: unknown): Promise<void> {
+        try {
+            if (typeof refreshToken !== 'string' || !refreshToken || refreshToken.length > MAX_REFRESH_TOKEN_LENGTH) return;
+            const payload = this.jwtService.verify(refreshToken, {
+                secret: this.refreshSecret(),
+                ignoreExpiration: true,
+            }) as { jti?: string; type?: string };
+            if (payload.type !== 'refresh' || typeof payload.jti !== 'string') return;
+            const row = await this.authTokenRepository.findOne({ where: { token_id: payload.jti } });
+            if (!row) return;
+            await this.authTokenRepository.update(
+                { family_id: row.family_id, is_revoked: false },
+                { is_revoked: true, revoked_at: new Date() },
+            );
+        } catch (error: any) {
+            this.logger.warn(`Logout revoke failed: ${error?.message}`);
+        }
     }
 
     async revokeUserRefreshTokens(userId: string): Promise<void> {
         await this.authTokenRepository.update(
-            { user_id: userId },
-            { is_revoked: true }
+            { user_id: userId, is_revoked: false },
+            { is_revoked: true, revoked_at: new Date() },
         );
     }
-
-    async refreshAccessToken(refreshToken: string, ipAddress: string): Promise<{
-        status: string,
-        message: string;
-        data?: {
-            access_token: string;
-            refresh_token: string;
-            expires_in: number;
-        };
-        error?: any;
-    }> {
-        try {
-        // Validate the refresh token
-        const { userId, tokenId } = await this.validateRefreshToken(refreshToken, ipAddress);
-        
-        // Get user from database (you'll need to inject the user service)
-        const user = await this.usersRepository.findOne({ where: { user_id: userId } });
-        if (!user) {
-            throw new Error('User not found');
-        }
-
-        // For now, we'll just return a new access token
-        // In a real implementation, you would get the user object from the database
-        // Revoke the used refresh token (optional: implement refresh token rotation)
-        await this.revokeRefreshToken(tokenId);
-        
-        // Convert UserEntity to User type
-        const [firstname, ...lastnameParts] = user.fullname?.split(' ') || [];
-        const lastname = lastnameParts.join(' ');
-        const userForToken = {
-          ...user,
-          firstname: firstname || '',
-          lastname: lastname || ''
-        };
-        
-        // Generate new tokens
-        const accessToken = this.generateAccessToken(userForToken as User);
-        // If using refresh token rotation, generate a new refresh token here
-        const newRefreshToken = await this.generateRefreshToken(userForToken as User, ipAddress, true);
-        
-        console.log("newRefreshToken: ", newRefreshToken);
-        return {
-            status: 'success',
-            message: 'Access token generated successfully',
-            data: {
-                access_token: accessToken,
-                refresh_token: newRefreshToken,
-                expires_in: 3600,
-            }
-        };
-    } catch (error: any) {
-        console.error("Error refreshing access token: ", error);
-        return {
-            status: 'error',
-            message: 'Failed to generate access token',
-            error: error
-        };
-    }
-}
 }

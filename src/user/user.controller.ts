@@ -14,6 +14,7 @@ import {
 import { Request } from 'express';
 import { UserService } from './user.service';
 import { getClientIp } from 'src/auth/client-ip';
+import { TokenPair } from 'src/auth/auth.service';
 import { UserCleanupResponse } from './models/userCleanupResponse';
 import { CreateUserDto } from './dto/create-user-dto';
 import { UpdateUserDto } from './dto/update-user-dto';
@@ -48,11 +49,7 @@ export class UserController {
         
         status: string;
         message: string;
-        data?: {
-            access_token: string;
-            refresh_token: string;
-            expires_in: number;
-        };
+        data?: TokenPair;
         error?: any;
     }>
     {
@@ -71,11 +68,7 @@ export class UserController {
     : Promise<{
         status: string;
         message: string;
-        data?: {
-            access_token: string;
-            refresh_token: string;
-            expires_in: number;
-        };
+        data?: TokenPair;
         error?: any;
     }> {
         const authenticatedUser = await this.userService.loginUsername({ ...credentials, ipAddress: getClientIp(req) });

@@ -10,8 +10,13 @@ One line per source file. Paths are relative to the repo root.
 
 ## auth (`src/auth/`)
 - `auth.module.ts` — JWT module setup (`JWT_SECRET`, `JWT_ACCESS_EXPIRATION`)
-- `auth.controller.ts` — `POST /api/auth/refresh`
-- `auth.service.ts` — token generation, validation, rotation, revocation
+- `auth.controller.ts` — `POST /api/auth/refresh`, `POST /api/auth/logout`
+- `auth.service.ts` — token generation, idempotent `refresh()` with grace replay, `logout()` family revoke
+- `token-crypto.ts` — `sha256Hex`, `safeEqual`, AES-GCM `encryptReplay`/`decryptReplay`
+- `auth-env.ts` — `validateAuthEnv()`, fail-closed startup check
+- `auth-maintenance.service.ts` — hourly cleanup cron
+- `auth.service.int-spec.ts` — integration tests (`pnpm test:int`)
+- `../migrations/1762800000000-AuthTokenRotation.ts` — hand-written migration for the new token columns
 - `client-ip.ts` — `getClientIp(req)` for audit records
 - `guards/authorize.guard.ts` — Bearer JWT guard
 - `models/auth.entity.ts` — `AuthTokenEntity`

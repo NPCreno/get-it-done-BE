@@ -3,7 +3,8 @@
 Endpoint → implementing chain. All routes are under `/api`. "Guarded" means `AuthorizeGuard`.
 
 ## Auth
-- `POST /api/auth/refresh` → `AuthController.refreshToken` → `AuthService.refreshAccessToken` → `validateRefreshToken`, `revokeRefreshToken`, `generateAccessToken`, `generateRefreshToken`. IP comes from `getClientIp(req)`; a client-sent `ipAddress` body field is ignored.
+- `POST /api/auth/refresh` → `AuthController.refreshToken` → `AuthService.refresh` (row lock, rotate or grace replay, 401 `REFRESH_INVALID` / `REFRESH_REUSED`). IP comes from `getClientIp(req)` (attested by `X-Internal-Secret`); a client-sent `ipAddress` body field is ignored.
+- `POST /api/auth/logout` → `AuthController.logout` → `AuthService.logout` (revokes the token family, always 204).
 
 ## User
 - `POST /api/user/create` → `UserController.create` → `UserService.createUser`

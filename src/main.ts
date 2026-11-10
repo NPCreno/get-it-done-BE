@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { validateAuthEnv } from './auth/auth-env';
 
 // Ensure crypto is available globally
 if (typeof globalThis.crypto === 'undefined') {
@@ -7,6 +8,7 @@ if (typeof globalThis.crypto === 'undefined') {
 }
 
 async function bootstrap() {
+  validateAuthEnv();
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({

@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
+import { AuthMaintenanceService } from './auth-maintenance.service';
 import { AuthTokenEntity } from './models/auth.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserEntity } from 'src/user/models/user.entity';
@@ -19,7 +20,7 @@ import { UserEntity } from 'src/user/models/user.entity';
         }),
         TypeOrmModule.forFeature([AuthTokenEntity, UserEntity]),
     ],
-    providers: [AuthService],
+    providers: [AuthService, AuthMaintenanceService],
     exports: [AuthService, JwtModule],
     controllers: [AuthController],
 

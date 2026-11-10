@@ -35,7 +35,7 @@ Railway. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`
 
 ## Entities (7)
 - `UserEntity` (table `users`)
-- `AuthTokenEntity` (`src/auth/models/auth.entity.ts`) — hashed refresh token records with `ip_address`
+- `AuthTokenEntity` (`src/auth/models/auth.entity.ts`) — refresh token records: sha256 hash, `family_id`, `remember_me`, `revoked_at`, `replaced_by_token_id`, `replay_ciphertext`, nullable `ip_address`
 - `ProjectEntity`
 - `TaskTemplateEntity` — recurring task definitions
 - `TaskInstanceEntity` — individual tasks
@@ -50,14 +50,18 @@ Railway. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`
 
 ## Auth
 - HS256. Access token signed with `JWT_SECRET`, lifetime from `JWT_ACCESS_EXPIRATION` (no default; the service throws if either is missing)
-- Refresh token signed with `JWT_REFRESH_SECRET`, lifetime `1d`, or `7d` with `rememberMe`. Stored hashed, rotated on use
-- Known issue: `auth.service.ts` falls back to the hardcoded secret `'refreshSecretKey'` when `JWT_REFRESH_SECRET` is unset. Make it fail closed like `JWT_SECRET`
-- Client IP is audit data only. `getClientIp()` reads `X-Client-IP` (set by the frontend BFF), then `X-Real-IP` (set by Railway), then `req.ip`. `X-Forwarded-For` is deliberately not read and Express `trust proxy` is not enabled. Never use the IP for an auth decision
+- Refresh token signed with `JWT_REFRESH_SECRET`. Lifetime `JWT_REFRESH_EXPIRATION` (default `7d`, Remember Me) or `JWT_REFRESH_EXPIRATION_SHORT` (default `1d`); `remember_me` is stored on the row and inherited on rotation. Stored as sha256 (legacy rows: bcrypt, starts with `$2`)
+- `JWT_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_EXPIRATION` are validated at startup (`auth-env.ts`); no fallbacks
+- `POST /api/auth/refresh` is idempotent: `SELECT ... FOR UPDATE` on the token row. Active row: rotate (same `family_id`) and store an AES-GCM replay of the new token. Revoked within `REFRESH_REUSE_GRACE_SECONDS` (30): the same refresh token is replayed with a fresh access token. Revoked beyond grace with a replacement: family revoked, `401 REFRESH_REUSED`. Otherwise `401 REFRESH_INVALID`. Responses carry `access_expires_in` / `refresh_expires_in`; `expires_in: 3600` is legacy
+- `POST /api/auth/logout {refreshToken}` revokes the family, always 204
+- `AuthorizeGuard` 401s carry `code: TOKEN_MISSING | TOKEN_INVALID`, and a token with `type !== 'access'` is rejected. Other 401s (ownership checks) have no code
+- `AuthMaintenanceService` (hourly cron) nulls expired replay ciphertext and deletes rows expired more than a day
+- Client IP is audit data only. `getClientIp()` returns `X-Client-IP` only when `X-Internal-Secret` matches `INTERNAL_API_SECRET` and the value is a valid IP; otherwise `null`. No `X-Real-IP`/`req.ip` fallback. Never use the IP for an auth decision
 
 ## Database
 - PostgreSQL through TypeORM, `autoLoadEntities: true`, connection from `DATABASE_URL`
 - `synchronize` is on only when `DATABASE_SYNCHRONIZE === 'true'` (local development only)
-- Migration scripts exist but `src/migrations/` has no files yet. `src/data-source.ts` serves the TypeORM CLI
+- Migrations are hand-written (`src/migrations/`); prod has never run them, so do not use `migration:generate`. Railway Pre-deploy Command: `npm run migration:run`. `src/data-source.ts` serves the TypeORM CLI
 
 ## Local database
 Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app runs natively with `pnpm start:dev`). It listens on `127.0.0.1:5433` because 5432 is often taken by a native Postgres. Defaults: user `postgres`, password `dev`, database `getitdone` (override with `POSTGRES_*` in `.env`).
@@ -69,11 +73,11 @@ Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app run
 - The scripts are bash: run them from Git Bash or WSL. Dumps hold real data and are gitignored; delete them when done. Never point `DATABASE_SYNCHRONIZE=true` at a shared database
 
 ## Environment
-`DATABASE_URL`, `DATABASE_SYNCHRONIZE`, `JWT_SECRET`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_SECRET`, `FRONTEND_URL`, `PORT`
+`DATABASE_URL`, `DATABASE_SYNCHRONIZE`, `JWT_SECRET`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRATION`, `JWT_REFRESH_EXPIRATION_SHORT`, `REFRESH_REUSE_GRACE_SECONDS`, `INTERNAL_API_SECRET`, `FRONTEND_URL`, `PORT`
 
-## API endpoints (37)
+## API endpoints (38)
 - `GET /` — health check (1)
-- `/api/auth` — `POST refresh` (1)
+- `/api/auth` — `POST refresh`, `POST logout` (2)
 - `/api/user` — create, loginEmail, loginUsername, get/:id, getAll, delete :id, :id/hard, update/:user_id (8)
 - `/api/projects` — getAll, getAll/:user_id, :project_id (get, patch, delete), create, :project_id/hard (7)
 - `/api/tasks` — 18 endpoints, see `FEATURE_MAP.md`
@@ -83,7 +87,8 @@ Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app run
 ## Commands
 - `pnpm start:dev` — dev server with watch
 - `pnpm build` — production build
-- `pnpm test` — jest (no tests written yet)
+- `pnpm test` — jest (no unit tests yet)
+- `pnpm test:int` — integration tests against the Docker Postgres (`getitdone_test`, created on demand); run `pnpm db:up` first
 - `pnpm lint` — ESLint with auto-fix
 - `pnpm migration:generate`, `pnpm migration:run`, `pnpm migration:revert` — TypeORM migrations
 
