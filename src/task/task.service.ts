@@ -290,7 +290,7 @@ export class TaskService implements OnModuleInit {
         where: { task_id: taskId, user: { user_id: userId } },
       });
       return !!parentTask;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -1317,7 +1317,7 @@ export class TaskService implements OnModuleInit {
 
       // Calculate streak by checking consecutive days
       let streak = 0;
-      let currentDate = new Date(today);
+      const currentDate = new Date(today);
       currentDate.setDate(currentDate.getDate() - 1); // Start from yesterday
 
       while (streak < 730) {

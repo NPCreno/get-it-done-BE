@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Subject, Observable, filter, map } from 'rxjs';
 import { TaskService } from 'src/task/task.service';
@@ -48,7 +48,7 @@ export class NotificationsService {
       ?.count;
 
     for (const notifType of notificationRulesJson.notifTypes) {
-      for (const [_, rules] of Object.entries(notifType)) {
+      for (const rules of Object.values(notifType)) {
         for (const rule of rules as NotificationRule[]) {
           const metricValue =
             rule.type === 'streak' ? currentStreak : completedCount;

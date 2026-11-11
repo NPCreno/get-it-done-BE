@@ -1,3 +1,4 @@
+import { webcrypto } from 'crypto';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { validateAuthEnv } from './auth/auth-env';
@@ -5,7 +6,7 @@ import { configureApp } from './app.setup';
 
 // Ensure crypto is available globally
 if (typeof globalThis.crypto === 'undefined') {
-  globalThis.crypto = require('crypto').webcrypto;
+  globalThis.crypto = webcrypto;
 }
 
 async function bootstrap() {

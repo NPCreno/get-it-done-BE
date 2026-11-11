@@ -21,7 +21,9 @@ export class HashPlaintextPasswords1762900000000 implements MigrationInterface {
     console.log(`[HashPlaintextPasswords] rehashed ${count} account(s)`);
   }
 
-  public async down(): Promise<void> {
-    throw new Error('Irreversible: plaintext passwords are never restored');
+  public down(): Promise<void> {
+    return Promise.reject(
+      new Error('Irreversible: plaintext passwords are never restored'),
+    );
   }
 }

@@ -199,16 +199,14 @@ describe('api contract (integration)', () => {
 
   describe('accounts', () => {
     it('signup ignores a client tier; password is stored hashed and login works', async () => {
-      const res = await request(server())
-        .post('/api/user/create')
-        .send({
-          fullname: 'Tier Test',
-          username: 'tier_test',
-          email: 'tier@example.com',
-          password: 'secret12',
-          tier: 'premium',
-          role: 'admin',
-        });
+      const res = await request(server()).post('/api/user/create').send({
+        fullname: 'Tier Test',
+        username: 'tier_test',
+        email: 'tier@example.com',
+        password: 'secret12',
+        tier: 'premium',
+        role: 'admin',
+      });
       expect(res.body.status).toBe('success');
       const row = (
         await q(
@@ -345,7 +343,7 @@ describe('api contract (integration)', () => {
         priority: 'High',
         due_date: new Date().toISOString(),
       });
-      const bare = await createTask({ title: 'Bare task' });
+      await createTask({ title: 'Bare task' });
       await request(server())
         .post('/api/tasks/createSubTask')
         .set(bearer(A))

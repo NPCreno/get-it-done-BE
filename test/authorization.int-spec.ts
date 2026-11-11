@@ -440,9 +440,9 @@ describe('authorization (two users)', () => {
         .send({ refreshToken: A.refresh });
       expect(refreshed.status).toBe(200);
       const jwt = app.get(JwtService);
-      const payload = jwt.decode(refreshed.body.data.access_token) as {
-        user: { role: string };
-      };
+      const payload = jwt.decode<{ user: { role: string } }>(
+        refreshed.body.data.access_token,
+      );
       expect(payload.user.role).toBe('standard');
       expect(
         (await request(server()).get('/api/user/getAll').set(bearer(A))).status,
@@ -456,15 +456,15 @@ describe('authorization (two users)', () => {
       const login = await request(server())
         .post('/api/user/loginUsername')
         .send({ username: B.username, password: B.password });
-      const fromLogin = jwt.decode(login.body.data.access_token) as {
+      const fromLogin = jwt.decode<{
         user: Record<string, unknown>;
-      };
+      }>(login.body.data.access_token);
       const refreshed = await request(server())
         .post('/api/auth/refresh')
         .send({ refreshToken: login.body.data.refresh_token });
-      const fromRefresh = jwt.decode(refreshed.body.data.access_token) as {
+      const fromRefresh = jwt.decode<{
         user: Record<string, unknown>;
-      };
+      }>(refreshed.body.data.access_token);
       for (const payload of [fromLogin, fromRefresh]) {
         for (const key of [
           'password',

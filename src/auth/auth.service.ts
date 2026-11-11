@@ -15,6 +15,7 @@ import {
   safeEqual,
   sha256Hex,
 } from './token-crypto';
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- bcrypt ships no type declarations
 const bcrypt = require('bcrypt');
 
 export interface TokenPair {
@@ -105,25 +106,25 @@ export class AuthService {
   }
 
   private lifetimeOf(token: string): number {
-    const d = this.jwtService.decode(token) as {
+    const d = this.jwtService.decode<{
       exp: number;
       iat: number;
-    } | null;
+    } | null>(token);
     if (!d?.exp || !d?.iat) {
       throw new Error('Signed token has no exp/iat');
     }
     return d.exp - d.iat;
   }
 
-  hashPassword(password: string): Observable<String> {
-    return from<String>(bcrypt.hash(password, 12));
+  hashPassword(password: string): Observable<string> {
+    return from<string>(bcrypt.hash(password, 12));
   }
 
   comparePasswords(
     newPassword: string,
     passwordHash: string,
-  ): Observable<any | boolean> {
-    return from<any | boolean>(bcrypt.compare(newPassword, passwordHash));
+  ): Observable<boolean> {
+    return from(bcrypt.compare(newPassword, passwordHash) as Promise<boolean>);
   }
 
   // --------------------------------------------------------------- refresh
@@ -151,10 +152,10 @@ export class AuthService {
         secret: this.refreshSecret(),
       },
     );
-    const decoded = this.jwtService.decode(token) as {
+    const decoded = this.jwtService.decode<{
       exp: number;
       iat: number;
-    };
+    }>(token);
     const expiresAt = new Date(decoded.exp * 1000);
 
     const repo = manager
@@ -191,12 +192,12 @@ export class AuthService {
     };
   }
 
-  private async hashMatches(token: string, stored: string): Promise<boolean> {
+  private hashMatches(token: string, stored: string): Promise<boolean> {
     if (stored.startsWith('$2')) {
       // Legacy bcrypt row. Remove in the cleanup PR once all have expired.
-      return bcrypt.compare(token, stored);
+      return Promise.resolve(bcrypt.compare(token, stored) as boolean);
     }
-    return safeEqual(sha256Hex(token), stored);
+    return Promise.resolve(safeEqual(sha256Hex(token), stored));
   }
 
   private withinGrace(row: AuthTokenEntity, now: number): boolean {
@@ -319,9 +320,9 @@ export class AuthService {
           );
           if (!replay || !(await this.hashMatches(replay, next.token)))
             return { kind: 'invalid' };
-          const decoded = this.jwtService.decode(replay) as {
+          const decoded = this.jwtService.decode<{
             exp: number;
-          } | null;
+          } | null>(replay);
           if (!decoded?.exp) return { kind: 'invalid' };
           const remaining = Math.floor(decoded.exp - now / 1000);
           if (remaining <= 0) return { kind: 'invalid' };
@@ -357,10 +358,13 @@ export class AuthService {
         refreshToken.length > MAX_REFRESH_TOKEN_LENGTH
       )
         return;
-      const payload = this.jwtService.verify(refreshToken, {
-        secret: this.refreshSecret(),
-        ignoreExpiration: true,
-      }) as { jti?: string; type?: string };
+      const payload = this.jwtService.verify<{ jti?: string; type?: string }>(
+        refreshToken,
+        {
+          secret: this.refreshSecret(),
+          ignoreExpiration: true,
+        },
+      );
       if (payload.type !== 'refresh' || typeof payload.jti !== 'string') return;
       const row = await this.authTokenRepository.findOne({
         where: { token_id: payload.jti },

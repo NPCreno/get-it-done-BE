@@ -68,7 +68,7 @@ describe('@Body() DTOs', () => {
         ) ?? [];
       for (const key of Object.keys(args)) {
         const [paramtype, index] = key.split(':').map(Number);
-        if (paramtype !== RouteParamtypes.BODY) continue;
+        if (paramtype !== Number(RouteParamtypes.BODY)) continue;
         const t = types[index] as new () => object;
         if (t && t !== Object && t !== Array && t !== String)
           bodyClasses.add(t);

@@ -142,7 +142,7 @@ export class UserService {
         message: `User with ID ${user_id} soft deleted successfully`,
         error: null,
       };
-    } catch (error) {
+    } catch {
       throw new InternalServerErrorException('Failed to soft delete user');
     }
   }
@@ -169,7 +169,7 @@ export class UserService {
         message: `User with ID ${user_id} permanently deleted`,
         error: null,
       };
-    } catch (error) {
+    } catch {
       throw new InternalServerErrorException('Failed to delete user');
     }
   }
@@ -211,10 +211,7 @@ export class UserService {
       }
     }
     if (passwordChanged) {
-      changes.password = await bcrypt.hash(
-        updateUserDto.password as string,
-        12,
-      );
+      changes.password = await bcrypt.hash(updateUserDto.password, 12);
     }
 
     if (Object.keys(changes).length > 0) {
@@ -314,7 +311,7 @@ export class UserService {
         credentials?.ipAddress,
         credentials?.rememberMe,
       );
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Invalid credentials');
     }
   }
@@ -343,7 +340,7 @@ export class UserService {
         credentials?.ipAddress,
         credentials?.rememberMe,
       );
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Invalid credentials');
     }
   }

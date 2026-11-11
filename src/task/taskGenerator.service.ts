@@ -134,15 +134,15 @@ export class TaskGeneratorService {
           // Skip if task exists (either active or soft-deleted)
           if (existing) {
             this.logger.debug(
-              `Skipping generation - task already exists for template ${template.taskTemplate_id} on ${dueDate}`,
+              `Skipping generation - task already exists for template ${template.taskTemplate_id} on ${String(dueDate)}`,
             );
             continue;
           }
 
           const instance = this.taskInstanceRepository.create({
             task_id: this.generateTaskId(),
-            user: { user_id: template.user_id } as any,
-            project: { project_id: template.project_id } as any,
+            user: { user_id: template.user_id },
+            project: { project_id: template.project_id },
             title: template.title,
             description: template.description,
             priority: 'Medium',

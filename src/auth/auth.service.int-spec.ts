@@ -15,7 +15,7 @@ import { ConfigModule } from '@nestjs/config';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- pg is loaded lazily for the test DB
 const { Client } = require('pg');
 import { DataSource } from 'typeorm';
 import { AuthService } from './auth.service';
@@ -24,6 +24,7 @@ import { AuthTokenEntity } from './models/auth.entity';
 import { UserEntity } from 'src/user/models/user.entity';
 import { User } from 'src/user/models/user.interface';
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- bcrypt ships no type declarations
 const bcrypt = require('bcrypt');
 
 const BASE_URL =
@@ -104,10 +105,10 @@ describe('AuthService refresh rotation (integration)', () => {
   }
 
   const familyRows = async (token: string) => {
-    const jti = (jwt.decode(token) as { jti: string }).jti;
+    const jti = jwt.decode<{ jti: string }>(token).jti;
     const row = (await tokens.findOneByOrFail({
       token_id: jti,
-    } as never)) as AuthTokenEntity;
+    })) as AuthTokenEntity;
     return tokens.find({
       where: { family_id: row.family_id } as never,
     }) as Promise<AuthTokenEntity[]>;
@@ -126,10 +127,10 @@ describe('AuthService refresh rotation (integration)', () => {
   it('refresh after the grace window is reuse: family revoked', async () => {
     const { refresh } = await login(true);
     const next = await auth.refresh(refresh.token, null);
-    const jti = (jwt.decode(refresh.token) as { jti: string }).jti;
+    const jti = jwt.decode<{ jti: string }>(refresh.token).jti;
     await tokens.update(
-      { token_id: jti } as never,
-      { revoked_at: new Date(Date.now() - 3600_000) } as never,
+      { token_id: jti },
+      { revoked_at: new Date(Date.now() - 3600_000) },
     );
     await expect(auth.refresh(refresh.token, null)).rejects.toMatchObject({
       response: { code: 'REFRESH_REUSED' },
