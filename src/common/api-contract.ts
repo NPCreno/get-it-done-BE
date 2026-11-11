@@ -37,6 +37,12 @@ export const API_CONTRACT = {
     username: '^[A-Za-z0-9_]+$',
     password: '[0-9]',
   },
+  // Paths the FE calls, relative to NEXT_PUBLIC_API_URL (which ends in /api).
+  routes: {
+    taskStatus: '/tasks/update-task-status/:task_id/status/:status',
+    subTaskStatus:
+      '/tasks/update-subtask-status/:taskSubInstance_id/status/:status',
+  },
 } as const;
 
 export type ApiContract = typeof API_CONTRACT;

@@ -537,9 +537,9 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/tasks/update-subTask-status/1/status/completed",
+              "raw": "{{base_url}}/api/tasks/update-subtask-status/1/status/completed",
               "host": ["{{base_url}}"],
-              "path": ["api", "tasks", "update-subTask-status", "1", "status", "completed"]
+              "path": ["api", "tasks", "update-subtask-status", "1", "status", "completed"]
             }
           }
         },

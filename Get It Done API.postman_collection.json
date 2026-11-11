@@ -183,7 +183,7 @@
         },
         { "name": "Soft Delete Subtask", "request": { "method": "DELETE", "url": "{{base_url}}/api/tasks/subTask/{{subtask_id}}" } },
         { "name": "Update Task Status", "request": { "method": "PATCH", "url": "{{base_url}}/api/tasks/update-task-status/{{task_id}}/status/Complete", "description": "Allowed statuses: Pending, Complete, Overdue." } },
-        { "name": "Update Subtask Status", "request": { "method": "PATCH", "url": "{{base_url}}/api/tasks/update-subTask-status/{{subtask_id}}/status/Complete", "description": "Allowed statuses: Pending, Complete, Overdue." } },
+        { "name": "Update Subtask Status", "request": { "method": "PATCH", "url": "{{base_url}}/api/tasks/update-subtask-status/{{subtask_id}}/status/Complete", "description": "Allowed statuses: Pending, Complete, Overdue." } },
         { "name": "Get Dashboard Data", "request": { "method": "GET", "url": "{{base_url}}/api/tasks/getDashboardData/{{user_id}}?startDate={{start_date}}&endDate={{end_date}}" } },
         { "name": "Get Completion Trend", "request": { "method": "GET", "url": "{{base_url}}/api/tasks/completion-trend/{{user_id}}?startDate={{start_date}}&endDate={{end_date}}" } },
         { "name": "Get Task Distribution", "request": { "method": "GET", "url": "{{base_url}}/api/tasks/task-distribution/{{user_id}}?month={{month}}&year={{year}}" } },

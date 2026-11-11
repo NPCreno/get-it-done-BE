@@ -18,7 +18,7 @@ Endpoint → implementing chain. All routes are under `/api`. "Guarded" means `A
 ## Tasks (all guarded) → `TaskController` → `TaskService`
 - Create: `POST create`, `POST bulk-create`, `POST createSubTask`, `POST bulk-create-subtasks`
 - Read: `GET getTasksByUser/:user_id`, `GET getTasksByProj/:project_id`
-- Update: `PATCH :task_id`, `PATCH update-task-status/:task_id/status/:status`, `PATCH update-subTask-status/:taskSubInstance_id/status/:status` (status checked by `StatusValidationPipe`)
+- Update: `PATCH :task_id`, `PATCH update-task-status/:task_id/status/:status`, `PATCH update-subtask-status/:taskSubInstance_id/status/:status` (status checked by `StatusValidationPipe`)
 - Delete: `DELETE :task_id`, `DELETE :task_id/hard`, `DELETE /subTask/:subTask_id`, `DELETE deleteRecurringTasks/:taskTemplate_id`
 - Analytics: `GET getDashboardData/:user_id`, `GET completion-trend/:user_id`, `GET task-distribution/:user_id`, `GET calendar-heatmap/:user_id`, `GET streak/:user_id`
 
