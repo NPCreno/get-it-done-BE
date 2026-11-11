@@ -1,5 +1,5 @@
 export interface TaskDistribution {
-    title: string;
-    value: number;
-    fill: string;
+  title: string;
+  value: number;
+  fill: string;
 }

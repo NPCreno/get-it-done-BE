@@ -24,12 +24,16 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const sources = walk(join(__dirname, '..')).filter((f) => f.includes(`${'dto'}`));
+const sources = walk(join(__dirname, '..')).filter((f) =>
+  f.includes(`${'dto'}`),
+);
 
 function declaredProperties(className: string): string[] {
   for (const file of sources) {
     const text = readFileSync(file, 'utf8');
-    const m = new RegExp(`export class ${className}\\b[^{]*\\{([\\s\\S]*?)\\n\\}`).exec(text);
+    const m = new RegExp(
+      `export class ${className}\\b[^{]*\\{([\\s\\S]*?)\\n\\}`,
+    ).exec(text);
     if (!m) continue;
     const props: string[] = [];
     for (const line of m[1].split('\n')) {
@@ -41,27 +45,49 @@ function declaredProperties(className: string): string[] {
   throw new Error(`source of ${className} not found`);
 }
 
-const controllers = [AuthController, UserController, ProjectsController, TaskController, NotificationsController];
+const controllers = [
+  AuthController,
+  UserController,
+  ProjectsController,
+  TaskController,
+  NotificationsController,
+];
 
 describe('@Body() DTOs', () => {
   const bodyClasses = new Set<new () => object>();
   for (const controller of controllers) {
     for (const method of Object.getOwnPropertyNames(controller.prototype)) {
       if (method === 'constructor') continue;
-      const args = Reflect.getMetadata(ROUTE_ARGS_METADATA, controller, method) ?? {};
-      const types: unknown[] = Reflect.getMetadata('design:paramtypes', controller.prototype, method) ?? [];
+      const args =
+        Reflect.getMetadata(ROUTE_ARGS_METADATA, controller, method) ?? {};
+      const types: unknown[] =
+        Reflect.getMetadata(
+          'design:paramtypes',
+          controller.prototype,
+          method,
+        ) ?? [];
       for (const key of Object.keys(args)) {
         const [paramtype, index] = key.split(':').map(Number);
-        if (paramtype !== RouteParamtypes.BODY) continue;
+        if (paramtype !== Number(RouteParamtypes.BODY)) continue;
         const t = types[index] as new () => object;
-        if (t && t !== Object && t !== Array && t !== String) bodyClasses.add(t);
+        if (t && t !== Object && t !== Array && t !== String)
+          bodyClasses.add(t);
       }
     }
   }
 
   it('finds the known body DTOs', () => {
     const names = [...bodyClasses].map((c) => c.name);
-    for (const n of ['CreateUserDto', 'UpdateUserDto', 'LoginEmailDto', 'CreateProjectDto', 'UpdateProjectDto', 'CreateTaskDto', 'UpdateTaskDto', 'CreateTaskSubInstanceDto']) {
+    for (const n of [
+      'CreateUserDto',
+      'UpdateUserDto',
+      'LoginEmailDto',
+      'CreateProjectDto',
+      'UpdateProjectDto',
+      'CreateTaskDto',
+      'UpdateTaskDto',
+      'CreateTaskSubInstanceDto',
+    ]) {
       expect(names).toContain(n);
     }
   });
@@ -73,7 +99,9 @@ describe('@Body() DTOs', () => {
           .getTargetValidationMetadatas(cls, '', false, false)
           .map((m) => m.propertyName),
       );
-      const missing = declaredProperties(cls.name).filter((p) => !decorated.has(p));
+      const missing = declaredProperties(cls.name).filter(
+        (p) => !decorated.has(p),
+      );
       expect(missing).toEqual([]);
     });
   }

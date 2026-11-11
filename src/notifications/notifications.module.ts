@@ -10,10 +10,10 @@ import { AuthModule } from '../auth/auth.module';
   imports: [
     AuthModule,
     forwardRef(() => TaskModule),
-    TypeOrmModule.forFeature([NotificationsEntity])
+    TypeOrmModule.forFeature([NotificationsEntity]),
   ],
   controllers: [NotificationsController],
   providers: [NotificationsService],
-  exports: [NotificationsService]
+  exports: [NotificationsService],
 })
 export class NotificationsModule {}

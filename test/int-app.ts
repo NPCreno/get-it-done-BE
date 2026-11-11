@@ -8,7 +8,9 @@ export async function createTestApp(): Promise<INestApplication> {
   await resetDatabase(BASE_URL, API_TEST_DB);
   const { AppModule } = await import('../src/app.module');
   const { configureApp } = await import('../src/app.setup');
-  const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const mod = await Test.createTestingModule({
+    imports: [AppModule],
+  }).compile();
   const app = mod.createNestApplication();
   configureApp(app);
   await app.init();

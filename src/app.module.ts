@@ -13,7 +13,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
-    ConfigModule.forRoot({isGlobal: true}),
+    ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
@@ -27,7 +27,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
     ProjectsModule,
     TaskModule,
     NotificationsModule,
-    EventEmitterModule.forRoot()
+    EventEmitterModule.forRoot(),
   ],
   controllers: [AppController],
   providers: [AppService],

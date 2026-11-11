@@ -1,11 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import {
-  startOfMonth,
-  endOfMonth,
-  isWithinInterval,
-  addDays,
-} from 'date-fns';
+import { startOfMonth, endOfMonth, isWithinInterval, addDays } from 'date-fns';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TaskTemplateEntity } from './models/taskTemplate.entity';
@@ -30,7 +25,7 @@ export class TaskGeneratorService {
   @Cron('0 0 * * *') // Every day at midnight
   async generateInstancesForCurrentMonth() {
     const timeZone = 'Asia/Manila';
-    
+
     // Process templates in batches
     const batchSize = this.BATCH_SIZE;
     let skip = 0;
@@ -38,11 +33,13 @@ export class TaskGeneratorService {
     let totalCount = 0;
 
     while (true) {
-      const [templates, count] = await this.taskTemplateRepository.findAndCount({
-        take: batchSize,
-        skip: skip,
-        order: { id: 'ASC' } // Ensure consistent ordering
-      });
+      const [templates, count] = await this.taskTemplateRepository.findAndCount(
+        {
+          take: batchSize,
+          skip: skip,
+          order: { id: 'ASC' }, // Ensure consistent ordering
+        },
+      );
 
       if (templates.length === 0) {
         this.logger.debug('No more templates to process');
@@ -54,25 +51,30 @@ export class TaskGeneratorService {
         totalCount = count;
       }
 
-      this.logger.log(`Processing batch of ${templates.length} templates (${skip + 1}-${skip + templates.length}/${totalCount})`);
-      
+      this.logger.log(
+        `Processing batch of ${templates.length} templates (${skip + 1}-${skip + templates.length}/${totalCount})`,
+      );
+
       // Process current batch
       await this.processTemplatesBatch(templates, timeZone);
-      
+
       totalProcessed += templates.length;
-      
+
       // Stop if we've processed all templates or if we received fewer templates than requested
       if (templates.length < batchSize || totalProcessed >= totalCount) {
         break;
       }
-      
+
       skip += batchSize;
     }
-    
+
     this.logger.log('Task instances generation completed');
   }
 
-  private async processTemplatesBatch(templates: TaskTemplateEntity[], timeZone: string): Promise<void> {
+  private async processTemplatesBatch(
+    templates: TaskTemplateEntity[],
+    timeZone: string,
+  ): Promise<void> {
     const today = new Date();
     const rangeStart = startOfMonth(today);
     const rangeEnd = endOfMonth(today);
@@ -85,8 +87,7 @@ export class TaskGeneratorService {
           isWithinInterval(date, {
             start: template.start_date,
             end: template.end_date ?? rangeEnd,
-          }) &&
-          isWithinInterval(date, { start: rangeStart, end: rangeEnd });
+          }) && isWithinInterval(date, { start: rangeStart, end: rangeEnd });
 
         if (template.repeat_every === 'Day') {
           for (let d = rangeStart; d <= rangeEnd; d = addDays(d, 1)) {
@@ -95,7 +96,7 @@ export class TaskGeneratorService {
         }
 
         if (template.repeat_every === 'Week') {
-          const daysOfWeek = (template.repeat_days || []).map(day =>
+          const daysOfWeek = (template.repeat_days || []).map((day) =>
             day.toLowerCase(),
           );
           for (let d = rangeStart; d <= rangeEnd; d = addDays(d, 1)) {
@@ -133,15 +134,15 @@ export class TaskGeneratorService {
           // Skip if task exists (either active or soft-deleted)
           if (existing) {
             this.logger.debug(
-              `Skipping generation - task already exists for template ${template.taskTemplate_id} on ${dueDate}`
+              `Skipping generation - task already exists for template ${template.taskTemplate_id} on ${String(dueDate)}`,
             );
             continue;
           }
 
           const instance = this.taskInstanceRepository.create({
             task_id: this.generateTaskId(),
-            user: { user_id: template.user_id } as any,
-            project: { project_id: template.project_id } as any,
+            user: { user_id: template.user_id },
+            project: { project_id: template.project_id },
             title: template.title,
             description: template.description,
             priority: 'Medium',
@@ -164,12 +165,16 @@ export class TaskGeneratorService {
           }).format(dueDate);
 
           this.logger.log(
-            `Generated task instance: ${instance.task_id} for template ${template.taskTemplate_id} due on ${formattedDate} (${timeZone})`
+            `Generated task instance: ${instance.task_id} for template ${template.taskTemplate_id} due on ${formattedDate} (${timeZone})`,
           );
         }
-        this.logger.log(`Successfully processed template ${template.taskTemplate_id}`);
+        this.logger.log(
+          `Successfully processed template ${template.taskTemplate_id}`,
+        );
       } catch (error) {
-        this.logger.error(`Error processing template ${template.taskTemplate_id}: ${error instanceof Error ? error.message : String(error)}`);
+        this.logger.error(
+          `Error processing template ${template.taskTemplate_id}: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     }
   }

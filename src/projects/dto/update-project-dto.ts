@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer';
-import { IsDate, IsHexColor, IsOptional, IsString, MaxLength, MinLength, ValidateIf } from 'class-validator';
+import {
+  IsDate,
+  IsHexColor,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 import { API_CONTRACT } from 'src/common/api-contract';
 
 const { limits } = API_CONTRACT;

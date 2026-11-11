@@ -1,71 +1,80 @@
-import { ProjectEntity } from "src/projects/models/projects.entity";
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryColumn, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { ProjectEntity } from 'src/projects/models/projects.entity';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 @Entity('users')
-export class UserEntity{
-    @PrimaryGeneratedColumn()
-    id!: number;
-    
-    @Column()
-    fullname!: string;
+export class UserEntity {
+  @PrimaryGeneratedColumn()
+  id!: number;
 
-    @Column({unique: true})
-    user_id!: string;
+  @Column()
+  fullname!: string;
 
-    @Column({unique: true})
-    username!: string;
+  @Column({ unique: true })
+  user_id!: string;
 
-    @Column({unique: true})
-    email!: string;
+  @Column({ unique: true })
+  username!: string;
 
-    @BeforeInsert()
-    emailToLowerCase() {
-        this.email = this.email.toLowerCase(); // Convert the email to lowercase before saving to the database
-    }
+  @Column({ unique: true })
+  email!: string;
 
-    @Column()
-    password!: string;
+  @BeforeInsert()
+  emailToLowerCase() {
+    this.email = this.email.toLowerCase(); // Convert the email to lowercase before saving to the database
+  }
 
-    // Preferences
-    @Column({nullable: true})
-    enableNotifications!: string;
+  @Column()
+  password!: string;
 
-    @Column({nullable: true})
-    theme!: string;
+  // Preferences
+  @Column({ nullable: true })
+  enableNotifications!: string;
 
-    @Column({nullable: true})
-    soundFx!: string;
+  @Column({ nullable: true })
+  theme!: string;
 
-    //role & permissions
-    @Column()
-    tier!: string;
+  @Column({ nullable: true })
+  soundFx!: string;
 
-    @Column({nullable: true})
-    role!: string;
+  //role & permissions
+  @Column()
+  tier!: string;
 
-    @Column({nullable: true})
-    status!: string;
+  @Column({ nullable: true })
+  role!: string;
 
-    //dates
-    @CreateDateColumn({ type: 'timestamp' })
-    createdAt!: Date;
-  
-    @UpdateDateColumn({ type: 'timestamp' })
-    updatedAt!: Date;
-  
-    @DeleteDateColumn({ type: 'timestamp', nullable: true })
-    deletedAt!: Date;
+  @Column({ nullable: true })
+  status!: string;
 
-    @Column({ type: 'timestamp', nullable: true })
-    premiumExpiry!: Date;
+  //dates
+  @CreateDateColumn({ type: 'timestamp' })
+  createdAt!: Date;
 
-    // security
-    @Column({ type: 'timestamp', nullable: true })
-    lastLoginAt!: Date;
+  @UpdateDateColumn({ type: 'timestamp' })
+  updatedAt!: Date;
 
-    @Column({nullable: true})
-    loginAttempts!: number;
+  @DeleteDateColumn({ type: 'timestamp', nullable: true })
+  deletedAt!: Date;
 
-    @OneToMany(() => ProjectEntity, (project) => project.user)
-    projects!: ProjectEntity[];
+  @Column({ type: 'timestamp', nullable: true })
+  premiumExpiry!: Date;
+
+  // security
+  @Column({ type: 'timestamp', nullable: true })
+  lastLoginAt!: Date;
+
+  @Column({ nullable: true })
+  loginAttempts!: number;
+
+  @OneToMany(() => ProjectEntity, (project) => project.user)
+  projects!: ProjectEntity[];
 }

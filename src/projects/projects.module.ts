@@ -1,4 +1,4 @@
-import { Body, Module, Param, Post } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -14,19 +14,16 @@ import { TaskSubInstanceEntity } from 'src/task/models/taskSubInstance.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      ProjectEntity, 
-      TaskTemplateEntity, 
-      TaskInstanceEntity, 
+      ProjectEntity,
+      TaskTemplateEntity,
+      TaskInstanceEntity,
       UserEntity,
-      TaskSubInstanceEntity
+      TaskSubInstanceEntity,
     ]),
     AuthModule,
     TaskModule,
   ],
   providers: [ProjectsService, TaskService],
-  controllers: [ProjectsController]
+  controllers: [ProjectsController],
 })
-
 export class ProjectsModule {}
-
-

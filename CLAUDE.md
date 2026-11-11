@@ -3,7 +3,7 @@
 ## Stack
 NestJS 11, TypeScript 5, Express platform, TypeORM 0.3, PostgreSQL
 
-Package manager: `package.json` declares `pnpm@11.13.0`, which is a broken release (its `@pnpm/exe` ships without a binary), and the repo has `package-lock.json` but no `pnpm-lock.yaml`. Pick one and align them (the FE moved to pnpm 11.28.9).
+Package manager: npm (`packageManager: npm@10.9.2`, `package-lock.json`), which is also what the Dockerfile and Railway use. A migration to pnpm 11.28.9 like the FE is a separate follow-up; the old `pnpm@11.13.0` pin was a broken release.
 
 ## Deployment
 Railway. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`).
@@ -98,10 +98,15 @@ Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app run
 ## Commands
 - `pnpm start:dev` — dev server with watch
 - `pnpm build` — production build
-- `pnpm test` — jest (no unit tests yet)
+- `npm test` — jest unit specs (`*.spec.ts`, pure, no DB)
 - `pnpm test:int` — integration tests against the Docker Postgres (`getitdone_test`, created on demand); run `pnpm db:up` first
-- `pnpm lint` — ESLint with auto-fix
+- `npm run lint` — ESLint with auto-fix (local); `npm run lint:check` — no autofix, used by CI (errors fail, `no-unsafe-*` warnings are baseline debt)
+- `npm run typecheck` — `tsc -p tsconfig.check.json` over `src`, `test` and `scripts`
 - `pnpm migration:generate`, `pnpm migration:run`, `pnpm migration:revert` — TypeORM migrations
+
+## CI
+- GitHub Actions `.github/workflows/ci.yml` on every PR and on pushes to `master`: job `check` (`npm ci`, `lint:check`, `typecheck`, `npm test`) and job `integration` (`npm run test:int` against a `postgres:17` service container; no secrets, `int-env.ts` sets everything). `.git-blame-ignore-revs` lists the prettier commit.
+- Test pyramid: unit specs (`*.spec.ts`, pure, no DB); integration (`test/*.int-spec.ts`, real Postgres, real HTTP); no e2e. New features add tests at the lowest level that covers them.
 
 ## CodeGraph
 The repo is indexed (`.codegraph/`). Query with `codegraph_explore` and `projectPath` set to this repo.

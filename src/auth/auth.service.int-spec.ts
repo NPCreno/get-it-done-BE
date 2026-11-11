@@ -15,7 +15,7 @@ import { ConfigModule } from '@nestjs/config';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- pg is loaded lazily for the test DB
 const { Client } = require('pg');
 import { DataSource } from 'typeorm';
 import { AuthService } from './auth.service';
@@ -24,15 +24,20 @@ import { AuthTokenEntity } from './models/auth.entity';
 import { UserEntity } from 'src/user/models/user.entity';
 import { User } from 'src/user/models/user.interface';
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- bcrypt ships no type declarations
 const bcrypt = require('bcrypt');
 
-const BASE_URL = process.env.TEST_DATABASE_URL_BASE ?? 'postgresql://postgres:dev@localhost:5433';
+const BASE_URL =
+  process.env.TEST_DATABASE_URL_BASE ??
+  'postgresql://postgres:dev@localhost:5433';
 const TEST_DB = 'getitdone_test';
 
 async function ensureTestDb(): Promise<void> {
   const c = new Client({ connectionString: `${BASE_URL}/postgres` });
   await c.connect();
-  const r = await c.query('SELECT 1 FROM pg_database WHERE datname = $1', [TEST_DB]);
+  const r = await c.query('SELECT 1 FROM pg_database WHERE datname = $1', [
+    TEST_DB,
+  ]);
   if (r.rowCount === 0) await c.query(`CREATE DATABASE ${TEST_DB}`);
   await c.end();
 }
@@ -50,7 +55,10 @@ describe('AuthService refresh rotation (integration)', () => {
     const mod = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({ isGlobal: true }),
-        JwtModule.register({ secret: process.env.JWT_SECRET, signOptions: { expiresIn: '15m' } }),
+        JwtModule.register({
+          secret: process.env.JWT_SECRET,
+          signOptions: { expiresIn: '15m' },
+        }),
         TypeOrmModule.forRoot({
           type: 'postgres',
           url: `${BASE_URL}/${TEST_DB}`,
@@ -76,7 +84,11 @@ describe('AuthService refresh rotation (integration)', () => {
         tier: 'free',
       }),
     );
-    tokenUser = { ...user, firstname: 'Test', lastname: 'User' } as unknown as User;
+    tokenUser = {
+      ...user,
+      firstname: 'Test',
+      lastname: 'User',
+    } as unknown as User;
   });
 
   afterAll(async () => {
@@ -85,19 +97,28 @@ describe('AuthService refresh rotation (integration)', () => {
 
   async function login(rememberMe: boolean) {
     const access = auth.generateAccessToken(tokenUser);
-    const refresh = await auth.generateRefreshToken(tokenUser, { ip: null, rememberMe });
+    const refresh = await auth.generateRefreshToken(tokenUser, {
+      ip: null,
+      rememberMe,
+    });
     return { access, refresh, pair: auth.buildPair(access, refresh) };
   }
 
   const familyRows = async (token: string) => {
-    const jti = (jwt.decode(token) as { jti: string }).jti;
-    const row = await tokens.findOneByOrFail({ token_id: jti } as never) as AuthTokenEntity;
-    return tokens.find({ where: { family_id: row.family_id } as never }) as Promise<AuthTokenEntity[]>;
+    const jti = jwt.decode<{ jti: string }>(token).jti;
+    const row = (await tokens.findOneByOrFail({
+      token_id: jti,
+    })) as AuthTokenEntity;
+    return tokens.find({
+      where: { family_id: row.family_id } as never,
+    }) as Promise<AuthTokenEntity[]>;
   };
 
   it('5 parallel refreshes return the identical pair and create exactly 1 new row', async () => {
     const { refresh } = await login(true);
-    const results = await Promise.all(Array.from({ length: 5 }, () => auth.refresh(refresh.token, null)));
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => auth.refresh(refresh.token, null)),
+    );
     const uniq = new Set(results.map((r) => r.refresh_token));
     expect(uniq.size).toBe(1);
     expect(await familyRows(refresh.token)).toHaveLength(2);
@@ -106,8 +127,11 @@ describe('AuthService refresh rotation (integration)', () => {
   it('refresh after the grace window is reuse: family revoked', async () => {
     const { refresh } = await login(true);
     const next = await auth.refresh(refresh.token, null);
-    const jti = (jwt.decode(refresh.token) as { jti: string }).jti;
-    await tokens.update({ token_id: jti } as never, { revoked_at: new Date(Date.now() - 3600_000) } as never);
+    const jti = jwt.decode<{ jti: string }>(refresh.token).jti;
+    await tokens.update(
+      { token_id: jti },
+      { revoked_at: new Date(Date.now() - 3600_000) },
+    );
     await expect(auth.refresh(refresh.token, null)).rejects.toMatchObject({
       response: { code: 'REFRESH_REUSED' },
     });
@@ -130,7 +154,9 @@ describe('AuthService refresh rotation (integration)', () => {
     await expect(auth.refresh(next.refresh_token, null)).rejects.toMatchObject({
       response: { code: 'REFRESH_INVALID' },
     });
-    expect((await familyRows(next.refresh_token)).every((r) => r.is_revoked)).toBe(true);
+    expect(
+      (await familyRows(next.refresh_token)).every((r) => r.is_revoked),
+    ).toBe(true);
   });
 
   it('remember_me=false stays ~1d across a refresh', async () => {
@@ -173,9 +199,15 @@ describe('AuthService refresh rotation (integration)', () => {
     const guard = new AuthorizeGuard(jwt);
     const ctx = (bearer: string) =>
       ({
-        switchToHttp: () => ({ getRequest: () => ({ headers: { authorization: `Bearer ${bearer}` } }) }),
+        switchToHttp: () => ({
+          getRequest: () => ({
+            headers: { authorization: `Bearer ${bearer}` },
+          }),
+        }),
       }) as unknown as ExecutionContext;
-    await expect(guard.canActivate(ctx(refresh.token))).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(guard.canActivate(ctx(refresh.token))).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
     await expect(guard.canActivate(ctx(refresh.token))).rejects.toMatchObject({
       response: { code: 'TOKEN_INVALID' },
     });
