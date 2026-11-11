@@ -10,7 +10,9 @@ process.env.FRONTEND_URL = 'http://localhost:3000';
 delete process.env.JWT_REFRESH_EXPIRATION;
 delete process.env.JWT_REFRESH_EXPIRATION_SHORT;
 
-export const BASE_URL = process.env.TEST_DATABASE_URL_BASE ?? 'postgresql://postgres:dev@localhost:5433';
+export const BASE_URL =
+  process.env.TEST_DATABASE_URL_BASE ??
+  'postgresql://postgres:dev@localhost:5433';
 export const API_TEST_DB = 'getitdone_test_api';
 
 process.env.DATABASE_URL = `${BASE_URL}/${API_TEST_DB}`;

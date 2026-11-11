@@ -1,5 +1,5 @@
-export interface TaskCompletionTrend { 
-    day: string;
-    completed: number;
-    date?: string;
+export interface TaskCompletionTrend {
+  day: string;
+  completed: number;
+  date?: string;
 }

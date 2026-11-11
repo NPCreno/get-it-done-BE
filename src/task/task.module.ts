@@ -16,10 +16,10 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
   imports: [
     forwardRef(() => NotificationsModule),
     TypeOrmModule.forFeature([
-      TaskInstanceEntity, 
-      TaskTemplateEntity, 
-      ProjectEntity, 
-      UserEntity, 
+      TaskInstanceEntity,
+      TaskTemplateEntity,
+      ProjectEntity,
+      UserEntity,
       TaskSubInstanceEntity,
     ]),
     AuthModule,
@@ -29,5 +29,4 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
   controllers: [TaskController],
   exports: [TaskService, TaskGeneratorService],
 })
-
 export class TaskModule {}

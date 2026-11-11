@@ -11,7 +11,8 @@ import { bearer, signupAndLogin, TestUser } from './int-auth';
 import { queryDb } from './int-db';
 import * as rules from '../src/notifications/notification.rules.json';
 
-const q = (sql: string, params: unknown[] = []) => queryDb(BASE_URL, API_TEST_DB, sql, params);
+const q = (sql: string, params: unknown[] = []) =>
+  queryDb(BASE_URL, API_TEST_DB, sql, params);
 const settle = () => new Promise((r) => setTimeout(r, 800));
 
 describe('task completion notifications', () => {
@@ -31,21 +32,36 @@ describe('task completion notifications', () => {
   });
 
   const createTask = async (u: TestUser, title: string) => {
-    const r = await request(server()).post('/api/tasks/create').set(bearer(u))
+    const r = await request(server())
+      .post('/api/tasks/create')
+      .set(bearer(u))
       .send({ title, priority: 'Low', status: 'Pending', isRecurring: false });
     return r.body.data.task_id as string;
   };
   const count = async (u: TestUser) =>
-    Number((await q('SELECT count(*) FROM notifications WHERE user_id = $1', [u.user_id]))[0].count);
+    Number(
+      (
+        await q('SELECT count(*) FROM notifications WHERE user_id = $1', [
+          u.user_id,
+        ])
+      )[0].count,
+    );
 
   it('has a rule that fires on the first completed task (the threshold this test relies on)', () => {
-    const all = rules.notifTypes.flatMap((t) => Object.values(t).flat()) as { type: string; condition: { equals?: number } }[];
-    expect(all.some((r) => r.type !== 'streak' && r.condition.equals === 1)).toBe(true);
+    const all = rules.notifTypes.flatMap((t) => Object.values(t).flat()) as {
+      type: string;
+      condition: { equals?: number };
+    }[];
+    expect(
+      all.some((r) => r.type !== 'streak' && r.condition.equals === 1),
+    ).toBe(true);
   });
 
   it('PATCH update-task-status/Complete creates a notification row for the owner', async () => {
     const id = await createTask(A, 'status path');
-    const res = await request(server()).patch(`/api/tasks/update-task-status/${id}/status/Complete`).set(bearer(A));
+    const res = await request(server())
+      .patch(`/api/tasks/update-task-status/${id}/status/Complete`)
+      .set(bearer(A));
     expect(res.status).toBeLessThan(300);
     await settle();
     expect(await count(A)).toBeGreaterThan(0);
@@ -53,7 +69,10 @@ describe('task completion notifications', () => {
 
   it('PATCH /api/tasks/:id with status Complete creates no notification row', async () => {
     const id = await createTask(B, 'update path');
-    const res = await request(server()).patch(`/api/tasks/${id}`).set(bearer(B)).send({ status: 'Complete' });
+    const res = await request(server())
+      .patch(`/api/tasks/${id}`)
+      .set(bearer(B))
+      .send({ status: 'Complete' });
     expect(res.status).toBeLessThan(300);
     expect(res.body.status).toBe('success');
     await settle();

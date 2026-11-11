@@ -9,20 +9,19 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserEntity } from 'src/user/models/user.entity';
 
 @Module({
-    imports: [
-        JwtModule.registerAsync({
-            imports: [ConfigModule],
-            inject: [ConfigService],
-            useFactory: async (configService: ConfigService) => ({
-                secret: configService.get('JWT_SECRET'),
-                signOptions: {expiresIn:  configService.get('JWT_ACCESS_EXPIRATION')} 
-            })
-        }),
-        TypeOrmModule.forFeature([AuthTokenEntity, UserEntity]),
-    ],
-    providers: [AuthService, AuthMaintenanceService],
-    exports: [AuthService, JwtModule],
-    controllers: [AuthController],
-
+  imports: [
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get('JWT_SECRET'),
+        signOptions: { expiresIn: configService.get('JWT_ACCESS_EXPIRATION') },
+      }),
+    }),
+    TypeOrmModule.forFeature([AuthTokenEntity, UserEntity]),
+  ],
+  providers: [AuthService, AuthMaintenanceService],
+  exports: [AuthService, JwtModule],
+  controllers: [AuthController],
 })
 export class AuthModule {}

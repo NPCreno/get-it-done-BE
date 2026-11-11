@@ -1,4 +1,11 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UserEntity } from './models/user.entity';
 import { Repository } from 'typeorm';
@@ -13,11 +20,12 @@ import { User } from './models/user.interface';
 
 @Injectable()
 export class UserService {
-  constructor (
-      @InjectRepository(UserEntity) private readonly userRepository: Repository<UserEntity>,
-      private readonly authService: AuthService,
-  ){}
-  
+  constructor(
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
+    private readonly authService: AuthService,
+  ) {}
+
   private generateUserId(): string {
     const randomNumber = Math.floor(Math.random() * 1_000_000_000); // 0 to 999,999,999
     return 'user-' + randomNumber.toString().padStart(9, '0');
@@ -32,62 +40,65 @@ export class UserService {
     try {
       // Ensure password is a primitive string
       const password = String(userDto.password);
-      
+
       // Hash the password
-      const passwordHash = await this.authService.hashPassword(password).toPromise();
+      const passwordHash = await this.authService
+        .hashPassword(password)
+        .toPromise();
       if (!passwordHash) {
         throw new Error('Failed to hash password');
       }
 
       const user_id = this.generateUserId();
-      
+
       // Create a new user instance with explicit typing
       const newUser = this.userRepository.create({
         fullname: String(userDto.fullname),
         username: String(userDto.username),
         email: String(userDto.email).toLowerCase(),
-        password: String(passwordHash),  // Ensure it's a primitive string
+        password: String(passwordHash), // Ensure it's a primitive string
         tier: 'free',
         role: 'standard',
         user_id,
         status: 'active',
       });
-  
+
       // Save the new user with the hashed password
       const savedUser = await this.userRepository.save(newUser);
-      
+
       // Remove password from the returned object
       const { password: _, ...userWithoutPassword } = savedUser;
-  
+
       return {
         status: 'success',
         message: 'User created successfully',
-        data: userWithoutPassword
+        data: userWithoutPassword,
       };
     } catch (error: any) {
       console.error('Error creating user:', error);
-      
-      if (error.code === '23505') { // Postgres unique violation
+
+      if (error.code === '23505') {
+        // Postgres unique violation
         const detail = error.detail || '';
         let message = 'Duplicate entry.';
-        
+
         if (detail.includes('username')) {
           message = 'Username already exists.';
         } else if (detail.includes('email')) {
           message = 'Email already exists.';
         }
-  
+
         return {
           status: 'error',
           message,
-          error: { message }
+          error: { message },
         };
       }
-  
+
       return {
         status: 'error',
         message: 'Failed to create user.',
-        error: { message: error.message || 'Internal server error' }
+        error: { message: error.message || 'Internal server error' },
       };
     }
   }
@@ -104,60 +115,69 @@ export class UserService {
     return users.map(({ password, ...user }) => user);
   }
 
-  async softDeleteOne(user_id: string, tokenUserId: string): Promise<{
-      status: string;
-      message: string;
-      error?: any;
-    }> {
-      try {
-        const user = await this.userRepository.findOne({ where: { user_id } });
+  async softDeleteOne(
+    user_id: string,
+    tokenUserId: string,
+  ): Promise<{
+    status: string;
+    message: string;
+    error?: any;
+  }> {
+    try {
+      const user = await this.userRepository.findOne({ where: { user_id } });
       if (!user) {
-          throw new NotFoundException(`User with ID ${user_id} not found`);
+        throw new NotFoundException(`User with ID ${user_id} not found`);
       }
       if (user.user_id !== tokenUserId) {
-          throw new UnauthorizedException('Access denied: Not your data.');
+        throw new UnauthorizedException('Access denied: Not your data.');
       }
       await this.userRepository.softDelete({ user_id });
       const updatedUser = await this.userRepository.findOne({
-          where: { user_id },
-          withDeleted: true
+        where: { user_id },
+        withDeleted: true,
       });
       if (!updatedUser) throw new NotFoundException(`Updated user not found`);
       return {
-          status: 'success',
-          message: `User with ID ${user_id} soft deleted successfully`,
-          error: null
+        status: 'success',
+        message: `User with ID ${user_id} soft deleted successfully`,
+        error: null,
       };
-      } catch (error) {
-        throw new InternalServerErrorException('Failed to soft delete user');
-      }
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to soft delete user');
+    }
   }
 
-  async hardDeleteOne(user_id: string, tokenUserId: string): Promise<{
-      status: string;
-      message: string;
-      error?: any;
-    }> {
-      try {
-        const user = await this.userRepository.findOne({ where: { user_id } });
+  async hardDeleteOne(
+    user_id: string,
+    tokenUserId: string,
+  ): Promise<{
+    status: string;
+    message: string;
+    error?: any;
+  }> {
+    try {
+      const user = await this.userRepository.findOne({ where: { user_id } });
       if (!user) {
-          throw new NotFoundException(`User with ID ${user_id} not found`);
+        throw new NotFoundException(`User with ID ${user_id} not found`);
       }
       if (user.user_id !== tokenUserId) {
-          throw new UnauthorizedException('Access denied: Not your data.');
+        throw new UnauthorizedException('Access denied: Not your data.');
       }
       await this.userRepository.delete({ user_id });
       return {
-          status: 'success',
-          message: `User with ID ${user_id} permanently deleted`,
-          error: null
+        status: 'success',
+        message: `User with ID ${user_id} permanently deleted`,
+        error: null,
       };
-      } catch (error) {
-        throw new InternalServerErrorException('Failed to delete user');
-      }
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to delete user');
+    }
   }
 
-  async updateOne(user_id: string, updateUserDto: UpdateUserDto): Promise<UserCleanupResponse> {
+  async updateOne(
+    user_id: string,
+    updateUserDto: UpdateUserDto,
+  ): Promise<UserCleanupResponse> {
     const user = await this.userRepository.findOne({ where: { user_id } });
     if (!user) {
       throw new NotFoundException(`User with ID ${user_id} not found`);
@@ -165,14 +185,20 @@ export class UserService {
 
     // Only allowlisted, defined fields reach the database.
     const changes: Partial<UserEntity> = {};
-    if (updateUserDto.fullname !== undefined) changes.fullname = updateUserDto.fullname;
-    if (updateUserDto.username !== undefined) changes.username = updateUserDto.username;
-    if (updateUserDto.enableNotifications !== undefined) changes.enableNotifications = updateUserDto.enableNotifications;
+    if (updateUserDto.fullname !== undefined)
+      changes.fullname = updateUserDto.fullname;
+    if (updateUserDto.username !== undefined)
+      changes.username = updateUserDto.username;
+    if (updateUserDto.enableNotifications !== undefined)
+      changes.enableNotifications = updateUserDto.enableNotifications;
     if (updateUserDto.theme !== undefined) changes.theme = updateUserDto.theme;
-    if (updateUserDto.soundFx !== undefined) changes.soundFx = updateUserDto.soundFx;
+    if (updateUserDto.soundFx !== undefined)
+      changes.soundFx = updateUserDto.soundFx;
 
-    const nameChanged = changes.fullname !== undefined && changes.fullname !== user.fullname;
-    const usernameChanged = changes.username !== undefined && changes.username !== user.username;
+    const nameChanged =
+      changes.fullname !== undefined && changes.fullname !== user.fullname;
+    const usernameChanged =
+      changes.username !== undefined && changes.username !== user.username;
     const passwordChanged = updateUserDto.password !== undefined;
 
     if (nameChanged || usernameChanged || passwordChanged) {
@@ -180,12 +206,15 @@ export class UserService {
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
       if (user.updatedAt && user.updatedAt > sixMonthsAgo) {
         throw new BadRequestException(
-          `You can only update name, username, or password once every 6 months. Last update: ${user.updatedAt.toISOString()}`
+          `You can only update name, username, or password once every 6 months. Last update: ${user.updatedAt.toISOString()}`,
         );
       }
     }
     if (passwordChanged) {
-      changes.password = await bcrypt.hash(updateUserDto.password as string, 12);
+      changes.password = await bcrypt.hash(
+        updateUserDto.password as string,
+        12,
+      );
     }
 
     if (Object.keys(changes).length > 0) {
@@ -199,7 +228,9 @@ export class UserService {
       }
     }
 
-    const updatedUser = await this.userRepository.findOne({ where: { user_id } });
+    const updatedUser = await this.userRepository.findOne({
+      where: { user_id },
+    });
     if (!updatedUser) throw new NotFoundException(`Updated user not found`);
 
     const { password, ...sanitizedUser } = updatedUser;
@@ -213,70 +244,86 @@ export class UserService {
   async validateUser(emailOrUsername: string, password: string): Promise<User> {
     // Get user with password for validation
     const user = await this.findByEmailOrUsername(emailOrUsername, true);
-    
+
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    
-    const isMatch = await this.authService.comparePasswords(password, user.password).toPromise();
-    
+
+    const isMatch = await this.authService
+      .comparePasswords(password, user.password)
+      .toPromise();
+
     if (!isMatch) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    
+
     // Return sanitized user without password
     return this.toUser(user);
   }
 
-  async findByEmailOrUsername(emailOrUsername: string, includePassword = false): Promise<User | UserEntity> {
+  async findByEmailOrUsername(
+    emailOrUsername: string,
+    includePassword = false,
+  ): Promise<User | UserEntity> {
     const isEmail = /\S+@\S+\.\S+/.test(emailOrUsername);
-    
+
     if (isEmail) {
-      const user = await this.userRepository.findOne({ where: { email: emailOrUsername } });
+      const user = await this.userRepository.findOne({
+        where: { email: emailOrUsername },
+      });
       if (!user) {
-          throw new NotFoundException(`User with email ${emailOrUsername} not found`);
+        throw new NotFoundException(
+          `User with email ${emailOrUsername} not found`,
+        );
       }
       return includePassword ? user : this.toUser(user);
     } else {
-      const user = await this.userRepository.findOne({ where: { username: emailOrUsername } });
+      const user = await this.userRepository.findOne({
+        where: { username: emailOrUsername },
+      });
       if (!user) {
-          throw new NotFoundException(`User with username ${emailOrUsername} not found`);
+        throw new NotFoundException(
+          `User with username ${emailOrUsername} not found`,
+        );
       }
       return includePassword ? user : this.toUser(user);
     }
   }
 
-  async loginEmail(credentials: { 
-    email: string, 
-    password: string, 
-    rememberMe?: boolean,
-    ipAddress?: string | null}): Promise<
-  {
+  async loginEmail(credentials: {
+    email: string;
+    password: string;
+    rememberMe?: boolean;
+    ipAddress?: string | null;
+  }): Promise<{
     status: string;
     message: string;
     data?: TokenPair;
     error?: any;
-  }
-  > {
+  }> {
     const { email, password } = credentials;
 
     if (!email || !password) {
       throw new Error('Email and password are required.');
     }
-    
+
     try {
       const validatedUser = await this.validateUser(email, password);
-      return await this.issueSession(validatedUser, credentials?.ipAddress, credentials?.rememberMe);
+      return await this.issueSession(
+        validatedUser,
+        credentials?.ipAddress,
+        credentials?.rememberMe,
+      );
     } catch (error) {
       throw new UnauthorizedException('Invalid credentials');
     }
   }
 
-  async loginUsername(credentials: { 
-    username: string; 
-    password: string, 
-    rememberMe?: boolean,
-    ipAddress?: string | null
+  async loginUsername(credentials: {
+    username: string;
+    password: string;
+    rememberMe?: boolean;
+    ipAddress?: string | null;
   }): Promise<{
     status: string;
     message: string;
@@ -288,17 +335,25 @@ export class UserService {
     if (!username || !password) {
       throw new Error('Username and password are required.');
     }
-    
+
     try {
       const validatedUser = await this.validateUser(username, password);
-      return await this.issueSession(validatedUser, credentials?.ipAddress, credentials?.rememberMe);
+      return await this.issueSession(
+        validatedUser,
+        credentials?.ipAddress,
+        credentials?.rememberMe,
+      );
     } catch (error) {
       throw new UnauthorizedException('Invalid credentials');
     }
   }
 
   /** Login: new token family, lifetimes reported from the signed tokens. */
-  private async issueSession(user: User, ip: string | null | undefined, rememberMe?: boolean) {
+  private async issueSession(
+    user: User,
+    ip: string | null | undefined,
+    rememberMe?: boolean,
+  ) {
     const access = this.authService.generateAccessToken(user);
     const refresh = await this.authService.generateRefreshToken(user, {
       ip,

@@ -20,7 +20,9 @@ export function safeEqual(a: string, b: string): boolean {
 }
 
 function replayKey(secret: string): Buffer {
-  return Buffer.from(hkdfSync('sha256', secret, 'gid', 'refresh-replay-v1', 32));
+  return Buffer.from(
+    hkdfSync('sha256', secret, 'gid', 'refresh-replay-v1', 32),
+  );
 }
 
 /**

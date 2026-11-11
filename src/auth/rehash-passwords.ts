@@ -24,7 +24,10 @@ export async function rehashPlaintextPasswords(
   let index = 0;
   for (const row of rows) {
     const hash: string = await bcrypt.hash(String(row.password), 12);
-    await q.query('UPDATE users SET password = $1 WHERE user_id = $2', [hash, row.user_id]);
+    await q.query('UPDATE users SET password = $1 WHERE user_id = $2', [
+      hash,
+      row.user_id,
+    ]);
     opts.afterRow?.(index);
     index += 1;
   }

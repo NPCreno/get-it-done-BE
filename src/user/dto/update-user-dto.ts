@@ -1,4 +1,11 @@
-import { IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { API_CONTRACT } from 'src/common/api-contract';
 
 const { limits, patterns } = API_CONTRACT;

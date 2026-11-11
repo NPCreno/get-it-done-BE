@@ -37,7 +37,7 @@ export class TaskSubInstanceEntity {
 
   @ManyToOne(() => TaskInstanceEntity, 'subInstances', {
     nullable: true,
-    onDelete: 'CASCADE'
+    onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'task_id', referencedColumnName: 'task_id' })
   instance!: TaskInstanceEntity;

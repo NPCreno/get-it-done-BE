@@ -14,19 +14,16 @@ import { TaskSubInstanceEntity } from 'src/task/models/taskSubInstance.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      ProjectEntity, 
-      TaskTemplateEntity, 
-      TaskInstanceEntity, 
+      ProjectEntity,
+      TaskTemplateEntity,
+      TaskInstanceEntity,
       UserEntity,
-      TaskSubInstanceEntity
+      TaskSubInstanceEntity,
     ]),
     AuthModule,
     TaskModule,
   ],
   providers: [ProjectsService, TaskService],
-  controllers: [ProjectsController]
+  controllers: [ProjectsController],
 })
-
 export class ProjectsModule {}
-
-

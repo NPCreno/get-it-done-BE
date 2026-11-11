@@ -38,9 +38,16 @@ describe('HashPlaintextPasswords migration', () => {
 
   async function seed(d: DataSource) {
     await d.query('DROP TABLE IF EXISTS users');
-    await d.query('CREATE TABLE users (user_id varchar PRIMARY KEY, password varchar NOT NULL)');
+    await d.query(
+      'CREATE TABLE users (user_id varchar PRIMARY KEY, password varchar NOT NULL)',
+    );
     await d.query('INSERT INTO users VALUES ($1, $2), ($3, $4), ($5, $6)', [
-      'u1', 'plain123', 'u2', hash12(), 'u3', 'other456',
+      'u1',
+      'plain123',
+      'u2',
+      hash12(),
+      'u3',
+      'other456',
     ]);
   }
 
@@ -56,11 +63,15 @@ describe('HashPlaintextPasswords migration', () => {
     ds = makeDs([HashPlaintextPasswords1762900000000]);
     await ds.initialize();
     await seed(ds);
-    const keep = (await ds.query("SELECT password FROM users WHERE user_id = 'u2'"))[0].password;
+    const keep = (
+      await ds.query("SELECT password FROM users WHERE user_id = 'u2'")
+    )[0].password;
     const log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
 
     await ds.runMigrations();
-    const rows = await ds.query('SELECT user_id, password FROM users ORDER BY user_id');
+    const rows = await ds.query(
+      'SELECT user_id, password FROM users ORDER BY user_id',
+    );
     expect(rows[0].password).toMatch(/^\$2[aby]\$12\$/);
     expect(bcrypt.compareSync('plain123', rows[0].password)).toBe(true);
     expect(rows[1].password).toBe(keep);
@@ -80,17 +91,25 @@ describe('HashPlaintextPasswords migration', () => {
     ds = makeDs([FailAfterFirstRow]);
     await ds.initialize();
     await seed(ds);
-    const before = await ds.query('SELECT user_id, password FROM users ORDER BY user_id');
+    const before = await ds.query(
+      'SELECT user_id, password FROM users ORDER BY user_id',
+    );
 
     await expect(ds.runMigrations()).rejects.toThrow();
-    expect(await ds.query('SELECT user_id, password FROM users ORDER BY user_id')).toEqual(before);
-    const table = await ds.query("SELECT to_regclass('public.migrations') AS t");
+    expect(
+      await ds.query('SELECT user_id, password FROM users ORDER BY user_id'),
+    ).toEqual(before);
+    const table = await ds.query(
+      "SELECT to_regclass('public.migrations') AS t",
+    );
     if (table[0].t) {
       expect(await ds.query('SELECT * FROM migrations')).toHaveLength(0);
     }
   });
 
   it('down() throws instead of silently doing nothing', async () => {
-    await expect(new HashPlaintextPasswords1762900000000().down()).rejects.toThrow('Irreversible');
+    await expect(
+      new HashPlaintextPasswords1762900000000().down(),
+    ).rejects.toThrow('Irreversible');
   });
 });

@@ -11,7 +11,10 @@ export interface TestUser {
 }
 
 /** Signs up and logs in through the real HTTP endpoints. */
-export async function signupAndLogin(app: INestApplication, name: string): Promise<TestUser> {
+export async function signupAndLogin(
+  app: INestApplication,
+  name: string,
+): Promise<TestUser> {
   const username = `user_${name}`;
   const email = `${name}@example.com`;
   const password = 'passw0rd1';
@@ -19,9 +22,13 @@ export async function signupAndLogin(app: INestApplication, name: string): Promi
     .post('/api/user/create')
     .send({ fullname: `Test ${name}`, username, email, password });
   if (created.status >= 300 || created.body.status !== 'success') {
-    throw new Error(`signup failed: ${created.status} ${JSON.stringify(created.body)}`);
+    throw new Error(
+      `signup failed: ${created.status} ${JSON.stringify(created.body)}`,
+    );
   }
-  const login = await request(app.getHttpServer()).post('/api/user/loginUsername').send({ username, password });
+  const login = await request(app.getHttpServer())
+    .post('/api/user/loginUsername')
+    .send({ username, password });
   if (login.status >= 300) throw new Error(`login failed: ${login.status}`);
   return {
     username,
@@ -33,4 +40,6 @@ export async function signupAndLogin(app: INestApplication, name: string): Promi
   };
 }
 
-export const bearer = (u: TestUser) => ({ Authorization: `Bearer ${u.access}` });
+export const bearer = (u: TestUser) => ({
+  Authorization: `Bearer ${u.access}`,
+});

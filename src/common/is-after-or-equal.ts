@@ -1,4 +1,8 @@
-import { registerDecorator, ValidationArguments, ValidationOptions } from 'class-validator';
+import {
+  registerDecorator,
+  ValidationArguments,
+  ValidationOptions,
+} from 'class-validator';
 
 /** end >= start, comparing two Date-typed properties of the same object. */
 export function IsAfterOrEqual(property: string, options?: ValidationOptions) {
@@ -11,7 +15,9 @@ export function IsAfterOrEqual(property: string, options?: ValidationOptions) {
       options,
       validator: {
         validate(value: unknown, args: ValidationArguments) {
-          const other = (args.object as Record<string, unknown>)[args.constraints[0]];
+          const other = (args.object as Record<string, unknown>)[
+            args.constraints[0]
+          ];
           if (!(value instanceof Date) || !(other instanceof Date)) return true; // other validators report type errors
           return value.getTime() >= other.getTime();
         },

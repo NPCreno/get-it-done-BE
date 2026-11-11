@@ -10,7 +10,15 @@ export const API_CONTRACT = {
   taskStatuses: ['Pending', 'Complete', 'Overdue'],
   newTaskStatuses: ['Pending', 'Complete'],
   repeatEvery: ['Day', 'Week', 'Month'],
-  weekdays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+  weekdays: [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ],
   themes: ['light', 'dark'],
   booleanStrings: ['true', 'false'],
   limits: {

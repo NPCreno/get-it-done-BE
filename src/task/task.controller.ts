@@ -31,7 +31,10 @@ export class TaskController {
 
   @UseGuards(AuthorizeGuard)
   @Post('create')
-  async create(@Body() dto: CreateTaskDto, @AuthUserId() userId: string): Promise<{
+  async create(
+    @Body() dto: CreateTaskDto,
+    @AuthUserId() userId: string,
+  ): Promise<{
     status: string;
     message: string;
     data?: TaskInstanceEntity | TaskTemplateEntity;
@@ -43,7 +46,15 @@ export class TaskController {
   @UseGuards(AuthorizeGuard)
   @Post('bulk-create')
   async bulkCreate(
-    @Body(new ParseArrayPipe({ items: CreateTaskDto, whitelist: true, forbidNonWhitelisted: false, transformOptions: { enableImplicitConversion: false } })) tasks: CreateTaskDto[],
+    @Body(
+      new ParseArrayPipe({
+        items: CreateTaskDto,
+        whitelist: true,
+        forbidNonWhitelisted: false,
+        transformOptions: { enableImplicitConversion: false },
+      }),
+    )
+    tasks: CreateTaskDto[],
     @AuthUserId() userId: string,
   ): Promise<{
     status: string;
@@ -54,10 +65,12 @@ export class TaskController {
     return this.taskService.createBulkTasks(tasks, userId);
   }
 
-  
   @UseGuards(AuthorizeGuard)
   @Post('createSubTask')
-  async createSubTask(@Body() dto: CreateTaskSubInstanceDto, @AuthUserId() userId: string): Promise<{
+  async createSubTask(
+    @Body() dto: CreateTaskSubInstanceDto,
+    @AuthUserId() userId: string,
+  ): Promise<{
     status: string;
     message: string;
     data?: TaskSubInstanceEntity;
@@ -69,7 +82,15 @@ export class TaskController {
   @UseGuards(AuthorizeGuard)
   @Post('bulk-create-subtasks')
   async bulkCreateSubTasks(
-    @Body(new ParseArrayPipe({ items: CreateTaskSubInstanceDto, whitelist: true, forbidNonWhitelisted: false, transformOptions: { enableImplicitConversion: false } })) bulkDto: CreateTaskSubInstanceDto[],
+    @Body(
+      new ParseArrayPipe({
+        items: CreateTaskSubInstanceDto,
+        whitelist: true,
+        forbidNonWhitelisted: false,
+        transformOptions: { enableImplicitConversion: false },
+      }),
+    )
+    bulkDto: CreateTaskSubInstanceDto[],
     @AuthUserId() userId: string,
   ): Promise<{
     status: string;
@@ -90,7 +111,7 @@ export class TaskController {
   ) {
     const tokenUserId = req['user'];
     if (tokenUserId.user.user_id !== user_id) {
-        throw new UnauthorizedException('Access denied: Not your data.');
+      throw new UnauthorizedException('Access denied: Not your data.');
     }
     return this.taskService.getTasksByUser(user_id, startDate, endDate);
   }
@@ -104,7 +125,12 @@ export class TaskController {
     @Query('endDate') endDate?: string,
   ) {
     const tokenUserId = req['user'];
-    return this.taskService.getTasksByProj(tokenUserId.user.user_id, project_id, startDate, endDate);
+    return this.taskService.getTasksByProj(
+      tokenUserId.user.user_id,
+      project_id,
+      startDate,
+      endDate,
+    );
   }
 
   @UseGuards(AuthorizeGuard)
@@ -114,13 +140,17 @@ export class TaskController {
     @Body() updateTaskDto: UpdateTaskDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<{
-          status: string;
-          message: string;
-          data?: TaskInstanceEntity;
-          error?: any;
-        }> {
+    status: string;
+    message: string;
+    data?: TaskInstanceEntity;
+    error?: any;
+  }> {
     const tokenUserId = req['user'];
-    return this.taskService.updateOne(task_id, updateTaskDto, tokenUserId.user.user_id);
+    return this.taskService.updateOne(
+      task_id,
+      updateTaskDto,
+      tokenUserId.user.user_id,
+    );
   }
 
   @UseGuards(AuthorizeGuard)
@@ -128,12 +158,12 @@ export class TaskController {
   async softDeleteOne(
     @Param('task_id') task_id: string,
     @Req() req: AuthenticatedRequest,
-  ):  Promise<{
-          status: string;
-          message: string;
-          data?: TaskInstanceEntity | null;
-          error?: any;
-        }> {
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: TaskInstanceEntity | null;
+    error?: any;
+  }> {
     const tokenUserId = req['user'];
     return this.taskService.softDeleteOne(task_id, tokenUserId.user.user_id);
   }
@@ -143,14 +173,17 @@ export class TaskController {
   async softDeleteSubTask(
     @Param('subTask_id') subTask_id: string,
     @Req() req: AuthenticatedRequest,
-  ):  Promise<{
-          status: string;
-          message: string;
-          data?: TaskSubInstanceEntity | null;
-          error?: any;
-        }> {
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: TaskSubInstanceEntity | null;
+    error?: any;
+  }> {
     const tokenUserId = req['user'];
-    return this.taskService.softDeleteSubTask(subTask_id, tokenUserId.user.user_id);
+    return this.taskService.softDeleteSubTask(
+      subTask_id,
+      tokenUserId.user.user_id,
+    );
   }
 
   @UseGuards(AuthorizeGuard)
@@ -168,17 +201,21 @@ export class TaskController {
   async deleteRecurringTasks(
     @Param('taskTemplate_id') taskTemplate_id: string,
     @Req() req: AuthenticatedRequest,
-  ):  Promise<{
-          status: string;
-          message: string;
-          data?: { 
-            deletedInstances: TaskInstanceEntity[]; 
-            deletedTemplate: TaskTemplateEntity | null; 
-          } | null;
-          error?: any;
-        }> {
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: {
+      deletedInstances: TaskInstanceEntity[];
+      deletedTemplate: TaskTemplateEntity | null;
+    } | null;
+    error?: any;
+  }> {
     const tokenUserId = req['user'];
-    return this.taskService.deleteRecurringTasks(taskTemplate_id, tokenUserId.user.user_id, false);
+    return this.taskService.deleteRecurringTasks(
+      taskTemplate_id,
+      tokenUserId.user.user_id,
+      false,
+    );
   }
 
   @UseGuards(AuthorizeGuard)
@@ -188,14 +225,14 @@ export class TaskController {
     @Param('user_id') user_id: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-  ):Promise<{
-      status: string;
-      message: string;
-      data?: IDashboardData;
-      error?: string;
+  ): Promise<{
+    status: string;
+    message: string;
+    data?: IDashboardData;
+    error?: string;
   }> {
     const tokenUserId = req['user'];
-    if(tokenUserId.user.user_id !== user_id) {
+    if (tokenUserId.user.user_id !== user_id) {
       throw new UnauthorizedException('Access denied: Not your data.');
     }
     return this.taskService.getDashboardData(user_id, startDate, endDate);
@@ -207,32 +244,32 @@ export class TaskController {
     @Req() req: AuthenticatedRequest,
     @Param('user_id') user_id: string,
     @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string
+    @Query('endDate') endDate: string,
   ) {
     const tokenUserId = req['user'];
     if (tokenUserId.user.user_id !== user_id) {
       throw new UnauthorizedException('Access denied: Not your data.');
     }
-    
+
     if (!startDate || !endDate) {
       throw new BadRequestException('Both startDate and endDate are required');
     }
-    
+
     const start = new Date(startDate);
     const end = new Date(endDate);
-    
+
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       throw new BadRequestException('Invalid date format');
     }
-    
+
     if (start > end) {
       throw new BadRequestException('startDate must be before endDate');
     }
-    
+
     const data = await this.taskService.getTaskCompletionTrend(
       user_id,
       startDate,
-      endDate
+      endDate,
     );
     return data;
   }
@@ -243,21 +280,21 @@ export class TaskController {
     @Req() req: AuthenticatedRequest,
     @Param('user_id') user_id: string,
     @Query('month') month: string,
-    @Query('year') year: string
+    @Query('year') year: string,
   ) {
     const tokenUserId = req['user'];
     if (tokenUserId.user.user_id !== user_id) {
       throw new UnauthorizedException('Access denied: Not your data.');
     }
-    
+
     if (!month || !year) {
       throw new BadRequestException('Both month and year are required');
     }
-    
+
     const data = await this.taskService.getTaskDistribution(
       user_id,
       month,
-      year
+      year,
     );
     return data;
   }
@@ -268,21 +305,21 @@ export class TaskController {
     @Req() req: AuthenticatedRequest,
     @Param('user_id') user_id: string,
     @Query('month') month: string,
-    @Query('year') year: string
+    @Query('year') year: string,
   ) {
     const tokenUserId = req['user'];
     if (tokenUserId.user.user_id !== user_id) {
       throw new UnauthorizedException('Access denied: Not your data.');
     }
-    
+
     if (!month || !year) {
       throw new BadRequestException('Both month and year are required');
     }
-    
+
     const data = await this.taskService.getCalendarHeatmap(
       user_id,
       month,
-      year
+      year,
     );
     return data;
   }
@@ -297,10 +334,8 @@ export class TaskController {
     if (tokenUserId.user.user_id !== user_id) {
       throw new UnauthorizedException('Access denied: Not your data.');
     }
-    
-    const data = await this.taskService.getStreakCount(
-      user_id
-    );
+
+    const data = await this.taskService.getStreakCount(user_id);
     return data;
   }
 
@@ -309,16 +344,16 @@ export class TaskController {
   async updateTaskStatus(
     @Req() req: AuthenticatedRequest,
     @Param('task_id') task_id: string,
-    @Param('status', new StatusValidationPipe()) status: string
+    @Param('status', new StatusValidationPipe()) status: string,
   ) {
     const tokenUserId = req['user'];
-    
+
     const data = await this.taskService.updateTaskStatus(
       task_id,
       status,
-      tokenUserId.user.user_id
+      tokenUserId.user.user_id,
     );
-    
+
     return data;
   }
 
@@ -327,16 +362,16 @@ export class TaskController {
   async updateSubTaskStatus(
     @Req() req: AuthenticatedRequest,
     @Param('taskSubInstance_id') taskSubInstance_id: string,
-    @Param('status', new StatusValidationPipe()) status: string
+    @Param('status', new StatusValidationPipe()) status: string,
   ) {
     const tokenUserId = req['user'];
-    
+
     const data = await this.taskService.updateSubTaskStatus(
       taskSubInstance_id,
       status,
-      tokenUserId.user.user_id
+      tokenUserId.user.user_id,
     );
-    
+
     return data;
   }
 }
