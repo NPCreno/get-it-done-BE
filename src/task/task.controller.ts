@@ -358,7 +358,7 @@ export class TaskController {
   }
 
   @UseGuards(AuthorizeGuard)
-  @Patch('update-subtask-status/:taskSubInstance_id/status/:status')
+  @Patch('update-subTask-status/:taskSubInstance_id/status/:status')
   async updateSubTaskStatus(
     @Req() req: AuthenticatedRequest,
     @Param('taskSubInstance_id') taskSubInstance_id: string,
