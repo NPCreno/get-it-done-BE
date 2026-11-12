@@ -51,5 +51,9 @@
   "patterns": {
     "username": "^[A-Za-z0-9_]+$",
     "password": "[0-9]"
+  },
+  "routes": {
+    "taskStatus": "/tasks/update-task-status/:task_id/status/:status",
+    "subTaskStatus": "/tasks/update-subtask-status/:taskSubInstance_id/status/:status"
   }
 }

@@ -74,6 +74,7 @@ Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app run
 
 ## API contract and validation
 - `src/common/api-contract.ts` is the canonical contract (enums, limits, patterns). DTO decorators import it. `pnpm contract:export` writes `docs/api-contract.json`, which the FE vendors (`contract:sync` in the FE repo). Changed the contract: export, then sync
+- `API_CONTRACT.routes` holds paths the FE calls; `routes.spec.ts` ties them to the controller; changing one means export, then sync.
 - A global `ValidationPipe` is set up in `src/app.setup.ts` (`configureApp`, used by `main.ts` and tests): `whitelist: true`, `transform: true`, no implicit conversion. Undecorated DTO properties are stripped silently
 - Rule: every `@Body()` is a fully decorated class, or a documented inline type with manual validation (`auth` refresh/logout). `src/common/body-dtos.spec.ts` fails if a body class has an undecorated property
 - Services map DTO fields explicitly. Never spread a body into `create()`/`update()`

@@ -167,7 +167,7 @@ describe('authorization (two users)', () => {
 
     it('sub-task status / delete leave the row unchanged', async () => {
       const st = await request(server())
-        .patch(`/api/tasks/update-subTask-status/${bSubTask}/status/Complete`)
+        .patch(`/api/tasks/update-subtask-status/${bSubTask}/status/Complete`)
         .set(bearer(A));
       expect(st.body.status === 'error' || st.status >= 400).toBe(true);
       const del = await request(server())
