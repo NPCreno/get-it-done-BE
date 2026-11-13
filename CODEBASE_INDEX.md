@@ -17,6 +17,8 @@ One line per source file. Paths are relative to the repo root.
 - `auth-maintenance.service.ts` — hourly cleanup cron
 - `auth.service.int-spec.ts` — integration tests (`pnpm test:int`)
 - `../migrations/1762800000000-AuthTokenRotation.ts` — hand-written migration for the new token columns
+- `../migrations/1763000000000-AwardOnce.ts` — lifetime counter, `user_awards` ledger, award backfill from notifications
+- `streak.ts` — pure `computeStreak` (count and run start); `test/award-once*.int-spec.ts`, `test/jest-global-tz.ts` (TZ=UTC for jest)
 - `client-ip.ts` — `getClientIp(req)` for audit records
 - `guards/authorize.guard.ts` — Bearer JWT guard
 - `models/auth.entity.ts` — `AuthTokenEntity`
@@ -46,6 +48,7 @@ One line per source file. Paths are relative to the repo root.
 - `notifications.module.ts`, `notifications.controller.ts` — SSE stream and clear endpoint
 - `notifications.service.ts` — `task.completed` event listener, notification creation
 - `models/notifications.entity.ts`, `models/notification.interfaces.ts` — entity and types
+- `award-key.ts` — pure `awardKeyFor(rule, value, ctx)`; `models/user-award.entity.ts` — award ledger
 - `notification.rules.json` — notification rule definitions
 
 ## pipes (`src/pipes/`)

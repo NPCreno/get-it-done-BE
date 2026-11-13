@@ -98,6 +98,7 @@
       "<rootDir>/.."
     ],
     "testRegex": ".*\\.spec\\.ts$",
+    "globalSetup": "<rootDir>/../test/jest-global-tz.ts",
     "transform": {
       "^.+\\.(t|j)s$": [
         "ts-jest",
