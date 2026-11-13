@@ -75,6 +75,18 @@ export class UserEntity {
   @Column({ nullable: true })
   loginAttempts!: number;
 
+  /**
+   * Cumulative completions: +1 on a real transition to Complete, never
+   * decreased. Hidden from entity reads so API responses do not change.
+   */
+  @Column({
+    name: 'lifetime_completed_count',
+    type: 'integer',
+    default: 0,
+    select: false,
+  })
+  lifetimeCompletedCount!: number;
+
   @OneToMany(() => ProjectEntity, (project) => project.user)
   projects!: ProjectEntity[];
 }

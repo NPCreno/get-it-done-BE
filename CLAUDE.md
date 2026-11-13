@@ -33,7 +33,7 @@ Railway. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`
 - `src/notifications/notifications.service.ts` — `@OnEvent('task.completed')` listener
 - `src/main.ts` — CORS (`FRONTEND_URL`, default `http://localhost:3000`), listens on `PORT` (default 8000)
 
-## Entities (7)
+## Entities (8)
 - `UserEntity` (table `users`)
 - `AuthTokenEntity` (`src/auth/models/auth.entity.ts`) — refresh token records: sha256 hash, `family_id`, `remember_me`, `revoked_at`, `replaced_by_token_id`, `replay_ciphertext`, nullable `ip_address`
 - `ProjectEntity`
@@ -41,9 +41,10 @@ Railway. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`
 - `TaskInstanceEntity` — individual tasks
 - `TaskSubInstanceEntity` — subtasks
 - `NotificationsEntity` (table `notifications`)
+- `UserAwardEntity` (`src/notifications/models/user-award.entity.ts`, table `user_awards`) — award ledger
 
 ## Relationships
-- User 1→N Project, TaskInstance, TaskSubInstance, Notification (all `onDelete: CASCADE`)
+- User 1→N Project, TaskInstance, TaskSubInstance, Notification, UserAward (all `onDelete: CASCADE`)
 - Project 1→N TaskInstance (`CASCADE`)
 - TaskTemplate 1→N TaskInstance (`SET NULL`)
 - TaskInstance 1→N TaskSubInstance (`CASCADE`)
@@ -81,6 +82,7 @@ Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app run
 - Identity is server-derived: create endpoints take no `user_id`; use `@AuthUserId()` (the token `sub`). Whitelisting is not authorization: every mutation loads the resource and compares its owner with the token
 - `toTokenUser()` (`src/auth/token-user.ts`) is the only way to build a JWT user. Never spread the entity (it carries the password hash)
 - Notifications: `GET sse` and `DELETE clear/:user_id` are guarded and scoped to the token user
+- Awards are given once: `users.lifetime_completed_count` only goes up (+1 on a real transition to Complete, in the same transaction as the status change; never decremented), and each matched rule is recorded in `user_awards` (`awardKeyFor`, PK `(user_id, award_key)`) in the same transaction as its notification. Clearing notifications never touches the ledger. Streak awards are once per streak run. Known gap: no outbox, so a crash between commit and the `task.completed` listener loses that completion's awards
 - Password changes are bcrypt-hashed (cost 12). Migration `HashPlaintextPasswords` fixes old plaintext rows; `npm run db:rehash-passwords` is the idempotent straggler script
 - Tests: `pnpm test` (contract and body-DTO unit specs), `pnpm test:int` (authorization, contract, migration, auth). `WRITE_FIXTURES=1 pnpm test:int` rewrites `test/fixtures/responses/`
 

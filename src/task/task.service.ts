@@ -33,6 +33,7 @@ import { CalendarHeatmap } from './interfaces/calendarHeatmap';
 import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
 import { CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { computeStreak, StreakInfo } from './streak';
 
 @Injectable()
 export class TaskService implements OnModuleInit {
@@ -1269,6 +1270,51 @@ export class TaskService implements OnModuleInit {
     }
   }
 
+  /** Loads the completion dates and runs the pure streak walk. */
+  private async loadStreak(user_id: string): Promise<StreakInfo> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Check for completed tasks today
+    const startOfToday = new Date(today);
+    const endOfToday = new Date(today);
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const hasCompletedToday = !!(await this.taskInstanceRepository.findOne({
+      where: {
+        user: { user_id },
+        status: 'Complete',
+        updatedAt: Between(startOfToday, endOfToday),
+      },
+      select: ['id'],
+    }));
+
+    // Get all completed task dates for the user in the last 2 years
+    const twoYearsAgo = new Date(today);
+    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+
+    const completedTasks = await this.taskInstanceRepository.find({
+      where: {
+        user: { user_id },
+        status: 'Complete',
+        updatedAt: MoreThanOrEqual(twoYearsAgo),
+      },
+      select: ['updatedAt'],
+    });
+
+    // Unique dates (YYYY-MM-DD) when tasks were completed
+    const completedDates = new Set(
+      completedTasks.map((task) => task.updatedAt.toISOString().split('T')[0]),
+    );
+
+    return computeStreak(completedDates, hasCompletedToday, today);
+  }
+
+  /** Streak count plus the run's start date. Used by the award listener only; throws on error. */
+  async getStreakInfo(user_id: string): Promise<StreakInfo> {
+    return this.loadStreak(user_id);
+  }
+
   public async getStreakCount(user_id: string): Promise<{
     status: 'success' | 'error';
     message: string;
@@ -1278,64 +1324,11 @@ export class TaskService implements OnModuleInit {
     error?: any;
   }> {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      // Check for completed tasks today
-      const startOfToday = new Date(today);
-      const endOfToday = new Date(today);
-      endOfToday.setHours(23, 59, 59, 999);
-
-      const hasCompletedToday = !!(await this.taskInstanceRepository.findOne({
-        where: {
-          user: { user_id },
-          status: 'Complete',
-          updatedAt: Between(startOfToday, endOfToday),
-        },
-        select: ['id'],
-      }));
-
-      // Get all completed task dates for the user in the last 2 years
-      const twoYearsAgo = new Date(today);
-      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-
-      const completedTasks = await this.taskInstanceRepository.find({
-        where: {
-          user: { user_id },
-          status: 'Complete',
-          updatedAt: MoreThanOrEqual(twoYearsAgo),
-        },
-        select: ['updatedAt'],
-      });
-
-      // Create a Set of unique dates (YYYY-MM-DD) when tasks were completed
-      const completedDates = new Set(
-        completedTasks.map(
-          (task) => task.updatedAt.toISOString().split('T')[0],
-        ),
-      );
-
-      // Calculate streak by checking consecutive days
-      let streak = 0;
-      const currentDate = new Date(today);
-      currentDate.setDate(currentDate.getDate() - 1); // Start from yesterday
-
-      while (streak < 730) {
-        // 2 years max
-        const dateStr = currentDate.toISOString().split('T')[0];
-        if (!completedDates.has(dateStr)) {
-          break;
-        }
-        streak++;
-        currentDate.setDate(currentDate.getDate() - 1);
-      }
-
+      const { count } = await this.loadStreak(user_id);
       return {
         status: 'success',
         message: 'Streak count retrieved successfully',
-        data: {
-          count: hasCompletedToday ? streak + 1 : streak,
-        },
+        data: { count },
       };
     } catch (error: any) {
       return {
@@ -1387,19 +1380,54 @@ export class TaskService implements OnModuleInit {
         );
       }
 
-      const response = await this.taskInstanceRepository.update(
-        { task_id },
-        { status: status as 'Complete' | 'Pending' | 'Overdue' },
+      // One transaction: conditional status change + lifetime counter. The
+      // users row lock serialises concurrent completions of the same user.
+      let lifetimeCount: number | null = null;
+      const changed = await this.taskInstanceRepository.manager.transaction(
+        async (manager) => {
+          const updated: unknown = await manager.query(
+            `UPDATE "task_instance_entity"
+               SET "status" = $1, "updatedAt" = CURRENT_TIMESTAMP
+             WHERE "task_id" = $2 AND "status" IS DISTINCT FROM $1
+             RETURNING "id"`,
+            [status, task_id],
+          );
+          // pg driver: UPDATE ... RETURNING yields [rows, affected]
+          const rows = (
+            Array.isArray((updated as unknown[])[0])
+              ? (updated as unknown[][])[0]
+              : updated
+          ) as unknown[];
+          if (rows.length === 0) return false;
+          if (status === 'Complete') {
+            const bumped: unknown = await manager.query(
+              `UPDATE "users"
+                  SET "lifetime_completed_count" = "lifetime_completed_count" + 1
+                WHERE "user_id" = $1
+                RETURNING "lifetime_completed_count" AS "count"`,
+              [task.user.user_id],
+            );
+            const bumpedRows = (
+              Array.isArray((bumped as unknown[])[0])
+                ? (bumped as unknown[][])[0]
+                : bumped
+            ) as { count: number }[];
+            lifetimeCount = Number(bumpedRows[0].count);
+          }
+          return true;
+        },
       );
-      // Emit event for notification system
-      if (response.affected && response.affected > 0) {
-        if (status === 'Complete') {
+
+      // Emit after commit so the listener sees the committed state
+      if (changed) {
+        if (status === 'Complete' && lifetimeCount !== null) {
           this.logger.log(
             `Successfully updated task ${task_id} status to '${status}'`,
           );
           this.eventEmitter.emit('task.completed', {
             userId: task.user.user_id,
             taskId: task.task_id,
+            lifetimeCount,
           });
         }
         return {

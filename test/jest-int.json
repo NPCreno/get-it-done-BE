@@ -7,5 +7,6 @@
     "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": "<rootDir>/test/tsconfig.int.json" }]
   },
   "testEnvironment": "node",
+  "globalSetup": "<rootDir>/test/jest-global-tz.ts",
   "testTimeout": 30000
 }

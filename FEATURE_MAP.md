@@ -32,4 +32,9 @@ Endpoint → implementing chain. All routes are under `/api`. "Guarded" means `A
 
 ## Notifications
 - `TaskService` emits `task.completed` → `NotificationsService` `@OnEvent('task.completed')` creates a notification → streamed over `GET /api/notifications/sse`
-- `DELETE /api/notifications/clear/:user_id` clears a user's notifications. Neither notification route is guarded.
+- Award rules (each award is given once): `updateTaskStatus` changes the status only when it differs (`IS DISTINCT FROM`), and on a transition to Complete increments `users.lifetime_completed_count` in the same transaction (never decremented), then emits `task.completed {userId, taskId, lifetimeCount}` after commit. The listener maps each matching rule to an award key (`src/notifications/award-key.ts`) and inserts it into `user_awards` with the notification in one transaction; SSE is sent only for a newly inserted key.
+  - `equals: n` on the lifetime count → `<type>:eq:<n>` (once ever); `every: n` → `<type>:every:<n>:<count>` (once per multiple); streak `equals: n` → `streak:eq:<n>:<run start date>` (once per streak run; a new run after a break can notify again)
+  - `{count}` in messages is the lifetime count. The dashboard `complete_tasks` stat still counts current completed tasks
+  - Migration `AwardOnce` backfills the counter from current completed tasks and the ledger from surviving notification rows by exact `(type, title)` (streak and `taskDue` rows are not backfilled). Users below their historic peak may receive some milestones once more after the migration; the ledger prevents repeats afterwards
+  - Known gap (no outbox): a crash between the status commit and the listener, or a listener DB error, loses that award without retry
+- `DELETE /api/notifications/clear/:user_id` clears a user's notifications. It does not touch `user_awards`.
