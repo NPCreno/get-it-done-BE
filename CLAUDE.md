@@ -26,6 +26,7 @@ Railway. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`
 - `src/auth/auth.service.ts` — `generateAccessToken`, `generateRefreshToken`, `validateRefreshToken`, `revokeRefreshToken`, `revokeUserRefreshTokens`, `refreshAccessToken`
 - `src/auth/auth.controller.ts` — `POST /api/auth/refresh`
 - `src/auth/guards/authorize.guard.ts` — JWT verification guard
+- `src/config/env.validation.ts` — boot-time env validation (`validateEnv`, `validateDatabaseEnv`, `checkDatabaseUrl`)
 - `src/auth/client-ip.ts` — `getClientIp(req)`, audit-only IP from request headers
 - `src/user/user.controller.ts`, `user.service.ts` — login, signup, user CRUD
 - `src/task/task.service.ts` — task CRUD and analytics queries
@@ -52,7 +53,7 @@ Railway. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`
 ## Auth
 - HS256. Access token signed with `JWT_SECRET`, lifetime from `JWT_ACCESS_EXPIRATION` (no default; the service throws if either is missing)
 - Refresh token signed with `JWT_REFRESH_SECRET`. Lifetime `JWT_REFRESH_EXPIRATION` (default `7d`, Remember Me) or `JWT_REFRESH_EXPIRATION_SHORT` (default `1d`); `remember_me` is stored on the row and inherited on rotation. Stored as sha256 (legacy rows: bcrypt, starts with `$2`)
-- `JWT_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_EXPIRATION` are validated at startup (`auth-env.ts`); no fallbacks
+- `JWT_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_EXPIRATION` are required at startup (see Environment); no fallbacks
 - `POST /api/auth/refresh` is idempotent: `SELECT ... FOR UPDATE` on the token row. Active row: rotate (same `family_id`) and store an AES-GCM replay of the new token. Revoked within `REFRESH_REUSE_GRACE_SECONDS` (30): the same refresh token is replayed with a fresh access token. Revoked beyond grace with a replacement: family revoked, `401 REFRESH_REUSED`. Otherwise `401 REFRESH_INVALID`. Responses carry `access_expires_in` / `refresh_expires_in`; `expires_in: 3600` is legacy
 - `POST /api/auth/logout {refreshToken}` revokes the family, always 204
 - `AuthorizeGuard` 401s carry `code: TOKEN_MISSING | TOKEN_INVALID`, and a token with `type !== 'access'` is rejected. Other 401s (ownership checks) have no code
@@ -87,7 +88,8 @@ Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app run
 - Tests: `pnpm test` (contract and body-DTO unit specs), `pnpm test:int` (authorization, contract, migration, auth). `WRITE_FIXTURES=1 pnpm test:int` rewrites `test/fixtures/responses/`
 
 ## Environment
-`DATABASE_URL`, `DATABASE_SYNCHRONIZE`, `JWT_SECRET`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRATION`, `JWT_REFRESH_EXPIRATION_SHORT`, `REFRESH_REUSE_GRACE_SECONDS`, `INTERNAL_API_SECRET`, `FRONTEND_URL`, `PORT`
+Validated at boot by `src/config/env.validation.ts` (`validateEnv`, called in `main.ts` before `AppModule` is loaded; any error prints the variable names and rules, never values, and exits 1). The migration CLI (`data-source.ts`) checks `DATABASE_URL` with the same `checkDatabaseUrl`. Required: `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_EXPIRATION`. Expiries need a unit (`15m`, `3600s`; a bare number is milliseconds to jsonwebtoken). Strict: `DATABASE_SYNCHRONIZE` is exactly `true`/`false`; `PORT` 1-65535; `REFRESH_REUSE_GRACE_SECONDS` 0-3600. `NODE_ENV` is `development|test|production` (default `development` locally, but required when `RAILWAY_ENVIRONMENT_NAME` or `RAILWAY_PROJECT_ID` is present). Production-only: `FRONTEND_URL` required, an origin only and not local (`FRONTEND_URL_ALLOW_LOCAL=true` opts out for a smoke test), and `DATABASE_SYNCHRONIZE=true` is an error; secrets under 32 characters or equal only warn. `AppEnv` is a diagnostic view; readers keep their own reads and defaults. A good boot logs `[Env] configuration valid (NODE_ENV=...)`.
+`NODE_ENV`, `FRONTEND_URL_ALLOW_LOCAL`, `DATABASE_URL`, `DATABASE_SYNCHRONIZE`, `JWT_SECRET`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRATION`, `JWT_REFRESH_EXPIRATION_SHORT`, `REFRESH_REUSE_GRACE_SECONDS`, `INTERNAL_API_SECRET`, `FRONTEND_URL`, `PORT`
 
 ## API endpoints (38)
 - `GET /` — health check (1)

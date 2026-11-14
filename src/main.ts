@@ -1,8 +1,8 @@
+import 'dotenv/config';
 import { webcrypto } from 'crypto';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { validateAuthEnv } from './auth/auth-env';
 import { configureApp } from './app.setup';
+import { formatEnvErrors, validateEnv } from './config/env.validation';
 
 // Ensure crypto is available globally
 if (typeof globalThis.crypto === 'undefined') {
@@ -10,7 +10,17 @@ if (typeof globalThis.crypto === 'undefined') {
 }
 
 async function bootstrap() {
-  validateAuthEnv();
+  // Validate before AppModule is loaded: its decorators (TypeOrmModule.forRoot,
+  // JwtModule) read process.env when they are evaluated.
+  const { env, errors, warnings } = validateEnv(process.env);
+  if (errors.length > 0) {
+    console.error(formatEnvErrors(errors));
+    process.exit(1);
+  }
+  for (const w of warnings) console.warn(`[Env] warning: ${w}`);
+  console.log(`[Env] configuration valid (NODE_ENV=${env.NODE_ENV})`);
+
+  const { AppModule } = await import('./app.module');
   const app = await NestFactory.create(AppModule);
 
   configureApp(app);
