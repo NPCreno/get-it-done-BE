@@ -537,4 +537,140 @@ describe('authorization (two users)', () => {
       b.close();
     });
   });
+
+  describe('token identity (REF-11)', () => {
+    let C: TestUser; // promoted to admin
+    let D: TestUser; // victim of admin actions
+    let E: TestUser; // plain user
+
+    const relogin = async (u: TestUser): Promise<TestUser> => {
+      const login = await request(server())
+        .post('/api/user/loginUsername')
+        .send({ username: u.username, password: u.password });
+      return { ...u, access: login.body.data.access_token };
+    };
+
+    beforeAll(async () => {
+      C = await signupAndLogin(app, 'c');
+      D = await signupAndLogin(app, 'd');
+      E = await signupAndLogin(app, 'e');
+      await q("UPDATE users SET role = 'admin' WHERE user_id = $1", [
+        C.user_id,
+      ]);
+      C = await relogin(C);
+    }, 60000);
+
+    const NOT_YOURS = 'Access denied: Not your data.';
+    const ADMIN_ONLY = 'Access denied: Admin only.';
+
+    it('I2: a user reads its own per-user endpoints (200)', async () => {
+      const now = new Date();
+      const qs = `startDate=${new Date(now.getTime() - 864e5).toISOString()}&endDate=${new Date(now.getTime() + 864e5).toISOString()}`;
+      const my = `month=${now.getMonth() + 1}&year=${now.getFullYear()}`;
+      const urls = [
+        `/api/tasks/getTasksByUser/${A.user_id}?${qs}`,
+        `/api/tasks/getDashboardData/${A.user_id}?${qs}`,
+        `/api/tasks/completion-trend/${A.user_id}?${qs}`,
+        `/api/tasks/task-distribution/${A.user_id}?${my}`,
+        `/api/tasks/calendar-heatmap/${A.user_id}?${my}`,
+        `/api/tasks/streak/${A.user_id}`,
+        `/api/projects/getAll/${A.user_id}`,
+      ];
+      for (const url of urls) {
+        const res = await request(server()).get(url).set(bearer(A));
+        expect([url, res.status]).toEqual([url, 200]);
+      }
+      const clear = await request(server())
+        .delete(`/api/notifications/clear/${A.user_id}`)
+        .set(bearer(A));
+      expect(clear.status).toBe(200);
+    });
+
+    it('I1/I5: a mismatched id is 401 with the fixed message', async () => {
+      const cases: [string, string][] = [
+        ['get', `/api/tasks/streak/${E.user_id}`],
+        ['get', `/api/projects/getAll/${E.user_id}`],
+        ['get', `/api/user/get/${C.user_id}`],
+        ['delete', `/api/notifications/clear/${C.user_id}`],
+      ];
+      for (const [method, url] of cases) {
+        const res = await (request(server()) as any)
+          [method](url)
+          .set(bearer(A));
+        expect([url, res.status, res.body.message]).toEqual([
+          url,
+          401,
+          NOT_YOURS,
+        ]);
+      }
+    });
+
+    it('I3: an admin may get and update another user; delete passes the guard', async () => {
+      const got = await request(server())
+        .get(`/api/user/get/${D.user_id}`)
+        .set(bearer(C));
+      expect(got.status).toBe(200);
+
+      const upd = await request(server())
+        .patch(`/api/user/update/${D.user_id}`)
+        .set(bearer(C))
+        .send({ theme: 'dark' });
+      expect(upd.status).toBe(200);
+      expect(
+        (await q('SELECT theme FROM users WHERE user_id = $1', [D.user_id]))[0]
+          .theme,
+      ).toBe('dark');
+
+      // The guard lets an admin through, but UserService.softDeleteOne still
+      // requires the target to be the token owner (unchanged by REF-11), so
+      // the delete is refused and the row stays. Not a 401 from the guard.
+      const del = await request(server())
+        .delete(`/api/user/${D.user_id}`)
+        .set(bearer(C));
+      expect(del.status).not.toBe(401);
+      expect(
+        (
+          await q('SELECT "deletedAt" FROM users WHERE user_id = $1', [
+            D.user_id,
+          ])
+        )[0].deletedAt,
+      ).toBeNull();
+    });
+
+    it('I4: admin-only endpoints allow an admin and reject a user', async () => {
+      for (const url of ['/api/user/getAll', '/api/projects/getAll']) {
+        expect((await request(server()).get(url).set(bearer(C))).status).toBe(
+          200,
+        );
+        const denied = await request(server()).get(url).set(bearer(E));
+        expect([url, denied.status, denied.body.message]).toEqual([
+          url,
+          401,
+          ADMIN_ONLY,
+        ]);
+      }
+      const denied = await request(server())
+        .delete(`/api/user/${D.user_id}/hard`)
+        .set(bearer(E));
+      expect([denied.status, denied.body.message]).toEqual([401, ADMIN_ONLY]);
+      expect(
+        await rowCount('SELECT count(*) FROM users WHERE user_id = $1', [
+          D.user_id,
+        ]),
+      ).toBe(1);
+
+      // The admin guard lets C through. UserService.hardDeleteOne still
+      // requires the target to be the token owner (unchanged by REF-11), so
+      // an admin can hard-delete only itself.
+      const hard = await request(server())
+        .delete(`/api/user/${C.user_id}/hard`)
+        .set(bearer(C));
+      expect(hard.status).toBe(200);
+      expect(
+        await rowCount('SELECT count(*) FROM users WHERE user_id = $1', [
+          C.user_id,
+        ]),
+      ).toBe(0);
+    });
+  });
 });

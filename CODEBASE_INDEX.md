@@ -59,7 +59,7 @@ One line per source file. Paths are relative to the repo root.
 - `is-after-or-equal.ts` — class-validator `IsAfterOrEqual`
 - `api-contract.spec.ts`, `body-dtos.spec.ts` — unit specs
 - `../app.setup.ts` — `configureApp()` (CORS + global ValidationPipe)
-- `../auth/token-user.ts` — `toTokenUser()` allowlist; `../auth/decorators/auth-user-id.decorator.ts` — `@AuthUserId()`
+- `../auth/token-user.ts` — `toTokenUser()` allowlist; `../auth/decorators/auth-user-id.decorator.ts` — `@AuthUserId()`; `../auth/decorators/current-user.decorator.ts` — `@CurrentUser()`; `../auth/guards/self-param.guard.ts` — `SelfParam()` (the one id comparison); `../auth/guards/admin-only.guard.ts`; `../common/controller-identity.spec.ts` — scans controllers
 - `../auth/rehash-passwords.ts`, `../migrations/1762900000000-HashPlaintextPasswords.ts`, `../../scripts/rehash-plaintext-passwords.ts`, `../../scripts/export-contract.ts`
 - `../../test/` — `int-env.ts`, `int-db.ts`, `int-app.ts`, `int-auth.ts`, `authorization.int-spec.ts`, `api-contract.int-spec.ts`, `password-migration.int-spec.ts`, `fixtures/responses/`
 
