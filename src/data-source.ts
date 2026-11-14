@@ -1,5 +1,10 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
+import { formatEnvErrors, validateDatabaseEnv } from './config/env.validation';
+
+// Clear message instead of an obscure ECONNREFUSED when DATABASE_URL is missing or invalid.
+const { errors } = validateDatabaseEnv(process.env);
+if (errors.length > 0) throw new Error(formatEnvErrors(errors));
 
 /**
  * CLI-only connection used to create and apply schema migrations. Runtime

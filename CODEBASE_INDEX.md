@@ -6,6 +6,7 @@ One line per source file. Paths are relative to the repo root.
 - `src/main.ts` — bootstrap, CORS, listen on `PORT`
 - `src/app.module.ts` — root module: Schedule, Config, TypeORM, feature modules
 - `src/app.controller.ts`, `src/app.service.ts` — health check at `GET /`
+- `src/config/env.validation.ts` — boot-time environment validation (replaces `auth/auth-env.ts`); `test/boot-validation.int-spec.ts` spawns `main.ts`
 - `src/data-source.ts` — TypeORM CLI data source for migrations
 
 ## auth (`src/auth/`)
@@ -13,7 +14,6 @@ One line per source file. Paths are relative to the repo root.
 - `auth.controller.ts` — `POST /api/auth/refresh`, `POST /api/auth/logout`
 - `auth.service.ts` — token generation, idempotent `refresh()` with grace replay, `logout()` family revoke
 - `token-crypto.ts` — `sha256Hex`, `safeEqual`, AES-GCM `encryptReplay`/`decryptReplay`
-- `auth-env.ts` — `validateAuthEnv()`, fail-closed startup check
 - `auth-maintenance.service.ts` — hourly cleanup cron
 - `auth.service.int-spec.ts` — integration tests (`pnpm test:int`)
 - `../migrations/1762800000000-AuthTokenRotation.ts` — hand-written migration for the new token columns
