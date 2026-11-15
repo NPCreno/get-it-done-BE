@@ -25,7 +25,7 @@ Endpoint → implementing chain. All routes are under `/api`. "Guarded" means `A
 ## Validation and identity (DATA-02)
 - Every create endpoint ignores a client `user_id`; the owner is the token `sub` (`@AuthUserId()`), and `project_id` must belong to the caller.
 - `PATCH /api/user/update/:user_id` maps `fullname`, `username`, `password`, `theme`, `enableNotifications`, `soundFx` only; a changed password is hashed; a duplicate username is `409`.
-- `GET /api/notifications/sse` and `DELETE /api/notifications/clear/:user_id` require a token and are scoped to it.
+- `GET /api/notifications`, `PATCH /api/notifications/read-all`, `PATCH /api/notifications/:notif_id/read`, `GET /api/notifications/sse` and `DELETE /api/notifications/clear/:user_id` require a token and are scoped to it. List items: `notif_id, type, title, message, read, actionType, createdAt`. The stream sends `event: notification` (`id:` = notif_id) after commit, a `ping` every 25 s, and closes at the token's expiry; clients refetch the list on reconnect.
 
 ## Recurring tasks
 - `TaskGeneratorService` `@Cron('0 0 * * *')` creates `TaskInstanceEntity` rows from `TaskTemplateEntity` every day at midnight.

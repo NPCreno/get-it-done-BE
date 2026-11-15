@@ -21,6 +21,14 @@ export const API_CONTRACT = {
   ],
   themes: ['light', 'dark'],
   booleanStrings: ['true', 'false'],
+  notificationTypes: [
+    'achievement',
+    'milestone',
+    'streak',
+    'levelUp',
+    'reward',
+    'taskDue',
+  ],
   limits: {
     fullnameMin: 3,
     fullnameMax: 50,
@@ -32,6 +40,7 @@ export const API_CONTRACT = {
     titleMax: 100,
     descriptionMax: 500,
     colorLabelMax: 50,
+    notificationsPageMax: 100,
   },
   patterns: {
     username: '^[A-Za-z0-9_]+$',
@@ -42,6 +51,9 @@ export const API_CONTRACT = {
     taskStatus: '/tasks/update-task-status/:task_id/status/:status',
     subTaskStatus:
       '/tasks/update-subtask-status/:taskSubInstance_id/status/:status',
+    notificationsList: '/notifications',
+    notificationRead: '/notifications/:notif_id/read',
+    notificationsReadAll: '/notifications/read-all',
   },
 } as const;
 
