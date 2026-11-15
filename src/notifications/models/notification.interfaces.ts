@@ -13,10 +13,3 @@ export interface NotificationRule {
   actionTarget?: string;
   metadata?: Record<string, any>;
 }
-
-export interface NotificationEvent {
-  type: string;
-  message: string;
-  data?: any;
-  timestamp: Date;
-}

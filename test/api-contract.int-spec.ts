@@ -20,7 +20,7 @@ const WRITE = process.env.WRITE_FIXTURES === '1';
 /** Deterministic ids, fixed timestamps, no emails. Date-only strings are kept. */
 function scrub(body: unknown): unknown {
   const maps = new Map<string, Map<string, string>>();
-  const idRe = /^(user|PRJ|task|TMP|subTask)-[\w-]+$/;
+  const idRe = /^(user|PRJ|task|TMP|subTask|notif)-[\w-]+$/;
   const text = JSON.stringify(body, (_k, v) => {
     if (typeof v !== 'string') return v;
     const m = idRe.exec(v);
@@ -317,6 +317,39 @@ describe('api contract (integration)', () => {
       fixture('dashboard-empty', dash.body);
       fixture('tasks-empty', tasks.body);
       fixture('projects-empty', projects.body);
+      const notifs = await request(server())
+        .get('/api/notifications')
+        .set(bearer(c));
+      expect(notifs.body).toEqual({
+        status: 'success',
+        data: { items: [], unread_count: 0, next_cursor: null },
+      });
+      fixture('notifications-empty', notifs.body);
+    });
+
+    it('notifications list shape; captures fixture', async () => {
+      const d = await signupAndLogin(app, 'notif');
+      const t = await request(server())
+        .post('/api/tasks/create')
+        .set(bearer(d))
+        .send({
+          title: 'Task',
+          priority: 'Low',
+          status: 'Pending',
+          isRecurring: false,
+        });
+      await request(server())
+        .patch(
+          `/api/tasks/update-task-status/${t.body.data.task_id}/status/Complete`,
+        )
+        .set(bearer(d));
+      await new Promise((r) => setTimeout(r, 800));
+      const res = await request(server())
+        .get('/api/notifications')
+        .set(bearer(d));
+      expect(res.body.status).toBe('success');
+      expect(res.body.data.items.length).toBeGreaterThan(0);
+      fixture('notifications-list', res.body);
     });
 
     it('getTasksByUser includes project_id; captures fixtures', async () => {

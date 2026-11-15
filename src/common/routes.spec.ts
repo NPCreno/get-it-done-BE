@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { TaskController } from '../task/task.controller';
+import { NotificationsController } from '../notifications/notifications.controller';
 import { API_CONTRACT } from './api-contract';
 
 /**
@@ -18,43 +19,64 @@ function pathOf(target: object, what: string): string {
   return p;
 }
 
-function routeOf(method: keyof TaskController) {
-  const handler = Object.getOwnPropertyDescriptor(
-    TaskController.prototype,
-    method,
-  )?.value as object;
-  const controllerPath = pathOf(TaskController, 'TaskController');
-  const methodPath = pathOf(handler, `TaskController.${String(method)}`);
+type Ctl = typeof TaskController | typeof NotificationsController;
+
+function routeOf(controller: Ctl, method: string) {
+  const handler = Object.getOwnPropertyDescriptor(controller.prototype, method)
+    ?.value as object;
+  const controllerPath = pathOf(controller, controller.name);
+  const methodPath = pathOf(handler, `${controller.name}.${method}`).replace(
+    /^\/+|\/+$/g,
+    '',
+  );
   return {
-    path: `/${controllerPath.replace(/^api\//, '')}/${methodPath}`,
+    path: `/${controllerPath.replace(/^api\//, '')}${methodPath ? `/${methodPath}` : ''}`,
     verb: Reflect.getMetadata(METHOD_METADATA, handler) as RequestMethod,
   };
 }
 
 describe('API_CONTRACT.routes', () => {
-  const cases: [keyof typeof API_CONTRACT.routes, keyof TaskController][] = [
-    ['taskStatus', 'updateTaskStatus'],
-    ['subTaskStatus', 'updateSubTaskStatus'],
+  const cases: [
+    keyof typeof API_CONTRACT.routes,
+    Ctl,
+    string,
+    RequestMethod,
+  ][] = [
+    ['taskStatus', TaskController, 'updateTaskStatus', RequestMethod.PATCH],
+    [
+      'subTaskStatus',
+      TaskController,
+      'updateSubTaskStatus',
+      RequestMethod.PATCH,
+    ],
+    ['notificationsList', NotificationsController, 'list', RequestMethod.GET],
+    ['notificationRead', NotificationsController, 'read', RequestMethod.PATCH],
+    [
+      'notificationsReadAll',
+      NotificationsController,
+      'readAll',
+      RequestMethod.PATCH,
+    ],
   ];
 
-  it('lists exactly the status routes', () => {
+  it('lists exactly the contract routes', () => {
     expect(Object.keys(API_CONTRACT.routes).sort()).toEqual(
       cases.map(([k]) => k).sort(),
     );
   });
 
-  for (const [key, method] of cases) {
-    it(`${key} matches TaskController.${method} (PATCH)`, () => {
-      const { path, verb } = routeOf(method);
-      expect(path).toBe(API_CONTRACT.routes[key]);
-      expect(verb).toBe(RequestMethod.PATCH);
+  for (const [key, controller, method, verb] of cases) {
+    it(`${key} matches ${controller.name}.${method}`, () => {
+      const route = routeOf(controller, method);
+      expect(route.path).toBe(API_CONTRACT.routes[key]);
+      expect(route.verb).toBe(verb);
     });
 
     it(`${key} is canonical lowercase apart from :params`, () => {
       const route = API_CONTRACT.routes[key];
-      expect(route.replace(/:\w+/g, '')).toBe(
-        route.replace(/:\w+/g, '').toLowerCase(),
-      );
+      const plain = route.replace(/:\w+/g, '');
+      // notif_id style params are removed above; the rest must be lowercase.
+      expect(plain).toBe(plain.toLowerCase());
     });
   }
 });

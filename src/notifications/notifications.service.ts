@@ -1,6 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  MessageEvent,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Subject, Observable, filter, map } from 'rxjs';
+import { withHeartbeatAndExpiry } from './notification-stream';
+import { decodeCursor, encodeCursor } from './notification-cursor';
+import { NotificationDto, toNotificationDto } from './notification.dto';
 import { TaskStreakService } from 'src/task/task-streak.service';
 import { NotificationsEntity } from './models/notifications.entity';
 import { DeepPartial, Repository } from 'typeorm';
@@ -9,10 +17,7 @@ import * as notificationRulesJson from './notification.rules.json';
 import { User } from 'src/user/models/user.interface';
 import { awardKeyFor } from './award-key';
 import { UserAwardEntity } from './models/user-award.entity';
-import {
-  NotificationEvent,
-  NotificationRule,
-} from './models/notification.interfaces';
+import { NotificationRule } from './models/notification.interfaces';
 
 @Injectable()
 export class NotificationsService {
@@ -48,6 +53,7 @@ export class NotificationsService {
   }) {
     const { userId, taskId, lifetimeCount } = payload;
     const streak = await this.taskStreakService.getStreakInfo(userId);
+    let given = 0;
 
     for (const notifType of notificationRulesJson.notifTypes) {
       for (const rules of Object.values(notifType)) {
@@ -69,11 +75,8 @@ export class NotificationsService {
               streak.count,
             );
             if (notification) {
-              this.sendNotification(userId, {
-                type: rule.type,
-                message: notification.message,
-                data: notification.metadata,
-              });
+              given++;
+              this.sendNotification(userId, notification);
             }
           } catch (error: any) {
             // The award and its notification roll back together; no retry.
@@ -84,6 +87,9 @@ export class NotificationsService {
         }
       }
     }
+    this.logger.debug(
+      `task.completed handled: task ${taskId}, awards given ${given}`,
+    );
   }
 
   /** Inserts the award and its notification in one transaction; null when already given. */
@@ -131,26 +137,85 @@ export class NotificationsService {
   }
 
   /** Only the caller's own events: the subject is shared by every user. */
-  getNotificationStream(userId: string): Observable<MessageEvent> {
-    return this.notificationSubject.pipe(
+  getNotificationStream(
+    userId: string,
+    expiresAtMs?: number,
+  ): Observable<MessageEvent> {
+    const live = this.notificationSubject.pipe(
       filter((e) => e.userId === userId),
       map((e) => e.event),
     );
+    return withHeartbeatAndExpiry(live, { expiresAtMs });
   }
 
-  sendNotification(
-    userId: string,
-    notification: Omit<NotificationEvent, 'timestamp'>,
-  ) {
-    const notificationEvent: NotificationEvent = {
-      ...notification,
-      timestamp: new Date(),
-    };
-
+  /** Called only after the notification row is committed. */
+  sendNotification(userId: string, notification: NotificationsEntity) {
+    const dto = toNotificationDto(notification);
     this.notificationSubject.next({
       userId,
-      event: { data: JSON.stringify(notificationEvent) } as MessageEvent, // SSE needs string data
+      event: {
+        id: dto.notif_id,
+        type: 'notification',
+        data: JSON.stringify(dto),
+      },
     });
+  }
+
+  async list(
+    userId: string,
+    limit = 50,
+    cursor?: string,
+  ): Promise<{
+    items: NotificationDto[];
+    unread_count: number;
+    next_cursor: string | null;
+  }> {
+    const page = this.notificationsRepository
+      .createQueryBuilder('n')
+      .where('"n"."user_id" = :uid', { uid: userId })
+      .orderBy('n.id', 'DESC')
+      .take(limit + 1);
+    if (cursor)
+      page.andWhere('n.id < :before', { before: decodeCursor(cursor) });
+    const rows = await page.getMany();
+    const unread_count = await this.notificationsRepository
+      .createQueryBuilder('n')
+      .where('"n"."user_id" = :uid', { uid: userId })
+      .andWhere('n.read = false')
+      .getCount();
+    const hasMore = rows.length > limit;
+    const items = rows.slice(0, limit);
+    return {
+      items: items.map(toNotificationDto),
+      unread_count,
+      next_cursor: hasMore ? encodeCursor(items[items.length - 1].id) : null,
+    };
+  }
+
+  /** Idempotent. A missing row and another user's row are the same 404. */
+  async markRead(userId: string, notifId: string): Promise<void> {
+    const res = await this.notificationsRepository
+      .createQueryBuilder()
+      .update(NotificationsEntity)
+      .set({ read: true })
+      .where('"notif_id" = :notifId AND "user_id" = :uid', {
+        notifId,
+        uid: userId,
+      })
+      .andWhere('"deletedAt" IS NULL')
+      .execute();
+    if (!res.affected) throw new NotFoundException('Notification not found');
+  }
+
+  async markAllRead(userId: string): Promise<number> {
+    const res = await this.notificationsRepository
+      .createQueryBuilder()
+      .update(NotificationsEntity)
+      .set({ read: true })
+      .where('"user_id" = :uid AND "read" = false', { uid: userId })
+      .andWhere('"deletedAt" IS NULL')
+      .execute();
+    return res.affected ?? 0;
   }
 
   async clearNotifications(user_id: string) {

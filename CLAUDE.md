@@ -99,7 +99,7 @@ Validated at boot by `src/config/env.validation.ts` (`validateEnv`, called in `m
 - `/api/user` — create, loginEmail, loginUsername, get/:id, getAll, delete :id, :id/hard, update/:user_id (8)
 - `/api/projects` — getAll, getAll/:user_id, :project_id (get, patch, delete), create, :project_id/hard (7)
 - `/api/tasks` — 18 endpoints, see `FEATURE_MAP.md`
-- `/api/notifications` — `GET sse` (SSE), `DELETE clear/:user_id` (2)
+- `/api/notifications` — `GET` (list: `limit`, opaque `cursor`; `{items, unread_count, next_cursor}`), `PATCH read-all`, `PATCH :notif_id/read` (idempotent; unknown or foreign id is 404), `GET sse` (typed `notification` events with `id:`, 25 s `ping`, ends at token `exp`), `DELETE clear/:user_id` (5). The list is the source of truth; the stream only signals. `metadata` and `actionTarget` are never exposed
 - Everything except `GET /`, `refresh`, `create`, `loginEmail`, `loginUsername` and the two notification routes uses `AuthorizeGuard`
 
 ## Commands

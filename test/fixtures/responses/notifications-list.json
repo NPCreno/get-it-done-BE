@@ -1,0 +1,36 @@
+{
+  "status": "success",
+  "data": {
+    "items": [
+      {
+        "notif_id": "notif-000000001",
+        "type": "levelUp",
+        "title": "Level Up!",
+        "message": "⬆️ Welcome to Level 1 — The Journey Begins.",
+        "read": false,
+        "actionType": "acknowledge",
+        "createdAt": "2026-01-15T09:00:00.000Z"
+      },
+      {
+        "notif_id": "notif-000000002",
+        "type": "streak",
+        "title": "1-Day Streak",
+        "message": "✅ You showed up today — that's 1 day in a row! Keep it going! 🔥",
+        "read": false,
+        "actionType": "acknowledge",
+        "createdAt": "2026-01-15T09:00:00.000Z"
+      },
+      {
+        "notif_id": "notif-000000003",
+        "type": "achievement",
+        "title": "First Task Completed!",
+        "message": "🎯 Great start! Your productivity journey begins now!",
+        "read": false,
+        "actionType": "acknowledge",
+        "createdAt": "2026-01-15T09:00:00.000Z"
+      }
+    ],
+    "unread_count": 3,
+    "next_cursor": null
+  }
+}

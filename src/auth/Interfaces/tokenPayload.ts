@@ -6,4 +6,6 @@ export interface TokenPayload {
   type: 'access' | 'refresh';
   jti?: string;
   family?: string;
+  iat?: number;
+  exp?: number;
 }
