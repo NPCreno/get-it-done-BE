@@ -11,6 +11,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { TaskService } from './task.service';
+import { TaskQueryService } from './task-query.service';
+import { SubTaskService } from './subtask.service';
+import { TaskStatusService } from './task-status.service';
+import { TaskStatsService } from './task-stats.service';
+import { TaskStreakService } from './task-streak.service';
+import { TaskRecurrenceService } from './task-recurrence.service';
 import { CreateTaskDto } from './dto/create-task-dto';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
 import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
@@ -25,7 +31,15 @@ import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
 import { CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
 @Controller('api/tasks')
 export class TaskController {
-  constructor(private taskService: TaskService) {}
+  constructor(
+    private taskService: TaskService,
+    private taskQueryService: TaskQueryService,
+    private subTaskService: SubTaskService,
+    private taskStatusService: TaskStatusService,
+    private taskStatsService: TaskStatsService,
+    private taskStreakService: TaskStreakService,
+    private taskRecurrenceService: TaskRecurrenceService,
+  ) {}
 
   @UseGuards(AuthorizeGuard)
   @Post('create')
@@ -74,7 +88,7 @@ export class TaskController {
     data?: TaskSubInstanceEntity;
     error?: any;
   }> {
-    return this.taskService.createTaskSubInstance(dto, userId);
+    return this.subTaskService.createTaskSubInstance(dto, userId);
   }
 
   @UseGuards(AuthorizeGuard)
@@ -96,7 +110,7 @@ export class TaskController {
     data?: TaskSubInstanceEntity[];
     error?: any;
   }> {
-    return this.taskService.createBulkTaskSubInstances(bulkDto, userId);
+    return this.subTaskService.createBulkTaskSubInstances(bulkDto, userId);
   }
 
   @UseGuards(AuthorizeGuard, SelfParam('user_id'))
@@ -106,7 +120,7 @@ export class TaskController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.taskService.getTasksByUser(userId, startDate, endDate);
+    return this.taskQueryService.getTasksByUser(userId, startDate, endDate);
   }
 
   @UseGuards(AuthorizeGuard)
@@ -117,7 +131,7 @@ export class TaskController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.taskService.getTasksByProj(
+    return this.taskQueryService.getTasksByProj(
       userId,
       project_id,
       startDate,
@@ -165,7 +179,7 @@ export class TaskController {
     data?: TaskSubInstanceEntity | null;
     error?: any;
   }> {
-    return this.taskService.softDeleteSubTask(subTask_id, userId);
+    return this.subTaskService.softDeleteSubTask(subTask_id, userId);
   }
 
   @UseGuards(AuthorizeGuard)
@@ -191,7 +205,7 @@ export class TaskController {
     } | null;
     error?: any;
   }> {
-    return this.taskService.deleteRecurringTasks(
+    return this.taskRecurrenceService.deleteRecurringTasks(
       taskTemplate_id,
       userId,
       false,
@@ -210,7 +224,7 @@ export class TaskController {
     data?: IDashboardData;
     error?: string;
   }> {
-    return this.taskService.getDashboardData(userId, startDate, endDate);
+    return this.taskStatsService.getDashboardData(userId, startDate, endDate);
   }
 
   @UseGuards(AuthorizeGuard, SelfParam('user_id'))
@@ -235,7 +249,7 @@ export class TaskController {
       throw new BadRequestException('startDate must be before endDate');
     }
 
-    const data = await this.taskService.getTaskCompletionTrend(
+    const data = await this.taskStatsService.getTaskCompletionTrend(
       userId,
       startDate,
       endDate,
@@ -254,7 +268,7 @@ export class TaskController {
       throw new BadRequestException('Both month and year are required');
     }
 
-    const data = await this.taskService.getTaskDistribution(
+    const data = await this.taskStatsService.getTaskDistribution(
       userId,
       month,
       year,
@@ -273,14 +287,18 @@ export class TaskController {
       throw new BadRequestException('Both month and year are required');
     }
 
-    const data = await this.taskService.getCalendarHeatmap(userId, month, year);
+    const data = await this.taskStatsService.getCalendarHeatmap(
+      userId,
+      month,
+      year,
+    );
     return data;
   }
 
   @UseGuards(AuthorizeGuard, SelfParam('user_id'))
   @Get('streak/:user_id')
   async getStreakCount(@AuthUserId() userId: string) {
-    const data = await this.taskService.getStreakCount(userId);
+    const data = await this.taskStreakService.getStreakCount(userId);
     return data;
   }
 
@@ -291,7 +309,7 @@ export class TaskController {
     @Param('task_id') task_id: string,
     @Param('status', new StatusValidationPipe()) status: string,
   ) {
-    const data = await this.taskService.updateTaskStatus(
+    const data = await this.taskStatusService.updateTaskStatus(
       task_id,
       status,
       userId,
@@ -307,7 +325,7 @@ export class TaskController {
     @Param('taskSubInstance_id') taskSubInstance_id: string,
     @Param('status', new StatusValidationPipe()) status: string,
   ) {
-    const data = await this.taskService.updateSubTaskStatus(
+    const data = await this.taskStatusService.updateSubTaskStatus(
       taskSubInstance_id,
       status,
       userId,

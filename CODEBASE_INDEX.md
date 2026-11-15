@@ -38,7 +38,7 @@ One line per source file. Paths are relative to the repo root.
 - `interfaces/sanitizedProject.ts` — response shape
 
 ## task (`src/task/`)
-- `task.module.ts`, `task.controller.ts`, `task.service.ts` — task and subtask CRUD, analytics
+- `task.module.ts`, `task.controller.ts` — wiring and routes; services: `task.service.ts` (task writes), `task-query.service.ts`, `subtask.service.ts`, `task-status.service.ts`, `task-stats.service.ts`, `task-streak.service.ts`, `task-recurrence.service.ts`; `task-ids.ts`, `service-size.spec.ts`
 - `taskGenerator.service.ts` — daily cron for recurring instances
 - `models/taskInstance.entity.ts`, `taskSubInstance.entity.ts`, `taskTemplate.entity.ts` — task entities
 - `dto/create-task-dto.ts`, `create-task-subInstance-dto.ts`, `update-task-dto.ts` — request payloads

@@ -10,13 +10,13 @@ import { CreateProjectDto } from './dto/create-project-dto';
 import { UpdateProjectDto } from './dto/update-project-dto';
 import { TaskInstanceEntity } from 'src/task/models/taskInstance.entity';
 import { TaskTemplateEntity } from 'src/task/models/taskTemplate.entity';
-import { TaskService } from 'src/task/task.service';
+import { TaskQueryService } from 'src/task/task-query.service';
 import { SanitizedProject } from './interfaces/sanitizedProject';
 
 @Injectable()
 export class ProjectsService {
   constructor(
-    private readonly taskService: TaskService,
+    private readonly taskQueryService: TaskQueryService,
     @InjectRepository(ProjectEntity)
     private readonly projectsRepository: Repository<ProjectEntity>,
     @InjectRepository(TaskInstanceEntity)
@@ -95,7 +95,7 @@ export class ProjectsService {
         const endDate = new Date(
           new Date().setDate(new Date().getDate() + 1),
         ).toISOString();
-        const tasks = await this.taskService.getTasksByProj(
+        const tasks = await this.taskQueryService.getTasksByProj(
           tokenUserId,
           project.project_id,
           startDate,

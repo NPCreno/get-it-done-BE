@@ -29,8 +29,8 @@ Railway. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`
 - `src/config/env.validation.ts` — boot-time env validation (`validateEnv`, `validateDatabaseEnv`, `checkDatabaseUrl`)
 - `src/auth/client-ip.ts` — `getClientIp(req)`, audit-only IP from request headers
 - `src/user/user.controller.ts`, `user.service.ts` — login, signup, user CRUD
-- `src/task/task.service.ts` — task CRUD and analytics queries
-- `src/task/taskGenerator.service.ts` — daily cron that creates recurring task instances
+- `src/task/task.service.ts` — task create/update/delete (`TaskService`); `task-query.service.ts` list reads; `subtask.service.ts` subtask writes; `task-status.service.ts` status transitions (award-once transaction, `task.completed` emit); `task-stats.service.ts` dashboard, trend, distribution, heatmap (SQL counts); `task-streak.service.ts` streak; `task-recurrence.service.ts` recurring deletes; `task-ids.ts` id generators. Each under about 400 lines (`service-size.spec.ts`)
+- `src/task/taskGenerator.service.ts` — daily cron that creates recurring task instances; also runs once at boot (`onModuleInit`)
 - `src/notifications/notifications.service.ts` — `@OnEvent('task.completed')` listener
 - `src/main.ts` — CORS (`FRONTEND_URL`, default `http://localhost:3000`), listens on `PORT` (default 8000)
 
