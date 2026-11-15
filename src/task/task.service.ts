@@ -71,26 +71,13 @@ export class TaskService implements OnModuleInit {
     return `subTask-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   }
 
+  /** One COUNT query. Soft-deleted tasks are excluded by the query builder. */
   async countCompletedTasks(user_id: string): Promise<number> {
-    try {
-      const user = await this.usersRepository.findOne({ where: { user_id } });
-      if (!user) {
-        throw new NotFoundException(`User with ID ${user_id} not found`);
-      }
-
-      const data = await this.taskInstanceRepository.find({
-        where: { user: { user_id } },
-        relations: ['user', 'project', 'template', 'subInstances'],
-        withDeleted: false,
-      });
-      const completedTasks = data.filter((task) => task.status === 'Complete');
-      return completedTasks.length;
-    } catch (error: any) {
-      this.logger.error(
-        `Failed to count completed tasks for user ${user_id}: ${error.message}`,
-      );
-      throw error;
-    }
+    return this.taskInstanceRepository
+      .createQueryBuilder('t')
+      .where('"t"."user_id" = :uid', { uid: user_id })
+      .andWhere('"t"."status" = :status', { status: 'Complete' })
+      .getCount();
   }
 
   async createBulkTasks(
@@ -944,44 +931,46 @@ export class TaskService implements OnModuleInit {
         throw new NotFoundException(`User with ID ${user_id} not found`);
       }
 
-      const where: any[] = [{ user: { user_id }, due_date: IsNull() }];
+      const allProjects = await this.projectsRepository.count({
+        where: { user_id },
+      });
 
+      // Same window as before: no due date, inside [start, end], or overdue.
+      let window = 't.due_date IS NULL';
+      const params: Record<string, unknown> = { uid: user_id };
       if (startDate && endDate) {
-        where.push({
-          user: { user_id },
-          due_date: Between(new Date(startDate), new Date(endDate)),
-        });
-
-        // also include overdue tasks (missed deadlines)
-        where.push({
-          user: { user_id },
-          due_date: LessThan(new Date(startDate)),
-        });
+        window =
+          '(t.due_date IS NULL OR t.due_date BETWEEN :start AND :end OR t.due_date < :start)';
+        params.start = new Date(startDate);
+        params.end = new Date(endDate);
       }
-
-      const projects = await this.projectsRepository.find({
-        where: { user: { user_id } },
-        relations: ['user'],
-        withDeleted: false,
-      });
-
-      const data = await this.taskInstanceRepository.find({
-        where,
-        relations: ['user', 'project'],
-        withDeleted: false,
-      });
-
-      const pendingTasks = data.filter((task) => task.status === 'Pending');
-      const completeTasks = await this.countCompletedTasks(user_id);
+      const counts = await this.taskInstanceRepository
+        .createQueryBuilder('t')
+        .select(`count(*) FILTER (WHERE ${window})`, 'all_tasks')
+        .addSelect(
+          `count(*) FILTER (WHERE ${window} AND t.status = 'Pending')`,
+          'pending_tasks',
+        )
+        .addSelect(
+          `count(*) FILTER (WHERE t.status = 'Complete')`,
+          'complete_tasks',
+        )
+        .where('"t"."user_id" = :uid')
+        .setParameters(params)
+        .getRawOne<{
+          all_tasks: string;
+          pending_tasks: string;
+          complete_tasks: string;
+        }>();
 
       return {
         status: 'success',
         message: 'Dashboard data fetched successfully',
         data: {
-          all_tasks: data.length,
-          pending_tasks: pendingTasks.length,
-          complete_tasks: completeTasks,
-          all_projects: projects.length,
+          all_tasks: Number(counts?.all_tasks ?? 0),
+          pending_tasks: Number(counts?.pending_tasks ?? 0),
+          complete_tasks: Number(counts?.complete_tasks ?? 0),
+          all_projects: allProjects,
         },
       };
     } catch (error: any) {
@@ -1130,7 +1119,7 @@ export class TaskService implements OnModuleInit {
       // Fetch projects with their completed tasks for the target month
       const projects = await this.projectsRepository
         .createQueryBuilder('project')
-        .leftJoinAndSelect(
+        .leftJoin(
           'project.taskInstances',
           'task',
           'task.status = :status AND task.updatedAt BETWEEN :startOfMonth AND :endOfMonth',
@@ -1146,23 +1135,24 @@ export class TaskService implements OnModuleInit {
           '(project.deletedAt IS NULL OR project.deletedAt >= :startOfMonth)',
           { startOfMonth },
         )
-        .select([
-          'project.id',
-          'project.project_id',
-          'project.title',
-          'project.color',
-          'task.id', // Only select task.id for counting
-          'task.status',
-        ])
-        .getMany();
+        .select('project.id', 'id')
+        .addSelect('project.title', 'title')
+        .addSelect('project.color', 'color')
+        .addSelect('COUNT(task.id)', 'value')
+        .groupBy('project.id')
+        .addGroupBy('project.title')
+        .addGroupBy('project.color')
+        .orderBy('project.id', 'ASC')
+        .getRawMany<{
+          title: string | null;
+          color: string | null;
+          value: string;
+        }>();
 
-      // Transform projects to match the TaskDistribution interface
-      const distributionData = projects.map((project) => ({
-        title: project.title || 'Untitled Project',
-        value:
-          project.taskInstances?.filter((task) => task.status === 'Complete')
-            .length || 0,
-        fill: project.color || '#808080', // Default to gray if no color is set
+      const distributionData = projects.map((row) => ({
+        title: row.title || 'Untitled Project',
+        value: Number(row.value),
+        fill: row.color || '#808080', // Default to gray if no color is set
       }));
 
       return {
