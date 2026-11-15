@@ -17,8 +17,8 @@ describe('task module wiring (REF-12)', () => {
     const { TaskGeneratorService } = await import(
       '../src/task/taskGenerator.service'
     );
-    // eslint-disable-next-line @typescript-eslint/unbound-method
     const original =
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       TaskGeneratorService.prototype.generateInstancesForCurrentMonth;
     jest
       .spyOn(TaskGeneratorService.prototype, 'generateInstancesForCurrentMonth')
@@ -53,11 +53,11 @@ describe('task module wiring (REF-12)', () => {
       '../src/task/task-streak.service'
     );
     const { TaskService } = await import('../src/task/task.service');
-    const projects = app.get(ProjectsService) as unknown as Record<
+    const projects = Object(app.get(ProjectsService)) as Record<
       string,
       unknown
     >;
-    const notifications = app.get(NotificationsService) as unknown as Record<
+    const notifications = Object(app.get(NotificationsService)) as Record<
       string,
       unknown
     >;
