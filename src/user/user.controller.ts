@@ -9,7 +9,6 @@ import {
   NotFoundException,
   UseGuards,
   Req,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { UserService } from './user.service';
@@ -20,7 +19,9 @@ import { CreateUserDto } from './dto/create-user-dto';
 import { UpdateUserDto } from './dto/update-user-dto';
 import { LoginEmailDto, LoginUsernameDto } from './dto/login-dto';
 import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
-import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
+import { AdminOnlyGuard } from 'src/auth/guards/admin-only.guard';
+import { SelfParam } from 'src/auth/guards/self-param.guard';
+import { AuthUserId } from 'src/auth/decorators/auth-user-id.decorator';
 
 @Controller('api/user')
 export class UserController {
@@ -70,18 +71,9 @@ export class UserController {
     return authenticatedUser;
   }
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, SelfParam('id', { allowAdmin: true }))
   @Get('get/:id')
-  async findOne(
-    @Param('id') id: string,
-    @Req() req: AuthenticatedRequest,
-  ): Promise<UserCleanupResponse | null> {
-    const tokenUser = req.user;
-    if (tokenUser.user.user_id !== id && tokenUser.user.role !== 'admin') {
-      throw new UnauthorizedException(
-        'Access denied: Not authorized to view this data.',
-      );
-    }
+  async findOne(@Param('id') id: string): Promise<UserCleanupResponse | null> {
     const user = await this.userService.findOne(id);
     if (!user) {
       throw new NotFoundException(`User with user_id ${id} not found`);
@@ -89,67 +81,44 @@ export class UserController {
     return user;
   }
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, AdminOnlyGuard)
   @Get('getAll')
-  async findAll(
-    @Req() req: AuthenticatedRequest,
-  ): Promise<UserCleanupResponse[]> {
-    const tokenUser = req.user;
-    if (tokenUser.user.role !== 'admin') {
-      throw new UnauthorizedException('Access denied: Admin only.');
-    }
+  async findAll(): Promise<UserCleanupResponse[]> {
     return this.userService.findAll();
   }
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, SelfParam('id', { allowAdmin: true }))
   @Delete(':id')
   async softDeleteOne(
     @Param('id') user_id: string,
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() actorId: string,
   ): Promise<{
     status: string;
     message: string;
     error?: any;
   }> {
-    const tokenUser = req.user;
-    if (tokenUser.user.user_id !== user_id && tokenUser.user.role !== 'admin') {
-      throw new UnauthorizedException(
-        'Access denied: Not authorized to perform this action.',
-      );
-    }
-    return this.userService.softDeleteOne(user_id, tokenUser.user.user_id);
+    return this.userService.softDeleteOne(user_id, actorId);
   }
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, AdminOnlyGuard)
   @Delete(':id/hard')
   async hardDeleteOne(
     @Param('id') user_id: string,
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() actorId: string,
   ): Promise<{
     status: string;
     message: string;
     error?: any;
   }> {
-    const tokenUser = req.user;
-    if (tokenUser.user.role !== 'admin') {
-      throw new UnauthorizedException('Access denied: Admin only.');
-    }
-    return this.userService.hardDeleteOne(user_id, tokenUser.user.user_id);
+    return this.userService.hardDeleteOne(user_id, actorId);
   }
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, SelfParam('user_id', { allowAdmin: true }))
   @Patch('update/:user_id')
   async update(
     @Param('user_id') user_id: string,
     @Body() updateUserDto: UpdateUserDto,
-    @Req() req: AuthenticatedRequest,
   ): Promise<UserCleanupResponse> {
-    const tokenUser = req.user;
-    if (tokenUser.user.user_id !== user_id && tokenUser.user.role !== 'admin') {
-      throw new UnauthorizedException(
-        'Access denied: Not authorized to update this user.',
-      );
-    }
     return this.userService.updateOne(user_id, updateUserDto);
   }
 }

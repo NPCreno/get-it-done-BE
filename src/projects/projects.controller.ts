@@ -6,63 +6,51 @@ import {
   Param,
   Patch,
   Post,
-  Req,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project-dto';
 import { ProjectEntity } from './models/projects.entity';
 import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
+import { AdminOnlyGuard } from 'src/auth/guards/admin-only.guard';
+import { SelfParam } from 'src/auth/guards/self-param.guard';
 import { UpdateProjectDto } from './dto/update-project-dto';
 import { SanitizedProject } from './interfaces/sanitizedProject';
-import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
 import { AuthUserId } from 'src/auth/decorators/auth-user-id.decorator';
 
 @Controller('api/projects')
 export class ProjectsController {
   constructor(private projectsService: ProjectsService) {}
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, AdminOnlyGuard)
   @Get('getAll')
-  findAll(@Req() req: AuthenticatedRequest): Promise<ProjectEntity[]> {
-    const tokenUserId = req.user.user;
-    if (tokenUserId.role !== 'admin') {
-      throw new UnauthorizedException('Access denied: Admin only.');
-    }
+  findAll(): Promise<ProjectEntity[]> {
     return this.projectsService.findAll();
   }
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, SelfParam('user_id'))
   @Get('getAll/:user_id')
-  findAllForUser(
-    @Param('user_id') user_id: string,
-    @Req() req: AuthenticatedRequest,
-  ): Promise<{
+  findAllForUser(@AuthUserId() userId: string): Promise<{
     status: string;
     message: string;
     data?: SanitizedProject[];
     error?: any;
   }> {
-    if (user_id !== req.user.user.user_id) {
-      throw new UnauthorizedException('Access denied: Not your data.');
-    }
-    return this.projectsService.findAllForUser(user_id, req.user.user.user_id);
+    return this.projectsService.findAllForUser(userId, userId);
   }
 
   @UseGuards(AuthorizeGuard)
   @Get(':project_id')
   findOne(
     @Param('project_id') project_id: string,
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() userId: string,
   ): Promise<{
     status: string;
     message: string;
     data?: ProjectEntity;
     error?: any;
   }> {
-    const tokenUserId = req.user.user;
-    return this.projectsService.findOne(project_id, tokenUserId.user_id);
+    return this.projectsService.findOne(project_id, userId);
   }
 
   @UseGuards(AuthorizeGuard)
@@ -84,46 +72,39 @@ export class ProjectsController {
   async update(
     @Param('project_id') project_id: string,
     @Body() updateProjectDto: UpdateProjectDto,
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() userId: string,
   ): Promise<{
     status: string;
     message: string;
     data?: ProjectEntity;
     error?: any;
   }> {
-    const tokenUserId = req.user.user;
-    return this.projectsService.updateOne(
-      project_id,
-      updateProjectDto,
-      tokenUserId.user_id,
-    );
+    return this.projectsService.updateOne(project_id, updateProjectDto, userId);
   }
 
   @UseGuards(AuthorizeGuard)
   @Delete(':project_id')
   async softDeleteOne(
     @Param('project_id') project_id: string,
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() userId: string,
   ): Promise<{
     status: string;
     message: string;
     error?: any;
   }> {
-    const tokenUserId = req.user.user;
-    return this.projectsService.softDeleteOne(project_id, tokenUserId.user_id);
+    return this.projectsService.softDeleteOne(project_id, userId);
   }
 
   @UseGuards(AuthorizeGuard)
   @Delete(':project_id/hard')
   async hardDeleteOne(
     @Param('project_id') project_id: string,
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() userId: string,
   ): Promise<{
     status: string;
     message: string;
     error?: any;
   }> {
-    const tokenUserId = req.user.user;
-    return this.projectsService.hardDeleteOne(project_id, tokenUserId.user_id);
+    return this.projectsService.hardDeleteOne(project_id, userId);
   }
 }

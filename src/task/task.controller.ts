@@ -8,19 +8,17 @@ import {
   Patch,
   Post,
   Query,
-  Req,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task-dto';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
 import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
+import { SelfParam } from 'src/auth/guards/self-param.guard';
 import { TaskTemplateEntity } from './models/taskTemplate.entity';
 import { UpdateTaskDto } from './dto/update-task-dto';
 import { IDashboardData } from './interfaces/dashboardData';
 import { StatusValidationPipe } from 'src/pipes/status-validation.pipe';
-import { AuthenticatedRequest } from 'src/auth/Interfaces/authenticatedRequest';
 import { AuthUserId } from 'src/auth/decorators/auth-user-id.decorator';
 import { ParseArrayPipe } from '@nestjs/common';
 import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
@@ -101,32 +99,26 @@ export class TaskController {
     return this.taskService.createBulkTaskSubInstances(bulkDto, userId);
   }
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, SelfParam('user_id'))
   @Get('getTasksByUser/:user_id')
   getTasksByUser(
-    @Req() req: AuthenticatedRequest,
-    @Param('user_id') user_id: string,
+    @AuthUserId() userId: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    const tokenUserId = req['user'];
-    if (tokenUserId.user.user_id !== user_id) {
-      throw new UnauthorizedException('Access denied: Not your data.');
-    }
-    return this.taskService.getTasksByUser(user_id, startDate, endDate);
+    return this.taskService.getTasksByUser(userId, startDate, endDate);
   }
 
   @UseGuards(AuthorizeGuard)
   @Get('getTasksByProj/:project_id')
   getTasksByProj(
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() userId: string,
     @Param('project_id') project_id: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    const tokenUserId = req['user'];
     return this.taskService.getTasksByProj(
-      tokenUserId.user.user_id,
+      userId,
       project_id,
       startDate,
       endDate,
@@ -138,69 +130,58 @@ export class TaskController {
   async update(
     @Param('task_id') task_id: string,
     @Body() updateTaskDto: UpdateTaskDto,
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() userId: string,
   ): Promise<{
     status: string;
     message: string;
     data?: TaskInstanceEntity;
     error?: any;
   }> {
-    const tokenUserId = req['user'];
-    return this.taskService.updateOne(
-      task_id,
-      updateTaskDto,
-      tokenUserId.user.user_id,
-    );
+    return this.taskService.updateOne(task_id, updateTaskDto, userId);
   }
 
   @UseGuards(AuthorizeGuard)
   @Delete(':task_id')
   async softDeleteOne(
     @Param('task_id') task_id: string,
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() userId: string,
   ): Promise<{
     status: string;
     message: string;
     data?: TaskInstanceEntity | null;
     error?: any;
   }> {
-    const tokenUserId = req['user'];
-    return this.taskService.softDeleteOne(task_id, tokenUserId.user.user_id);
+    return this.taskService.softDeleteOne(task_id, userId);
   }
 
   @UseGuards(AuthorizeGuard)
   @Delete('/subTask/:subTask_id')
   async softDeleteSubTask(
     @Param('subTask_id') subTask_id: string,
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() userId: string,
   ): Promise<{
     status: string;
     message: string;
     data?: TaskSubInstanceEntity | null;
     error?: any;
   }> {
-    const tokenUserId = req['user'];
-    return this.taskService.softDeleteSubTask(
-      subTask_id,
-      tokenUserId.user.user_id,
-    );
+    return this.taskService.softDeleteSubTask(subTask_id, userId);
   }
 
   @UseGuards(AuthorizeGuard)
   @Delete(':task_id/hard')
   async hardDeleteOne(
     @Param('task_id') task_id: string,
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() userId: string,
   ): Promise<TaskInstanceEntity> {
-    const tokenUserId = req['user'];
-    return this.taskService.hardDeleteOne(task_id, tokenUserId.user.user_id);
+    return this.taskService.hardDeleteOne(task_id, userId);
   }
 
   @UseGuards(AuthorizeGuard)
   @Delete('deleteRecurringTasks/:taskTemplate_id')
   async deleteRecurringTasks(
     @Param('taskTemplate_id') taskTemplate_id: string,
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() userId: string,
   ): Promise<{
     status: string;
     message: string;
@@ -210,19 +191,17 @@ export class TaskController {
     } | null;
     error?: any;
   }> {
-    const tokenUserId = req['user'];
     return this.taskService.deleteRecurringTasks(
       taskTemplate_id,
-      tokenUserId.user.user_id,
+      userId,
       false,
     );
   }
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, SelfParam('user_id'))
   @Get('getDashboardData/:user_id')
   getDashboardData(
-    @Req() req: AuthenticatedRequest,
-    @Param('user_id') user_id: string,
+    @AuthUserId() userId: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ): Promise<{
@@ -231,26 +210,16 @@ export class TaskController {
     data?: IDashboardData;
     error?: string;
   }> {
-    const tokenUserId = req['user'];
-    if (tokenUserId.user.user_id !== user_id) {
-      throw new UnauthorizedException('Access denied: Not your data.');
-    }
-    return this.taskService.getDashboardData(user_id, startDate, endDate);
+    return this.taskService.getDashboardData(userId, startDate, endDate);
   }
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, SelfParam('user_id'))
   @Get('completion-trend/:user_id')
   async getCompletionTrend(
-    @Req() req: AuthenticatedRequest,
-    @Param('user_id') user_id: string,
+    @AuthUserId() userId: string,
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
-    const tokenUserId = req['user'];
-    if (tokenUserId.user.user_id !== user_id) {
-      throw new UnauthorizedException('Access denied: Not your data.');
-    }
-
     if (!startDate || !endDate) {
       throw new BadRequestException('Both startDate and endDate are required');
     }
@@ -267,91 +236,65 @@ export class TaskController {
     }
 
     const data = await this.taskService.getTaskCompletionTrend(
-      user_id,
+      userId,
       startDate,
       endDate,
     );
     return data;
   }
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, SelfParam('user_id'))
   @Get('task-distribution/:user_id')
   async getTaskDistribution(
-    @Req() req: AuthenticatedRequest,
-    @Param('user_id') user_id: string,
+    @AuthUserId() userId: string,
     @Query('month') month: string,
     @Query('year') year: string,
   ) {
-    const tokenUserId = req['user'];
-    if (tokenUserId.user.user_id !== user_id) {
-      throw new UnauthorizedException('Access denied: Not your data.');
-    }
-
     if (!month || !year) {
       throw new BadRequestException('Both month and year are required');
     }
 
     const data = await this.taskService.getTaskDistribution(
-      user_id,
+      userId,
       month,
       year,
     );
     return data;
   }
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, SelfParam('user_id'))
   @Get('calendar-heatmap/:user_id')
   async getCalendarHeatmap(
-    @Req() req: AuthenticatedRequest,
-    @Param('user_id') user_id: string,
+    @AuthUserId() userId: string,
     @Query('month') month: string,
     @Query('year') year: string,
   ) {
-    const tokenUserId = req['user'];
-    if (tokenUserId.user.user_id !== user_id) {
-      throw new UnauthorizedException('Access denied: Not your data.');
-    }
-
     if (!month || !year) {
       throw new BadRequestException('Both month and year are required');
     }
 
-    const data = await this.taskService.getCalendarHeatmap(
-      user_id,
-      month,
-      year,
-    );
+    const data = await this.taskService.getCalendarHeatmap(userId, month, year);
     return data;
   }
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, SelfParam('user_id'))
   @Get('streak/:user_id')
-  async getStreakCount(
-    @Param('user_id') user_id: string,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    const tokenUserId = req['user'];
-    if (tokenUserId.user.user_id !== user_id) {
-      throw new UnauthorizedException('Access denied: Not your data.');
-    }
-
-    const data = await this.taskService.getStreakCount(user_id);
+  async getStreakCount(@AuthUserId() userId: string) {
+    const data = await this.taskService.getStreakCount(userId);
     return data;
   }
 
   @UseGuards(AuthorizeGuard)
   @Patch('update-task-status/:task_id/status/:status')
   async updateTaskStatus(
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() userId: string,
     @Param('task_id') task_id: string,
     @Param('status', new StatusValidationPipe()) status: string,
   ) {
-    const tokenUserId = req['user'];
-
     const data = await this.taskService.updateTaskStatus(
       task_id,
       status,
-      tokenUserId.user.user_id,
+      userId,
     );
 
     return data;
@@ -360,16 +303,14 @@ export class TaskController {
   @UseGuards(AuthorizeGuard)
   @Patch('update-subtask-status/:taskSubInstance_id/status/:status')
   async updateSubTaskStatus(
-    @Req() req: AuthenticatedRequest,
+    @AuthUserId() userId: string,
     @Param('taskSubInstance_id') taskSubInstance_id: string,
     @Param('status', new StatusValidationPipe()) status: string,
   ) {
-    const tokenUserId = req['user'];
-
     const data = await this.taskService.updateSubTaskStatus(
       taskSubInstance_id,
       status,
-      tokenUserId.user.user_id,
+      userId,
     );
 
     return data;

@@ -2,14 +2,13 @@ import {
   Controller,
   Delete,
   MessageEvent,
-  Param,
   Sse,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { NotificationsService } from './notifications.service';
 import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
+import { SelfParam } from 'src/auth/guards/self-param.guard';
 import { AuthUserId } from 'src/auth/decorators/auth-user-id.decorator';
 
 @Controller('api/notifications')
@@ -26,16 +25,10 @@ export class NotificationsController {
     return this.notificationsService.getNotificationStream(userId);
   }
 
-  @UseGuards(AuthorizeGuard)
+  @UseGuards(AuthorizeGuard, SelfParam('user_id'))
   @Delete('clear/:user_id')
-  async clearNotifications(
-    @Param('user_id') user_id: string,
-    @AuthUserId() userId: string,
-  ) {
-    if (user_id !== userId) {
-      throw new UnauthorizedException('Access denied: Not your data.');
-    }
-    await this.notificationsService.clearNotifications(user_id);
+  async clearNotifications(@AuthUserId() userId: string) {
+    await this.notificationsService.clearNotifications(userId);
     return { message: 'Notifications cleared successfully' };
   }
 }
