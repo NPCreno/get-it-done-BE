@@ -164,6 +164,7 @@ describe('SQL counts (REF-13)', () => {
       project: 'PRJ-B1',
     });
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     const original = PostgresQueryRunner.prototype.query;
     spy = jest
       .spyOn(PostgresQueryRunner.prototype, 'query')
