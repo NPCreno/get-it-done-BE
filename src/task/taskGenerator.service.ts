@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { startOfMonth, endOfMonth, isWithinInterval, addDays } from 'date-fns';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -7,7 +7,7 @@ import { TaskTemplateEntity } from './models/taskTemplate.entity';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
 
 @Injectable()
-export class TaskGeneratorService {
+export class TaskGeneratorService implements OnModuleInit {
   private readonly logger = new Logger(TaskGeneratorService.name);
   private readonly BATCH_SIZE = 100; // Process templates in batches to avoid memory issues
 
@@ -17,6 +17,10 @@ export class TaskGeneratorService {
     @InjectRepository(TaskInstanceEntity)
     private readonly taskInstanceRepository: Repository<TaskInstanceEntity>,
   ) {}
+
+  async onModuleInit() {
+    await this.generateInstancesForCurrentMonth(); //trigger cronjob for generating task instances from task template
+  }
 
   private generateTaskId(): string {
     return `generatedTask-${Math.floor(Math.random() * 1_000_000_000)}`;

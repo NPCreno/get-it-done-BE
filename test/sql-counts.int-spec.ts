@@ -10,7 +10,7 @@ import { PostgresQueryRunner } from 'typeorm/driver/postgres/PostgresQueryRunner
 import { createTestApp } from './int-app';
 import { signupAndLogin, TestUser } from './int-auth';
 import { queryDb } from './int-db';
-import { TaskService } from '../src/task/task.service';
+import { TaskStatsService } from '../src/task/task-stats.service';
 import { UserEntity } from '../src/user/models/user.entity';
 
 const q = (sql: string, params: unknown[] = []) =>
@@ -24,7 +24,7 @@ const YEAR = '2030';
 
 describe('SQL counts (REF-13)', () => {
   let app: INestApplication;
-  let svc: TaskService;
+  let svc: TaskStatsService;
   let A: TestUser;
   let B: TestUser;
   let calls: { sql: string; params: unknown[] }[] = [];
@@ -73,7 +73,7 @@ describe('SQL counts (REF-13)', () => {
 
   beforeAll(async () => {
     app = await createTestApp();
-    svc = app.get(TaskService);
+    svc = app.get(TaskStatsService);
     A = await signupAndLogin(app, 'a');
     B = await signupAndLogin(app, 'b');
 

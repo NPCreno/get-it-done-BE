@@ -15,7 +15,7 @@ Endpoint → implementing chain. All routes are under `/api`. "Guarded" means `A
 ## Projects (all guarded)
 - `GET getAll`, `GET getAll/:user_id`, `GET :project_id`, `POST create`, `PATCH :project_id`, `DELETE :project_id`, `DELETE :project_id/hard` → `ProjectsController` → `ProjectsService`
 
-## Tasks (all guarded) → `TaskController` → `TaskService`
+## Tasks (all guarded) → `TaskController` → `TaskService` (writes), `TaskQueryService`, `SubTaskService`, `TaskStatusService`, `TaskStatsService`, `TaskStreakService`, `TaskRecurrenceService`
 - Create: `POST create`, `POST bulk-create`, `POST createSubTask`, `POST bulk-create-subtasks`
 - Read: `GET getTasksByUser/:user_id`, `GET getTasksByProj/:project_id`
 - Update: `PATCH :task_id`, `PATCH update-task-status/:task_id/status/:status`, `PATCH update-subtask-status/:taskSubInstance_id/status/:status` (status checked by `StatusValidationPipe`)
@@ -31,7 +31,7 @@ Endpoint → implementing chain. All routes are under `/api`. "Guarded" means `A
 - `TaskGeneratorService` `@Cron('0 0 * * *')` creates `TaskInstanceEntity` rows from `TaskTemplateEntity` every day at midnight.
 
 ## Notifications
-- `TaskService` emits `task.completed` → `NotificationsService` `@OnEvent('task.completed')` creates a notification → streamed over `GET /api/notifications/sse`
+- `TaskStatusService` emits `task.completed` → `NotificationsService` `@OnEvent('task.completed')` creates a notification → streamed over `GET /api/notifications/sse`
 - Award rules (each award is given once): `updateTaskStatus` changes the status only when it differs (`IS DISTINCT FROM`), and on a transition to Complete increments `users.lifetime_completed_count` in the same transaction (never decremented), then emits `task.completed {userId, taskId, lifetimeCount}` after commit. The listener maps each matching rule to an award key (`src/notifications/award-key.ts`) and inserts it into `user_awards` with the notification in one transaction; SSE is sent only for a newly inserted key.
   - `equals: n` on the lifetime count → `<type>:eq:<n>` (once ever); `every: n` → `<type>:every:<n>:<count>` (once per multiple); streak `equals: n` → `streak:eq:<n>:<run start date>` (once per streak run; a new run after a break can notify again)
   - `{count}` in messages is the lifetime count. The dashboard `complete_tasks` stat still counts current completed tasks

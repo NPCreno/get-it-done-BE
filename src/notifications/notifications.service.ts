@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Subject, Observable, filter, map } from 'rxjs';
-import { TaskService } from 'src/task/task.service';
+import { TaskStreakService } from 'src/task/task-streak.service';
 import { NotificationsEntity } from './models/notifications.entity';
 import { DeepPartial, Repository } from 'typeorm';
 import { OnEvent } from '@nestjs/event-emitter';
@@ -23,7 +23,7 @@ export class NotificationsService {
   }>();
 
   constructor(
-    private readonly taskService: TaskService,
+    private readonly taskStreakService: TaskStreakService,
     @InjectRepository(NotificationsEntity)
     private readonly notificationsRepository: Repository<NotificationsEntity>,
   ) {}
@@ -47,7 +47,7 @@ export class NotificationsService {
     lifetimeCount: number;
   }) {
     const { userId, taskId, lifetimeCount } = payload;
-    const streak = await this.taskService.getStreakInfo(userId);
+    const streak = await this.taskStreakService.getStreakInfo(userId);
 
     for (const notifType of notificationRulesJson.notifTypes) {
       for (const rules of Object.values(notifType)) {

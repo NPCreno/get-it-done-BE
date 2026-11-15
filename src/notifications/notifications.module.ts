@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
 import { TaskModule } from '../task/task.module';
@@ -10,7 +10,7 @@ import { AuthModule } from '../auth/auth.module';
 @Module({
   imports: [
     AuthModule,
-    forwardRef(() => TaskModule),
+    TaskModule,
     TypeOrmModule.forFeature([NotificationsEntity, UserAwardEntity]),
   ],
   controllers: [NotificationsController],

@@ -38,7 +38,7 @@ AuthToken: stores user_id, sha256 token, expiry, family_id, remember_me, revoked
 Deleting a user cascades to projects, tasks, subtasks and notifications. Deleting a task instance cascades to its subtasks.
 
 ## Events and schedules
-- `task.completed` is emitted by `TaskService` and consumed by `NotificationsService`.
+- `task.completed` is emitted by `TaskStatusService` and consumed by `NotificationsService`.
 - `TaskGeneratorService` runs daily at midnight and creates instances from templates.
 
 ## Database
