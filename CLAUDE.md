@@ -86,7 +86,7 @@ Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app run
 - `toTokenUser()` (`src/auth/token-user.ts`) is the only way to build a JWT user. Never spread the entity (it carries the password hash)
 - Notifications: `GET sse` and `DELETE clear/:user_id` are guarded and scoped to the token user
 - Awards are given once: `users.lifetime_completed_count` only goes up (+1 on a real transition to Complete, in the same transaction as the status change; never decremented), and each matched rule is recorded in `user_awards` (`awardKeyFor`, PK `(user_id, award_key)`) in the same transaction as its notification. Clearing notifications never touches the ledger. Streak awards are once per streak run. Known gap: no outbox, so a crash between commit and the `task.completed` listener loses that completion's awards
-- Password changes are bcrypt-hashed (cost 12). Migration `HashPlaintextPasswords` fixes old plaintext rows; `npm run db:rehash-passwords` is the idempotent straggler script
+- Password changes are bcrypt-hashed (cost 12). Migration `HashPlaintextPasswords` fixes old plaintext rows; `npm run db:rehash-passwords` is the idempotent straggler script. bcrypt 6 ships prebuilt Node-API binaries (glibc and musl, no `tar`, no node-pre-gyp, no compiler in the image); `src/auth/bcrypt-compat.spec.ts` pins hashes made by 5.1.1
 - Tests: `pnpm test` (contract and body-DTO unit specs), `pnpm test:int` (authorization, contract, migration, auth). `WRITE_FIXTURES=1 pnpm test:int` rewrites `test/fixtures/responses/`
 
 ## Environment
