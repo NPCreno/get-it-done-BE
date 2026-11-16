@@ -1,3 +1,4 @@
+import { isEmailLike } from './identifier';
 import {
   BadRequestException,
   ConflictException,
@@ -262,7 +263,7 @@ export class UserService {
     emailOrUsername: string,
     includePassword = false,
   ): Promise<User | UserEntity> {
-    const isEmail = /\S+@\S+\.\S+/.test(emailOrUsername);
+    const isEmail = isEmailLike(emailOrUsername);
 
     if (isEmail) {
       const user = await this.userRepository.findOne({

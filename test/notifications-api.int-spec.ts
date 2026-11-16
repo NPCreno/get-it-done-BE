@@ -162,6 +162,7 @@ describe('notifications API (RT-01)', () => {
   function openStream(port: number, token: string) {
     return new Promise<{
       status: number;
+      headers: http.IncomingHttpHeaders;
       chunks: string[];
       ended: () => boolean;
       close: () => void;
@@ -185,6 +186,7 @@ describe('notifications API (RT-01)', () => {
           res.on('close', () => (ended = true));
           resolve({
             status: res.statusCode ?? 0,
+            headers: res.headers,
             chunks,
             ended: () => ended,
             close: () => req.destroy(),
@@ -203,6 +205,11 @@ describe('notifications API (RT-01)', () => {
     const C = await signupAndLogin(app, 'stream');
     const s = await openStream(port, C.access);
     expect(s.status).toBe(200);
+    // SEC-09 T9: helmet headers are present on the stream too
+    expect(s.headers['x-content-type-options']).toBe('nosniff');
+    expect(s.headers['content-security-policy']).toContain(
+      "default-src 'none'",
+    );
     await complete(C);
     const text = s.chunks.join('');
     s.close();

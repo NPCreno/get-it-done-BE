@@ -21,12 +21,14 @@ import { LoginEmailDto, LoginUsernameDto } from './dto/login-dto';
 import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
 import { AdminOnlyGuard } from 'src/auth/guards/admin-only.guard';
 import { SelfParam } from 'src/auth/guards/self-param.guard';
+import { RateLimit } from 'src/auth/rate-limit/rate-limit.decorator';
 import { AuthUserId } from 'src/auth/decorators/auth-user-id.decorator';
 
 @Controller('api/user')
 export class UserController {
   constructor(private userService: UserService) {}
 
+  @RateLimit('signup')
   @Post('create')
   async create(@Body() userDto: CreateUserDto): Promise<{
     status: string;
@@ -37,6 +39,7 @@ export class UserController {
     return this.userService.createUser(userDto);
   }
 
+  @RateLimit('login')
   @Post('loginEmail')
   async loginEmail(
     @Body() credentials: LoginEmailDto,
@@ -54,6 +57,7 @@ export class UserController {
     return authenticatedUser;
   }
 
+  @RateLimit('login')
   @Post('loginUsername')
   async loginUsername(
     @Body() credentials: LoginUsernameDto,

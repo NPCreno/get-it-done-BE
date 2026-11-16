@@ -2,11 +2,13 @@ import { Body, Controller, HttpCode, Post, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { getClientIp } from './client-ip';
+import { RateLimit } from './rate-limit/rate-limit.decorator';
 
 @Controller('api/auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
 
+  @RateLimit('refresh')
   @Post('refresh')
   @HttpCode(200)
   async refreshToken(
@@ -24,6 +26,7 @@ export class AuthController {
     };
   }
 
+  @RateLimit('logout')
   @Post('logout')
   @HttpCode(204)
   async logout(@Body() body: { refreshToken?: unknown }): Promise<void> {

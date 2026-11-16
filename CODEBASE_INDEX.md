@@ -20,6 +20,8 @@ One line per source file. Paths are relative to the repo root.
 - `../migrations/1763000000000-AwardOnce.ts` — lifetime counter, `user_awards` ledger, award backfill from notifications
 - `streak.ts` — pure `computeStreak` (count and run start); `test/award-once*.int-spec.ts`, `test/jest-global-tz.ts` (TZ=UTC for jest)
 - `client-ip.ts` — `getClientIp(req)` for audit records
+- `rate-limit/` — `ip.ts`, `client-key.ts`, `identifier-key.ts`, `rate-limits.ts` (throttler table), `rate-limit.decorator.ts`, `auth-throttler.guard.ts`, `rate-limit-config.module.ts` (SEC-09)
+- `../user/identifier.ts` — shared email-like test used by login lookup and rate limiting
 - `guards/authorize.guard.ts` — Bearer JWT guard
 - `models/auth.entity.ts` — `AuthTokenEntity`
 - `models/auth.interface.ts` — auth types

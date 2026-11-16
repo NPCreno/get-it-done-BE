@@ -27,7 +27,8 @@ This guide explains how to set up and run the Get It Done backend application us
 
 3. **Access the Application**
    - Backend API: http://localhost:8000
-   - PostgreSQL: localhost:5432
+   - PostgreSQL: 127.0.0.1:5433 (`POSTGRES_PORT`), bound to localhost only
+   - `POSTGRES_PASSWORD` must be set in `.env`: `docker compose` refuses to start without it
 
 ## Available Commands
 
@@ -91,7 +92,17 @@ Create a `.env` file based on `.env.example`. Required variables:
 
 ## Database Persistence
 
-Data is persisted in a Docker volume named `pgdata`. This means your data will survive container restarts.
+Data is persisted in a Docker volume named `pgdata17` (Postgres 17). This means your data will survive container restarts.
+
+### Moving data from the old Postgres 15 volume (`pgdata`)
+
+The old volume is left untouched. No step below deletes a volume.
+
+1. Start a throwaway Postgres 15 on the old volume (stop any container already using it first):
+   `docker run --rm -d --name pg15-old -v <project>_pgdata:/var/lib/postgresql/data -e POSTGRES_PASSWORD=<old password> postgres:15`
+   (find the exact volume name with `docker volume ls`).
+2. Dump it: `docker exec pg15-old pg_dump -U postgres -d getitdone > getitdone.sql`, then `docker stop pg15-old`.
+3. Start the new stack (`docker compose up -d postgres`) and restore into `127.0.0.1:5433` with `npm run db:restore` or `psql`.
 
 ## Troubleshooting
 
