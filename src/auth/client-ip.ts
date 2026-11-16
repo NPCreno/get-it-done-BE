@@ -18,11 +18,16 @@ function headerValue(value: string | string[] | undefined): string {
  * nothing beats recording an unverified value. The secret is not an auth
  * control; endpoints never require it.
  */
-export function getClientIp(req: Request): string | null {
+/** True when the caller sent the correct X-Internal-Secret (our Next.js BFF). */
+export function hasValidInternalSecret(req: Request): boolean {
   const expected = process.env.INTERNAL_API_SECRET;
-  if (!expected) return null;
+  if (!expected) return false;
   const provided = headerValue(req.headers['x-internal-secret']);
-  if (!provided || !safeEqual(provided, expected)) return null;
+  return !!provided && safeEqual(provided, expected);
+}
+
+export function getClientIp(req: Request): string | null {
+  if (!hasValidInternalSecret(req)) return null;
   const ip = headerValue(req.headers['x-client-ip']);
   if (!ip || ip.length > MAX_IP_LENGTH || isIP(ip) === 0) return null;
   return ip;

@@ -27,7 +27,8 @@ Railway. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`
 - `src/auth/auth.controller.ts` — `POST /api/auth/refresh`
 - `src/auth/guards/authorize.guard.ts` — JWT verification guard
 - `src/config/env.validation.ts` — boot-time env validation (`validateEnv`, `validateDatabaseEnv`, `checkDatabaseUrl`)
-- `src/auth/client-ip.ts` — `getClientIp(req)`, audit-only IP from request headers
+- `src/auth/client-ip.ts` — `getClientIp(req)`, audit-only IP from request headers; `hasValidInternalSecret(req)`
+- `src/auth/rate-limit/` — SEC-09: `@RateLimit(group)` + one `AuthThrottlerGuard`, named throttlers in `rate-limits.ts`, `clientKey()`, `identifierKey()`, `normalizeIp()`
 - `src/user/user.controller.ts`, `user.service.ts` — login, signup, user CRUD
 - `src/task/task.service.ts` — task create/update/delete (`TaskService`); `task-query.service.ts` list reads; `subtask.service.ts` subtask writes; `task-status.service.ts` status transitions (award-once transaction, `task.completed` emit); `task-stats.service.ts` dashboard, trend, distribution, heatmap (SQL counts); `task-streak.service.ts` streak; `task-recurrence.service.ts` recurring deletes; `task-ids.ts` id generators. Each under about 400 lines (`service-size.spec.ts`)
 - `src/task/taskGenerator.service.ts` — daily cron that creates recurring task instances; also runs once at boot (`onModuleInit`)
@@ -59,6 +60,9 @@ Railway. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`
 - `AuthorizeGuard` 401s carry `code: TOKEN_MISSING | TOKEN_INVALID`, and a token with `type !== 'access'` is rejected. Other 401s (ownership checks) have no code
 - `AuthMaintenanceService` (hourly cron) nulls expired replay ciphertext and deletes rows expired more than a day
 - Client IP is audit data only. `getClientIp()` returns `X-Client-IP` only when `X-Internal-Secret` matches `INTERNAL_API_SECRET` and the value is a valid IP; otherwise `null`. No `X-Real-IP`/`req.ip` fallback. Never use the IP for an auth decision
+- Rate limiting (SEC-09, `src/auth/rate-limit/`): only login (`loginEmail`/`loginUsername`, shared buckets), `refresh`, `logout` and signup (`user/create`) carry `@RateLimit(group)`; there is no global guard. Client key order: `attested` (valid secret + IP, IPv6 as /64) > `bff-noip` (shared bucket) > `unattested` (single valid `X-Real-IP`, else socket; `X-Forwarded-For` and an unattested `X-Client-IP` are never read). Unattested traffic also hits a global cap per group. Login adds a per-identifier limit keyed on the exact lookup string (no case folding). No `trust proxy`. Counters are in memory, so this assumes ONE API instance (same as the notification stream). A 429 has `Retry-After` in seconds and the fixed message; logs carry the throttler name only, never IP, identifier or key. Tests override the limits via the `RATE_LIMITS` token (`createTestApp()` uses high limits, `createTestApp({})` the real ones). Signup must go through the FE BFF (`/api/auth/signup`) so it is attested
+- Helmet is set in `configureApp` (CSP `default-src 'none'`, HSTS 180 days without `includeSubDomains` until the API hostname is confirmed)
+- Compose: Postgres 17 on volume `pgdata17`, bound to 127.0.0.1, `POSTGRES_PASSWORD` required. `DATABASE_SYNCHRONIZE` stays true in `.env.example` until REF-14 adds a baseline migration
 
 ## Database
 - PostgreSQL through TypeORM, `autoLoadEntities: true`, connection from `DATABASE_URL`
