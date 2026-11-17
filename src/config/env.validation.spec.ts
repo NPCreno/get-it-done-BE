@@ -221,6 +221,14 @@ describe('validateEnv', () => {
     ).toEqual([]);
   });
 
+  it('E14b on Render (RENDER=true) NODE_ENV must be set explicitly', () => {
+    expect(errorsFor({ RENDER: 'true' })).toEqual([
+      'NODE_ENV: must be set explicitly on Render (expected "production")',
+    ]);
+    expect(errorsFor({ RENDER: 'true' }, prod())).toEqual([]);
+    expect(errorsFor({ RENDER: 'true', NODE_ENV: 'development' })).toEqual([]);
+  });
+
   it('E15 the AppEnv view mirrors the runtime defaults', () => {
     const only: NodeJS.ProcessEnv = {
       DATABASE_URL: base().DATABASE_URL,

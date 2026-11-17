@@ -114,12 +114,18 @@ export function validateEnv(raw: NodeJS.ProcessEnv): EnvResult {
   // NODE_ENV
   let nodeEnv: AppEnv['NODE_ENV'] = 'development';
   const rawNodeEnv = raw.NODE_ENV;
-  const onRailway = !!(raw.RAILWAY_ENVIRONMENT_NAME || raw.RAILWAY_PROJECT_ID);
+  // A hosted deploy must say NODE_ENV, or it silently runs as development and
+  // skips the production checks. Render sets RENDER=true on every service.
+  const host = raw.RENDER
+    ? 'Render'
+    : raw.RAILWAY_ENVIRONMENT_NAME || raw.RAILWAY_PROJECT_ID
+      ? 'Railway'
+      : null;
   if (rawNodeEnv === undefined || rawNodeEnv === '') {
-    if (onRailway)
+    if (host)
       err(
         'NODE_ENV',
-        'must be set explicitly on Railway (expected "production")',
+        `must be set explicitly on ${host} (expected "production")`,
       );
   } else if ((NODE_ENVS as readonly string[]).includes(rawNodeEnv)) {
     nodeEnv = rawNodeEnv as AppEnv['NODE_ENV'];

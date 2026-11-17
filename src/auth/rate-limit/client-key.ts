@@ -15,6 +15,12 @@ export interface ClientKey {
  *  3. unattested: everything else. X-Client-IP is never read without the
  *     secret and X-Forwarded-For is never read at all. Railway's X-Real-IP is
  *     only a bounded fallback (a single valid IP), else the socket address.
+ *
+ * On Render (OPS-04) Render's docs list no X-Real-IP header, so unattested
+ * callers normally fall back to the socket address, which is Render's proxy:
+ * they share buckets. A caller that sends its own X-Real-IP picks its bucket,
+ * so for unattested traffic the per-group global cap is the real limit.
+ * Attested BFF traffic (login, signup, refresh) is unaffected.
  */
 export function clientKey(req: Request): ClientKey {
   const ip = normalizeIp(getClientIp(req));
