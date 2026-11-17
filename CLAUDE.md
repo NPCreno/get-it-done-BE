@@ -11,11 +11,12 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `task_instance_entity.id` is `uuid` (as production has it). Nothing joins on it; everything uses `task_id`. A local database built before OPS-04 has an integer `id`: synchronize recreates it as uuid on the next start, or drop it and restore a fresh dump (`npm run db:restore`)
 
 ## Architecture
-- 6 modules: AppModule, AuthModule, UserModule, ProjectsModule, TaskModule, NotificationsModule
+- 7 modules: AppModule, AuthModule, UserModule, ProjectsModule, TaskModule, NotificationsModule, ChatModule
 - 1 guard: `AuthorizeGuard` (Bearer JWT checked with `JwtService.verifyAsync`). This is the security boundary
 - 1 pipe: `StatusValidationPipe` (allows `Pending`, `Complete`, `Overdue`)
 - Event-driven notifications through `@nestjs/event-emitter` (`task.completed`)
 - Daily recurring-task generation through `@nestjs/schedule` (`@Cron('0 0 * * *')`)
+- One WebSocket gateway (`ChatGateway`, `@nestjs/platform-ws` `WsAdapter` set in `configureApp`) at `/api/chat/ws`, receive only
 
 ## Modules
 - `auth` — access and refresh token generation, refresh rotation and revocation
@@ -23,11 +24,12 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `projects` — project CRUD scoped to the owning user
 - `task` — tasks, subtasks, recurring templates and instances, dashboard analytics
 - `notifications` — SSE stream, notification creation on task completion
+- `chat` — FEAT-05: project sharing by username (`project_members`), project chat messages (`chat_messages`), WebSocket rooms
 
 ## Key files
 - `src/auth/auth.service.ts` — `generateAccessToken`, `generateRefreshToken`, `validateRefreshToken`, `revokeRefreshToken`, `revokeUserRefreshTokens`, `refreshAccessToken`
 - `src/auth/auth.controller.ts` — `POST /api/auth/refresh`
-- `src/auth/guards/authorize.guard.ts` — JWT verification guard
+- `src/auth/guards/authorize.guard.ts` — JWT verification guard; `src/auth/verify-access-token.ts` — `verifyAccessToken()`, shared with the chat gateway
 - `src/config/env.validation.ts` — boot-time env validation (`validateEnv`, `validateDatabaseEnv`, `checkDatabaseUrl`)
 - `src/auth/client-ip.ts` — `getClientIp(req)`, audit-only IP from request headers; `hasValidInternalSecret(req)`
 - `src/auth/rate-limit/` — SEC-09: `@RateLimit(group)` + one `AuthThrottlerGuard`, named throttlers in `rate-limits.ts`, `clientKey()`, `identifierKey()`, `normalizeIp()`
@@ -35,9 +37,10 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `src/task/task.service.ts` — task create/update/delete (`TaskService`); `task-query.service.ts` list reads; `subtask.service.ts` subtask writes; `task-status.service.ts` status transitions (award-once transaction, `task.completed` emit); `task-stats.service.ts` dashboard, trend, distribution, heatmap (SQL counts); `task-streak.service.ts` streak; `task-recurrence.service.ts` recurring deletes; `task-ids.ts` id generators. Each under about 400 lines (`service-size.spec.ts`)
 - `src/task/taskGenerator.service.ts` — daily cron that creates recurring task instances; also runs once at boot (`onModuleInit`)
 - `src/notifications/notifications.service.ts` — `@OnEvent('task.completed')` listener
+- `src/chat/chat-access.service.ts` — `assertCanChat` (owner or member, project not deleted; a stranger gets the missing-project 404); `chat-members.service.ts`, `chat-messages.service.ts`, `chat-rooms.service.ts` (in-memory rooms), `chat.gateway.ts`
 - `src/main.ts` — CORS (`FRONTEND_URL`, default `http://localhost:3000`), listens on `PORT` (default 8000)
 
-## Entities (8)
+## Entities (10)
 - `UserEntity` (table `users`)
 - `AuthTokenEntity` (`src/auth/models/auth.entity.ts`) — refresh token records: sha256 hash, `family_id`, `remember_me`, `revoked_at`, `replaced_by_token_id`, `replay_ciphertext`, nullable `ip_address`
 - `ProjectEntity`
@@ -46,12 +49,15 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `TaskSubInstanceEntity` — subtasks
 - `NotificationsEntity` (table `notifications`)
 - `UserAwardEntity` (`src/notifications/models/user-award.entity.ts`, table `user_awards`) — award ledger
+- `ProjectMemberEntity` (`src/chat/models/project-member.entity.ts`, table `project_members`, PK `(project_id, user_id)`) — users a project is shared with; the owner is never a row
+- `ChatMessageEntity` (`src/chat/models/chat-message.entity.ts`, table `chat_messages`) — uuid id from the app, `body` varchar(2000), `created_at`/`deleted_at` timestamptz(3), soft delete
 
 ## Relationships
 - User 1→N Project, TaskInstance, TaskSubInstance, Notification, UserAward (all `onDelete: CASCADE`)
 - Project 1→N TaskInstance (`CASCADE`)
 - TaskTemplate 1→N TaskInstance (`SET NULL`)
 - TaskInstance 1→N TaskSubInstance (`CASCADE`)
+- Project 1→N ProjectMember, ChatMessage; User 1→N ProjectMember, ChatMessage (all `CASCADE`)
 
 ## Auth
 - HS256. Access token signed with `JWT_SECRET`, lifetime from `JWT_ACCESS_EXPIRATION` (no default; the service throws if either is missing)
@@ -62,7 +68,7 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `AuthorizeGuard` 401s carry `code: TOKEN_MISSING | TOKEN_INVALID`, and a token with `type !== 'access'` is rejected. Other 401s (ownership checks) have no code
 - `AuthMaintenanceService` (hourly cron) nulls expired replay ciphertext and deletes rows expired more than a day
 - Client IP is audit data only. `getClientIp()` returns `X-Client-IP` only when `X-Internal-Secret` matches `INTERNAL_API_SECRET` and the value is a valid IP; otherwise `null`. No `X-Real-IP`/`req.ip` fallback. Never use the IP for an auth decision
-- Rate limiting (SEC-09, `src/auth/rate-limit/`): only login (`loginEmail`/`loginUsername`, shared buckets), `refresh`, `logout` and signup (`user/create`) carry `@RateLimit(group)`; there is no global guard. Client key order: `attested` (valid secret + IP, IPv6 as /64) > `bff-noip` (shared bucket) > `unattested` (single valid `X-Real-IP`, else socket; `X-Forwarded-For` and an unattested `X-Client-IP` are never read; Render documents no `X-Real-IP`, so on Render unattested callers usually share the proxy's socket bucket and the global cap bounds them). Unattested traffic also hits a global cap per group. Login adds a per-identifier limit keyed on the exact lookup string (no case folding). No `trust proxy`. Counters are in memory, so this assumes ONE API instance (same as the notification stream). A 429 has `Retry-After` in seconds and the fixed message; logs carry the throttler name only, never IP, identifier or key. Tests override the limits via the `RATE_LIMITS` token (`createTestApp()` uses high limits, `createTestApp({})` the real ones). Signup must go through the FE BFF (`/api/auth/signup`) so it is attested
+- Rate limiting (SEC-09, `src/auth/rate-limit/`): only login (`loginEmail`/`loginUsername`, shared buckets), `refresh`, `logout`, signup (`user/create`), chat message send (`chatMessage`, 30/min per token user) and chat member add (`chatMember`, 60/h per token user) carry `@RateLimit(group)`; there is no global guard. Chat groups key on the token `sub`, so `AuthorizeGuard` must run first (class-level `@UseGuards`). Client key order: `attested` (valid secret + IP, IPv6 as /64) > `bff-noip` (shared bucket) > `unattested` (single valid `X-Real-IP`, else socket; `X-Forwarded-For` and an unattested `X-Client-IP` are never read; Render documents no `X-Real-IP`, so on Render unattested callers usually share the proxy's socket bucket and the global cap bounds them). Unattested traffic also hits a global cap per group. Login adds a per-identifier limit keyed on the exact lookup string (no case folding). No `trust proxy`. Counters are in memory, so this assumes ONE API instance (same as the notification stream). A 429 has `Retry-After` in seconds and the fixed message; logs carry the throttler name only, never IP, identifier or key. Tests override the limits via the `RATE_LIMITS` token (`createTestApp()` uses high limits, `createTestApp({})` the real ones). Signup must go through the FE BFF (`/api/auth/signup`) so it is attested
 - Helmet is set in `configureApp` (CSP `default-src 'none'`, HSTS 180 days without `includeSubDomains` until the API hostname is confirmed)
 - Compose: Postgres 17 on volume `pgdata17`, bound to 127.0.0.1, `POSTGRES_PASSWORD` required. `DATABASE_SYNCHRONIZE` stays true in `.env.example` until REF-14 adds a baseline migration
 
@@ -99,12 +105,13 @@ Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app run
 Validated at boot by `src/config/env.validation.ts` (`validateEnv`, called in `main.ts` before `AppModule` is loaded; any error prints the variable names and rules, never values, and exits 1). The migration CLI (`data-source.ts`) checks `DATABASE_URL` with the same `checkDatabaseUrl`. Required: `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_EXPIRATION`. Expiries need a unit (`15m`, `3600s`; a bare number is milliseconds to jsonwebtoken). Strict: `DATABASE_SYNCHRONIZE` is exactly `true`/`false`; `PORT` 1-65535; `REFRESH_REUSE_GRACE_SECONDS` 0-3600. `NODE_ENV` is `development|test|production` (default `development` locally, but required when `RENDER` (set by Render on every service), `RAILWAY_ENVIRONMENT_NAME` or `RAILWAY_PROJECT_ID` is present). Production-only: `FRONTEND_URL` required, an origin only and not local (`FRONTEND_URL_ALLOW_LOCAL=true` opts out for a smoke test), and `DATABASE_SYNCHRONIZE=true` is an error; secrets under 32 characters or equal only warn. `AppEnv` is a diagnostic view; readers keep their own reads and defaults. A good boot logs `[Env] configuration valid (NODE_ENV=...)`.
 `NODE_ENV`, `FRONTEND_URL_ALLOW_LOCAL`, `DATABASE_URL`, `DATABASE_SYNCHRONIZE`, `JWT_SECRET`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRATION`, `JWT_REFRESH_EXPIRATION_SHORT`, `REFRESH_REUSE_GRACE_SECONDS`, `INTERNAL_API_SECRET`, `FRONTEND_URL`, `PORT`
 
-## API endpoints (38)
+## API endpoints (45)
 - `GET /` — health check (1)
 - `/api/auth` — `POST refresh`, `POST logout` (2)
 - `/api/user` — create, loginEmail, loginUsername, get/:id, getAll, delete :id, :id/hard, update/:user_id (8)
 - `/api/projects` — getAll, getAll/:user_id, :project_id (get, patch, delete), create, :project_id/hard (7)
 - `/api/tasks` — 18 endpoints, see `FEATURE_MAP.md`
+- `/api/chat` — `projects/:project_id/members` (GET, POST `{username}`, DELETE `:user_id`), `shared-projects` (GET), `projects/:project_id/messages` (GET `limit`/`cursor`, POST `{body}`, DELETE `:id`) (7). Responses `{status:'success', data}`; shapes and socket frames in `API_CONTRACT.chat` and `FEATURE_MAP.md`. WebSocket `/api/chat/ws` (not counted): Origin = `FRONTEND_URL`, first frame `{type:'auth', token}` within 5 s, close 4401 on bad auth or token expiry, `join`/`leave`, server frames `{type, data}`. Rooms are in memory (one instance)
 - `/api/notifications` — `GET` (list: `limit`, opaque `cursor`; `{items, unread_count, next_cursor}`), `PATCH read-all`, `PATCH :notif_id/read` (idempotent; unknown or foreign id is 404), `GET sse` (typed `notification` events with `id:`, 25 s `ping`, ends at token `exp`), `DELETE clear/:user_id` (5). The list is the source of truth; the stream only signals. `metadata` and `actionTarget` are never exposed
 - Everything except `GET /`, `refresh`, `create`, `loginEmail`, `loginUsername` and the two notification routes uses `AuthorizeGuard`
 

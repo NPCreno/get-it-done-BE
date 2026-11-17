@@ -24,6 +24,7 @@ One line per source file. Paths are relative to the repo root.
 - `rate-limit/` — `ip.ts`, `client-key.ts`, `identifier-key.ts`, `rate-limits.ts` (throttler table), `rate-limit.decorator.ts`, `auth-throttler.guard.ts`, `rate-limit-config.module.ts` (SEC-09)
 - `../user/identifier.ts` — shared email-like test used by login lookup and rate limiting
 - `guards/authorize.guard.ts` — Bearer JWT guard
+- `verify-access-token.ts` — `verifyAccessToken()`, the access-token check shared by `AuthorizeGuard` and the chat gateway
 - `models/auth.entity.ts` — `AuthTokenEntity`
 - `models/auth.interface.ts` — auth types
 - `Interfaces/authenticatedRequest.ts`, `Interfaces/tokenPayload.ts` — request and token payload types
@@ -54,6 +55,19 @@ One line per source file. Paths are relative to the repo root.
 - `award-key.ts` — pure `awardKeyFor(rule, value, ctx)`; `models/user-award.entity.ts` — award ledger
 - `notification.rules.json` — notification rule definitions
 
+## chat (`src/chat/`) — FEAT-05 project sharing and chat
+- `chat.module.ts`, `chat.controller.ts` — `/api/chat` routes (members, shared-projects, messages)
+- `chat-access.service.ts` — `assertCanChat` / `assertOwner` (owner or member; a stranger gets the missing-project 404), pure `decideAccess`
+- `chat-members.service.ts` — list, add by username (locked, 20 max), remove/leave, shared-projects
+- `chat-messages.service.ts` — paged list, send, soft delete; broadcasts after the write
+- `chat-rooms.service.ts` — in-memory rooms, `broadcast`, `kick` (one API instance)
+- `chat.gateway.ts` — receive-only WebSocket at `/api/chat/ws` (origin check, auth frame, join/leave, 4401); `ws-origin.ts` — `isAllowedOrigin`
+- `chat-cursor.ts` — opaque `(created_at, id)` page cursor; `chat.dto.ts` — response shapes and `toMessageDto`
+- `dto/add-member.dto.ts`, `dto/send-message.dto.ts`, `dto/list-messages-query.dto.ts` — request payloads
+- `models/project-member.entity.ts`, `models/chat-message.entity.ts` — `ProjectMemberEntity`, `ChatMessageEntity`
+- `../migrations/1763100000000-ProjectChat.ts` — `project_members`, `chat_messages`
+- `*.spec.ts` — access, cursor, DTO validation, rooms and origin unit specs; `../../test/chat.int-spec.ts`, `chat-ws.int-spec.ts`, `project-chat-migration.int-spec.ts`, `chat-fixtures.ts`
+
 ## pipes (`src/pipes/`)
 - `status-validation.pipe.ts` — validates task status values
 
@@ -61,7 +75,7 @@ One line per source file. Paths are relative to the repo root.
 - `api-contract.ts` — canonical contract constants
 - `is-after-or-equal.ts` — class-validator `IsAfterOrEqual`
 - `api-contract.spec.ts`, `body-dtos.spec.ts` — unit specs
-- `../app.setup.ts` — `configureApp()` (CORS + global ValidationPipe)
+- `../app.setup.ts` — `configureApp()` (helmet, CORS, global ValidationPipe, `WsAdapter`)
 - `../auth/token-user.ts` — `toTokenUser()` allowlist; `../auth/decorators/auth-user-id.decorator.ts` — `@AuthUserId()`; `../auth/decorators/current-user.decorator.ts` — `@CurrentUser()`; `../auth/guards/self-param.guard.ts` — `SelfParam()` (the one id comparison); `../auth/guards/admin-only.guard.ts`; `../common/controller-identity.spec.ts` — scans controllers
 - `../auth/rehash-passwords.ts`, `../migrations/1762900000000-HashPlaintextPasswords.ts`, `../../scripts/rehash-plaintext-passwords.ts`, `../../scripts/export-contract.ts`
 - `../../test/` — `int-env.ts`, `int-db.ts`, `int-app.ts`, `int-auth.ts`, `authorization.int-spec.ts`, `api-contract.int-spec.ts`, `password-migration.int-spec.ts`, `catchup-migration.int-spec.ts`, `fixtures/responses/`
