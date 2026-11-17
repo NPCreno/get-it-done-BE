@@ -60,8 +60,8 @@ A robust backend API for a productivity and task management application, built w
 ## Local Setup
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v18 or later recommended)
-- [npm](https://www.npmjs.com/) (comes with Node.js)
+- [Node.js](https://nodejs.org/) 22
+- [pnpm](https://pnpm.io/) 11.28.9 (pinned in `packageManager`; `corepack enable` or `npm install -g pnpm@11.28.9`)
 - [PostgreSQL](https://www.postgresql.org/) (local or remote instance)
 
 ### 1. Clone the repository
@@ -72,7 +72,7 @@ cd get-it-done-BE
 
 ### 2. Install dependencies
 ```bash
-npm install
+pnpm install
 ```
 
 ### 3. Configure environment variables
@@ -90,23 +90,23 @@ JWT_SECRET=your_jwt_secret
 ### 5. Start the application
 ```bash
 # Development
-npm run start:dev
+pnpm start:dev
 
 # Production
-npm run build
-npm run start:prod
+pnpm build
+pnpm start:prod
 ```
 
 ### 6. Run tests
 ```bash
 # Unit tests
-npm run test
+pnpm test
 
-# End-to-end tests
-npm run test:e2e
+# Integration tests (needs `pnpm db:up`)
+pnpm test:int
 
 # Test coverage
-npm run test:cov
+pnpm test:cov
 ```
 
 ---
@@ -132,33 +132,33 @@ This project is UNLICENSED. For usage or contributions, please contact the autho
 ## Project setup
 
 ```bash
-$ npm install
+$ pnpm install
 ```
 
 ## Compile and run the project
 
 ```bash
 # development
-$ npm run start
+$ pnpm start
 
 # watch mode
-$ npm run start:dev
+$ pnpm start:dev
 
 # production mode
-$ npm run start:prod
+$ pnpm start:prod
 ```
 
 ## Run tests
 
 ```bash
 # unit tests
-$ npm run test
+$ pnpm test
 
-# e2e tests
-$ npm run test:e2e
+# integration tests
+$ pnpm test:int
 
 # test coverage
-$ npm run test:cov
+$ pnpm test:cov
 ```
 
 ## Deployment
@@ -168,7 +168,7 @@ When you're ready to deploy your NestJS application to production, there are som
 If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
 
 ```bash
-$ npm install -g mau
+$ pnpm add -g mau
 $ mau deploy
 ```
 

@@ -1,7 +1,7 @@
 /**
  * Idempotent straggler cleanup: run after the new backend is live if the
  * post-migration check still finds non-bcrypt passwords. Logs counts only.
- * Usage: npm run db:rehash-passwords
+ * Usage: pnpm db:rehash-passwords
  */
 import dataSource from '../src/data-source';
 import { rehashPlaintextPasswords } from '../src/auth/rehash-passwords';

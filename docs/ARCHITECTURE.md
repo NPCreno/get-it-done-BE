@@ -42,4 +42,9 @@ Deleting a user cascades to projects, tasks, subtasks and notifications. Deletin
 - `TaskGeneratorService` runs daily at midnight and creates instances from templates.
 
 ## Database
-PostgreSQL through TypeORM. `synchronize` is on only when `DATABASE_SYNCHRONIZE === 'true'`. Migration scripts are configured but `src/migrations/` does not exist yet, so staging and production need migrations created before `synchronize` is turned off.
+PostgreSQL through TypeORM. `synchronize` is on only when `DATABASE_SYNCHRONIZE === 'true'`. Hand-written migrations live in `src/migrations/`; there is no baseline migration yet (REF-14), so they cannot build an empty database. Production runs them compiled from `dist/` with the TypeORM CLI of the production `typeorm` package (no ts-node).
+
+## Build and deployment
+- pnpm 11.28.9 with `pnpm-lock.yaml`; `pnpm-workspace.yaml` holds `allowBuilds` (only `bcrypt` runs its install script, which picks a shipped prebuild)
+- Railway builds the root `Dockerfile`: `node:22-alpine`, stages `base` → `build` (full install, `nest build`) and `deps` (production install) → `production` (`dist`, production `node_modules`, `package.json`; non-root `node` user; `CMD ["node", "dist/main"]`). `NODE_ENV` comes from the environment, not the image
+- Pre-deploy: `node node_modules/typeorm/cli.js migration:run -d dist/data-source.js`

@@ -1,7 +1,7 @@
 /**
  * REF-13: counts are SQL aggregates. Query-count and semantics tests over a
  * crafted dataset; every expected number is written by hand from the dataset.
- * Run with `npm run db:up && npm run test:int`.
+ * Run with `pnpm db:up && pnpm test:int`.
  */
 import { API_TEST_DB, BASE_URL } from './int-env';
 import { INestApplication } from '@nestjs/common';

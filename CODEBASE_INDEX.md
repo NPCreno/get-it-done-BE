@@ -67,3 +67,6 @@ One line per source file. Paths are relative to the repo root.
 
 ## Root config
 - `package.json`, `tsconfig.json`, `nest-cli.json`, `codegraph.json`
+- `pnpm-lock.yaml` — the only lockfile (pnpm 11.28.9); `pnpm-workspace.yaml` — `allowBuilds` for install scripts, and makes this repo its own workspace root
+- `Dockerfile` — `node:22-alpine`, multi-stage, non-root runtime; `.dockerignore` keeps env files, tests, dumps and tooling out of the context
+- `docker-compose.yml` — Postgres 17 and the backend image; `docker-compose.dev.yml` — Postgres only (`pnpm db:up`)

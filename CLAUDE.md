@@ -3,10 +3,15 @@
 ## Stack
 NestJS 11, TypeScript 5, Express platform, TypeORM 0.3, PostgreSQL
 
-Package manager: npm (`packageManager: npm@10.9.2`, `package-lock.json`), which is also what the Dockerfile and Railway use. A migration to pnpm 11.28.9 like the FE is a separate follow-up; the old `pnpm@11.13.0` pin was a broken release.
+Package manager: pnpm 11.28.9 (`packageManager: pnpm@11.28.9`, `pnpm-lock.yaml`), the same as the FE, the CI and the Dockerfile. There is no `package-lock.json`; don't run `npm install`.
+- This repo has its own `pnpm-workspace.yaml` (`allowBuilds`: `bcrypt` true, `@swc/core` and `unrs-resolver` false), so it is its own workspace root even though the parent folder is a pnpm workspace too. Run plain `pnpm install` from the repo root; **don't** pass `--ignore-workspace`, which also ignores `allowBuilds` and fails with `ERR_PNPM_IGNORED_BUILDS`. A new dependency with a build script needs an `allowBuilds` entry (`true` only if the app needs it built)
+- pnpm 11 rejects a package version published less than a day ago (`minimumReleaseAge`), at resolve and at frozen install. Wait a day before locking a brand-new release
 
 ## Deployment
-Railway. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`).
+Railway, Dockerfile builder. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`).
+- Image: `node:22-alpine`, multi-stage (`base`, `build`, `deps`, `production`). The runtime stage holds only `dist`, production `node_modules` and `package.json`, runs as the non-root `node` user (uid 1000) with `CMD ["node", "dist/main"]`. No pnpm, compilers, sources or devDependencies in it
+- The image does not set `NODE_ENV`: the deploy environment does (Railway: `NODE_ENV=production`; Compose: `.env`)
+- Railway Pre-deploy Command: `node node_modules/typeorm/cli.js migration:run -d dist/data-source.js` (same as `pnpm migration:run:prod`). Start Command: none (the Dockerfile `CMD`)
 
 ## Architecture
 - 6 modules: AppModule, AuthModule, UserModule, ProjectsModule, TaskModule, NotificationsModule
@@ -67,7 +72,7 @@ Railway. The frontend is a separate Next.js app on Vercel (repo `get-it-done-FE`
 ## Database
 - PostgreSQL through TypeORM, `autoLoadEntities: true`, connection from `DATABASE_URL`
 - `synchronize` is on only when `DATABASE_SYNCHRONIZE === 'true'` (local development only)
-- Migrations are hand-written (`src/migrations/`); prod has never run them, so do not use `migration:generate`. Railway Pre-deploy Command: `npm run migration:run`. `src/data-source.ts` serves the TypeORM CLI
+- Migrations are hand-written (`src/migrations/`); prod has never run them, so do not use `migration:generate`. Railway Pre-deploy Command: `node node_modules/typeorm/cli.js migration:run -d dist/data-source.js` (compiled, no ts-node; `pnpm migration:run:prod`). `pnpm migration:run` (ts-node) is for development. `src/data-source.ts` serves the TypeORM CLI
 
 ## Local database
 Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app runs natively with `pnpm start:dev`). It listens on `127.0.0.1:5433` because 5432 is often taken by a native Postgres. Defaults: user `postgres`, password `dev`, database `getitdone` (override with `POSTGRES_*` in `.env`).
@@ -90,7 +95,7 @@ Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app run
 - `toTokenUser()` (`src/auth/token-user.ts`) is the only way to build a JWT user. Never spread the entity (it carries the password hash)
 - Notifications: `GET sse` and `DELETE clear/:user_id` are guarded and scoped to the token user
 - Awards are given once: `users.lifetime_completed_count` only goes up (+1 on a real transition to Complete, in the same transaction as the status change; never decremented), and each matched rule is recorded in `user_awards` (`awardKeyFor`, PK `(user_id, award_key)`) in the same transaction as its notification. Clearing notifications never touches the ledger. Streak awards are once per streak run. Known gap: no outbox, so a crash between commit and the `task.completed` listener loses that completion's awards
-- Password changes are bcrypt-hashed (cost 12). Migration `HashPlaintextPasswords` fixes old plaintext rows; `npm run db:rehash-passwords` is the idempotent straggler script. bcrypt 6 ships prebuilt Node-API binaries (glibc and musl, no `tar`, no node-pre-gyp, no compiler in the image); `src/auth/bcrypt-compat.spec.ts` pins hashes made by 5.1.1
+- Password changes are bcrypt-hashed (cost 12). Migration `HashPlaintextPasswords` fixes old plaintext rows; `pnpm db:rehash-passwords` is the idempotent straggler script. bcrypt 6 ships prebuilt Node-API binaries (glibc and musl, no `tar`, no node-pre-gyp, no compiler in the image); `src/auth/bcrypt-compat.spec.ts` pins hashes made by 5.1.1
 - Tests: `pnpm test` (contract and body-DTO unit specs), `pnpm test:int` (authorization, contract, migration, auth). `WRITE_FIXTURES=1 pnpm test:int` rewrites `test/fixtures/responses/`
 
 ## Environment
@@ -109,14 +114,14 @@ Validated at boot by `src/config/env.validation.ts` (`validateEnv`, called in `m
 ## Commands
 - `pnpm start:dev` — dev server with watch
 - `pnpm build` — production build
-- `npm test` — jest unit specs (`*.spec.ts`, pure, no DB)
+- `pnpm test` — jest unit specs (`*.spec.ts`, pure, no DB)
 - `pnpm test:int` — integration tests against the Docker Postgres (`getitdone_test`, created on demand); run `pnpm db:up` first
-- `npm run lint` — ESLint with auto-fix (local); `npm run lint:check` — no autofix, used by CI (errors fail, `no-unsafe-*` warnings are baseline debt)
-- `npm run typecheck` — `tsc -p tsconfig.check.json` over `src`, `test` and `scripts`
-- `pnpm migration:generate`, `pnpm migration:run`, `pnpm migration:revert` — TypeORM migrations
+- `pnpm lint` — ESLint with auto-fix (local); `pnpm lint:check` — no autofix, used by CI (errors fail, `no-unsafe-*` warnings are baseline debt)
+- `pnpm typecheck` — `tsc -p tsconfig.check.json` over `src`, `test` and `scripts`
+- `pnpm migration:generate`, `pnpm migration:run`, `pnpm migration:revert` — TypeORM migrations (ts-node); `pnpm migration:run:prod` — compiled, after `pnpm build`
 
 ## CI
-- GitHub Actions `.github/workflows/ci.yml` on every PR and on pushes to `master`: job `check` (`npm ci`, `lint:check`, `typecheck`, `npm test`) and job `integration` (`npm run test:int` against a `postgres:17` service container; no secrets, `int-env.ts` sets everything). `.git-blame-ignore-revs` lists the prettier commit.
+- GitHub Actions `.github/workflows/ci.yml` on every PR and on pushes to `master`: job `check` (`pnpm install --frozen-lockfile`, `lint:check`, `typecheck`, `test`) and job `integration` (`pnpm test:int` against a `postgres:17` service container; no secrets, `int-env.ts` sets everything). `.git-blame-ignore-revs` lists the prettier commit.
 - Test pyramid: unit specs (`*.spec.ts`, pure, no DB); integration (`test/*.int-spec.ts`, real Postgres, real HTTP); no e2e. New features add tests at the lowest level that covers them.
 
 ## CodeGraph
