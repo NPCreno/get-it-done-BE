@@ -1,23 +1,21 @@
-# Base image
-FROM node:18
+FROM node:22-alpine AS base
+RUN npm install -g pnpm@11.28.9
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# Create app directory
-WORKDIR /usr/src/app
-
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
-COPY package*.json ./
-
-# Install app dependencies
-RUN npm install
-
-# Bundle app source
+FROM base AS build
+RUN pnpm install --frozen-lockfile
 COPY . .
+RUN pnpm build
 
-# Creates a "dist" folder with the production build
-RUN npm run build
+FROM base AS deps
+RUN pnpm install --frozen-lockfile --prod
 
-# Expose the port on which the app will run
+FROM node:22-alpine AS production
+WORKDIR /app
+COPY --from=deps  --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --chown=node:node package.json ./
+USER node
 EXPOSE 8000
-
-# Start the server using the production build
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "dist/main"]
