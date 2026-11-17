@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AuthenticatedRequest } from '../Interfaces/authenticatedRequest';
+import { verifyAccessToken } from '../verify-access-token';
 
 @Injectable()
 export class AuthorizeGuard implements CanActivate {
@@ -23,19 +24,9 @@ export class AuthorizeGuard implements CanActivate {
     }
 
     const token = authHeader.split(' ')[1];
-
-    let payload: any;
-    try {
-      payload = await this.jwtService.verifyAsync(token);
-    } catch {
-      throw new UnauthorizedException({
-        statusCode: 401,
-        code: 'TOKEN_INVALID',
-        message: 'Invalid or expired token.',
-      });
-    }
-    // A refresh token must never pass as an access token.
-    if (payload?.type !== 'access') {
+    // Signature, expiry, and type === 'access' (a refresh token never passes).
+    const payload = await verifyAccessToken(this.jwtService, token);
+    if (!payload) {
       throw new UnauthorizedException({
         statusCode: 401,
         code: 'TOKEN_INVALID',
