@@ -205,6 +205,7 @@ export class ChatGateway
 
   private ping(): void {
     for (const client of this.clients.values()) {
+      if (client.ws.readyState !== WebSocket.OPEN) continue;
       if (!client.alive) {
         client.ws.terminate();
         continue;
