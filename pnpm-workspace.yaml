@@ -1,0 +1,4 @@
+allowBuilds:
+  bcrypt: true          # runs node-gyp-build: uses the shipped prebuild, fails loudly if none matches
+  '@swc/core': false
+  unrs-resolver: false

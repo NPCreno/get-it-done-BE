@@ -5,7 +5,7 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
-  "packageManager": "npm@10.9.2",
+  "packageManager": "pnpm@11.28.9",
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -51,6 +51,7 @@
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "dotenv": "^16.6.1",
+    "express": "^5.2.1",
     "helmet": "^8.3.0",
     "pg": "^8.15.6",
     "reflect-metadata": "^0.2.2",
