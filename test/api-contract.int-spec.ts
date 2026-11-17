@@ -32,6 +32,17 @@ function scrub(body: unknown): unknown {
         map.set(v, `${prefix}-${String(map.size + 1).padStart(9, '0')}`);
       return map.get(v);
     }
+    // Bare uuids (task `id`, OPS-04) become stable placeholder uuids.
+    if (/^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(v)) {
+      if (!maps.has('uuid')) maps.set('uuid', new Map());
+      const map = maps.get('uuid')!;
+      if (!map.has(v))
+        map.set(
+          v,
+          `00000000-0000-4000-8000-${String(map.size + 1).padStart(12, '0')}`,
+        );
+      return map.get(v);
+    }
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/.test(v))
       return '2026-01-15T09:00:00.000Z';
     if (/@/.test(v)) return 'user@example.com';

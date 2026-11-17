@@ -17,8 +17,12 @@ import { TaskSubInstanceEntity } from './taskSubInstance.entity';
 
 @Entity()
 export class TaskInstanceEntity {
-  @PrimaryGeneratedColumn()
-  id!: number;
+  /**
+   * uuid, as production has always had it (OPS-04). Nothing joins on it:
+   * sub-tasks and every route use `task_id`.
+   */
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
 
   @Column({ unique: true })
   task_id!: string;

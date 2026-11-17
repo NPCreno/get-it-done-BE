@@ -2,7 +2,7 @@ import { User } from 'src/user/models/user.interface';
 import { TaskSubInstanceResponse } from './taskSubInstanceResponse';
 
 export interface TaskInstanceResponse {
-  id: number;
+  id: string;
   task_id: string;
   title: string;
   description: string | null;
