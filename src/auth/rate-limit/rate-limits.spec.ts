@@ -63,6 +63,19 @@ describe('throttler config (U4)', () => {
     expect(running('refresh')).toEqual(['refresh-client-1m']);
     expect(running('logout')).toEqual(['logout-client-1m']);
     expect(running('signup')).toEqual(['signup-client-1h', 'signup-client-1d']);
+    expect(running('chatMessage')).toEqual(['chat-message-user-1m']);
+    expect(running('chatMember')).toEqual(['chat-member-user-1h']);
+  });
+
+  it('chat throttlers key on the token user, never the IP', () => {
+    const t = buildThrottlers({});
+    const msg = t.find((i) => i.name === 'chat-message-user-1m')!;
+    expect(msg.limit).toBe(30);
+    expect(msg.ttl).toBe(60_000);
+    const tracker = msg.getTracker as (r: Record<string, any>) => string;
+    expect(tracker({ ...attested(), user: { sub: 'u1' } })).toBe('user:u1');
+    expect(tracker({ ...attested(), user: { sub: 'u2' } })).toBe('user:u2');
+    expect(tracker(attested())).toBe('user:unknown');
   });
 
   it('generateKey ignores the handler and separates names', () => {

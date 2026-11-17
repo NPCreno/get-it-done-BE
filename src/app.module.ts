@@ -11,6 +11,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsModule } from './notifications/notifications.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { RateLimitModule } from './auth/rate-limit/rate-limit-config.module';
+import { ChatModule } from './chat/chat.module';
 @Module({
   imports: [
     RateLimitModule,
@@ -29,6 +30,7 @@ import { RateLimitModule } from './auth/rate-limit/rate-limit-config.module';
     ProjectsModule,
     TaskModule,
     NotificationsModule,
+    ChatModule,
     EventEmitterModule.forRoot(),
   ],
   controllers: [AppController],

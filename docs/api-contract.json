@@ -55,7 +55,10 @@
     "titleMax": 100,
     "descriptionMax": 500,
     "colorLabelMax": 50,
-    "notificationsPageMax": 100
+    "notificationsPageMax": 100,
+    "chatMessageMax": 2000,
+    "chatMessagesPageMax": 50,
+    "chatMembersMax": 20
   },
   "patterns": {
     "username": "^[A-Za-z0-9_]+$",
@@ -66,6 +69,78 @@
     "subTaskStatus": "/tasks/update-subtask-status/:taskSubInstance_id/status/:status",
     "notificationsList": "/notifications",
     "notificationRead": "/notifications/:notif_id/read",
-    "notificationsReadAll": "/notifications/read-all"
+    "notificationsReadAll": "/notifications/read-all",
+    "chatMembersList": "/chat/projects/:project_id/members",
+    "chatMemberAdd": "/chat/projects/:project_id/members",
+    "chatMemberRemove": "/chat/projects/:project_id/members/:user_id",
+    "chatSharedProjects": "/chat/shared-projects",
+    "chatMessagesList": "/chat/projects/:project_id/messages",
+    "chatMessageSend": "/chat/projects/:project_id/messages",
+    "chatMessageDelete": "/chat/projects/:project_id/messages/:id"
+  },
+  "chat": {
+    "wsPath": "/chat/ws",
+    "authTimeoutMs": 5000,
+    "closeCodes": {
+      "unauthorized": 4401
+    },
+    "messagesPerMinute": 30,
+    "maxRoomsPerSocket": 50,
+    "clientFrames": [
+      "auth",
+      "join",
+      "leave"
+    ],
+    "serverEvents": [
+      "ready",
+      "joined",
+      "left",
+      "removed",
+      "message.created",
+      "message.deleted",
+      "error"
+    ],
+    "errorCodes": [
+      "NOT_FOUND",
+      "BAD_FRAME",
+      "TOO_MANY_ROOMS"
+    ],
+    "fields": {
+      "member": [
+        "user_id",
+        "username",
+        "fullname"
+      ],
+      "members": [
+        "owner",
+        "members"
+      ],
+      "sharedProject": [
+        "project_id",
+        "title",
+        "color",
+        "owner_username"
+      ],
+      "message": [
+        "id",
+        "project_id",
+        "user_id",
+        "username",
+        "body",
+        "created_at"
+      ],
+      "messagesPage": [
+        "items",
+        "next_cursor"
+      ],
+      "memberRemoved": [
+        "project_id",
+        "user_id"
+      ],
+      "messageDeleted": [
+        "id",
+        "project_id"
+      ]
+    }
   }
 }

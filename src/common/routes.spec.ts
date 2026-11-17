@@ -3,6 +3,7 @@ import { RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { TaskController } from '../task/task.controller';
 import { NotificationsController } from '../notifications/notifications.controller';
+import { ChatController } from '../chat/chat.controller';
 import { API_CONTRACT } from './api-contract';
 
 /**
@@ -19,7 +20,10 @@ function pathOf(target: object, what: string): string {
   return p;
 }
 
-type Ctl = typeof TaskController | typeof NotificationsController;
+type Ctl =
+  | typeof TaskController
+  | typeof NotificationsController
+  | typeof ChatController;
 
 function routeOf(controller: Ctl, method: string) {
   const handler = Object.getOwnPropertyDescriptor(controller.prototype, method)
@@ -56,6 +60,18 @@ describe('API_CONTRACT.routes', () => {
       NotificationsController,
       'readAll',
       RequestMethod.PATCH,
+    ],
+    ['chatMembersList', ChatController, 'listMembers', RequestMethod.GET],
+    ['chatMemberAdd', ChatController, 'addMember', RequestMethod.POST],
+    ['chatMemberRemove', ChatController, 'removeMember', RequestMethod.DELETE],
+    ['chatSharedProjects', ChatController, 'sharedProjects', RequestMethod.GET],
+    ['chatMessagesList', ChatController, 'listMessages', RequestMethod.GET],
+    ['chatMessageSend', ChatController, 'sendMessage', RequestMethod.POST],
+    [
+      'chatMessageDelete',
+      ChatController,
+      'deleteMessage',
+      RequestMethod.DELETE,
     ],
   ];
 
