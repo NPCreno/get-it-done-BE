@@ -42,4 +42,4 @@ Deleting a user cascades to projects, tasks, subtasks and notifications. Deletin
 - `TaskGeneratorService` runs daily at midnight and creates instances from templates.
 
 ## Database
-PostgreSQL through TypeORM. `synchronize` is on only when `DATABASE_SYNCHRONIZE === 'true'`. Migration scripts are configured but `src/migrations/` does not exist yet, so staging and production need migrations created before `synchronize` is turned off.
+PostgreSQL through TypeORM (production: Neon). `synchronize` is on only when `DATABASE_SYNCHRONIZE === 'true'` (local development and tests). Production's schema came from synchronize before any migration ran; `src/migrations/1762700000000-CatchUpBaseline.ts` (OPS-04) creates what that baseline lacks (`notifications`), and the hand-written migrations after it run in one transaction on every Render start (`npm run start:render`). Task `id` is uuid, as in production.

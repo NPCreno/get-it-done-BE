@@ -16,6 +16,7 @@ One line per source file. Paths are relative to the repo root.
 - `token-crypto.ts` — `sha256Hex`, `safeEqual`, AES-GCM `encryptReplay`/`decryptReplay`
 - `auth-maintenance.service.ts` — hourly cleanup cron
 - `auth.service.int-spec.ts` — integration tests (`pnpm test:int`)
+- `../migrations/1762700000000-CatchUpBaseline.ts` — OPS-04: creates `notifications` (synchronize's DDL) where production lacks it; no-op elsewhere. `test/catchup-migration.int-spec.ts`; drift record `docs/migrations/2026-11-17-prod-drift.md`
 - `../migrations/1762800000000-AuthTokenRotation.ts` — hand-written migration for the new token columns
 - `../migrations/1763000000000-AwardOnce.ts` — lifetime counter, `user_awards` ledger, award backfill from notifications
 - `streak.ts` — pure `computeStreak` (count and run start); `test/award-once*.int-spec.ts`, `test/jest-global-tz.ts` (TZ=UTC for jest)
@@ -63,7 +64,7 @@ One line per source file. Paths are relative to the repo root.
 - `../app.setup.ts` — `configureApp()` (CORS + global ValidationPipe)
 - `../auth/token-user.ts` — `toTokenUser()` allowlist; `../auth/decorators/auth-user-id.decorator.ts` — `@AuthUserId()`; `../auth/decorators/current-user.decorator.ts` — `@CurrentUser()`; `../auth/guards/self-param.guard.ts` — `SelfParam()` (the one id comparison); `../auth/guards/admin-only.guard.ts`; `../common/controller-identity.spec.ts` — scans controllers
 - `../auth/rehash-passwords.ts`, `../migrations/1762900000000-HashPlaintextPasswords.ts`, `../../scripts/rehash-plaintext-passwords.ts`, `../../scripts/export-contract.ts`
-- `../../test/` — `int-env.ts`, `int-db.ts`, `int-app.ts`, `int-auth.ts`, `authorization.int-spec.ts`, `api-contract.int-spec.ts`, `password-migration.int-spec.ts`, `fixtures/responses/`
+- `../../test/` — `int-env.ts`, `int-db.ts`, `int-app.ts`, `int-auth.ts`, `authorization.int-spec.ts`, `api-contract.int-spec.ts`, `password-migration.int-spec.ts`, `catchup-migration.int-spec.ts`, `fixtures/responses/`
 
 ## Root config
 - `package.json`, `tsconfig.json`, `nest-cli.json`, `codegraph.json`
