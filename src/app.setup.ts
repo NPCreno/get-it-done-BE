@@ -1,7 +1,8 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
+import { WsAdapter } from '@nestjs/platform-ws';
 
-/** Helmet, CORS and the global ValidationPipe. Shared by main.ts and the integration tests. */
+/** Helmet, CORS, the global ValidationPipe and the WebSocket adapter. Shared by main.ts and the integration tests. */
 export function configureApp(app: INestApplication): void {
   // JSON API: no HTML, no framing, no subresources. Not a replacement for the
   // frontend's own CSP. HSTS includeSubDomains stays off until the API
@@ -31,6 +32,8 @@ export function configureApp(app: INestApplication): void {
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     credentials: true,
   });
+  // Plain `ws` (the browser's built-in WebSocket); the chat gateway shares the HTTP port.
+  app.useWebSocketAdapter(new WsAdapter(app));
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
