@@ -5,6 +5,7 @@ import { ThrottlerOptions } from '@nestjs/throttler';
 import { clientKey, ClientKey } from './client-key';
 import { identifierKey } from './identifier-key';
 import { RATE_LIMIT_GROUP, RateLimitGroup } from './rate-limit.decorator';
+import { API_CONTRACT } from '../../common/api-contract';
 
 export const RATE_LIMITS = Symbol('RATE_LIMITS');
 
@@ -23,8 +24,8 @@ const DAY = 24 * HOUR;
 export interface ThrottlerDef {
   name: string;
   groups: RateLimitGroup[];
-  tracker: string; // 'client' | 'identifier' | a constant bucket name
-  runsFor: 'attested' | 'unattested' | 'noip' | 'identifier';
+  tracker: string; // 'client' | 'identifier' | 'user' | a constant bucket name
+  runsFor: 'attested' | 'unattested' | 'noip' | 'identifier' | 'user';
   limit: number;
   ttl: number;
 }
@@ -126,6 +127,23 @@ export const THROTTLER_DEFS: ThrottlerDef[] = [
     limit: 10,
     ttl: HOUR,
   },
+  // Chat routes run after AuthorizeGuard, so they are keyed on the token user.
+  {
+    name: 'chat-message-user-1m',
+    groups: ['chatMessage'],
+    tracker: 'user',
+    runsFor: 'user',
+    limit: API_CONTRACT.chat.messagesPerMinute,
+    ttl: MIN,
+  },
+  {
+    name: 'chat-member-user-1h',
+    groups: ['chatMember'],
+    tracker: 'user',
+    runsFor: 'user',
+    limit: 60,
+    ttl: HOUR,
+  },
   {
     name: 'bff-noip-1m',
     groups: ['login', 'refresh', 'logout', 'signup'],
@@ -148,6 +166,12 @@ function keyOf(req: Request): ClientKey {
   return k;
 }
 
+/** The token user set by AuthorizeGuard; one shared bucket if it is missing. */
+function userOf(req: Record<string, any>): string {
+  const sub: unknown = (req.user as { sub?: unknown } | undefined)?.sub;
+  return typeof sub === 'string' && sub !== '' ? sub : 'unknown';
+}
+
 const reqOf = (ctx: ExecutionContext) =>
   ctx.switchToHttp().getRequest<Request>();
 const groupOf = (ctx: ExecutionContext): unknown =>
@@ -167,6 +191,8 @@ function skipIfFor(def: ThrottlerDef) {
         return kind !== 'bff-noip';
       case 'identifier':
         return identifierKey(req.body) === null;
+      case 'user':
+        return false;
     }
   };
 }
@@ -175,6 +201,7 @@ function trackerFor(def: ThrottlerDef) {
   return (req: Record<string, any>): string => {
     if (def.tracker === 'client') return keyOf(req as Request).key;
     if (def.tracker === 'identifier') return identifierKey(req.body) ?? '';
+    if (def.tracker === 'user') return `user:${userOf(req)}`;
     return def.tracker;
   };
 }

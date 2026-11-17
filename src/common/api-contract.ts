@@ -41,6 +41,9 @@ export const API_CONTRACT = {
     descriptionMax: 500,
     colorLabelMax: 50,
     notificationsPageMax: 100,
+    chatMessageMax: 2000,
+    chatMessagesPageMax: 50,
+    chatMembersMax: 20,
   },
   patterns: {
     username: '^[A-Za-z0-9_]+$',
@@ -54,6 +57,56 @@ export const API_CONTRACT = {
     notificationsList: '/notifications',
     notificationRead: '/notifications/:notif_id/read',
     notificationsReadAll: '/notifications/read-all',
+    chatMembersList: '/chat/projects/:project_id/members',
+    chatMemberAdd: '/chat/projects/:project_id/members',
+    chatMemberRemove: '/chat/projects/:project_id/members/:user_id',
+    chatSharedProjects: '/chat/shared-projects',
+    chatMessagesList: '/chat/projects/:project_id/messages',
+    chatMessageSend: '/chat/projects/:project_id/messages',
+    chatMessageDelete: '/chat/projects/:project_id/messages/:id',
+  },
+  /**
+   * Project chat (FEAT-05). REST responses are `{ status: 'success', data }`.
+   * The socket only receives; sending goes through REST.
+   */
+  chat: {
+    // Relative to NEXT_PUBLIC_API_URL, like `routes` (the server path is /api/chat/ws).
+    wsPath: '/chat/ws',
+    authTimeoutMs: 5000,
+    closeCodes: { unauthorized: 4401 },
+    messagesPerMinute: 30,
+    maxRoomsPerSocket: 50,
+    // Client -> server frames: {"type":"auth","token"}, {"type":"join","project_id"}, {"type":"leave","project_id"}
+    clientFrames: ['auth', 'join', 'leave'],
+    // Server -> client frames: {"type", "data"}; message.created data is a
+    // `message`, message.deleted data is {id, project_id}, the same as REST.
+    serverEvents: [
+      'ready',
+      'joined',
+      'left',
+      'removed',
+      'message.created',
+      'message.deleted',
+      'error',
+    ],
+    errorCodes: ['NOT_FOUND', 'BAD_FRAME', 'TOO_MANY_ROOMS'],
+    // Exact keys of each response object.
+    fields: {
+      member: ['user_id', 'username', 'fullname'],
+      members: ['owner', 'members'],
+      sharedProject: ['project_id', 'title', 'color', 'owner_username'],
+      message: [
+        'id',
+        'project_id',
+        'user_id',
+        'username',
+        'body',
+        'created_at',
+      ],
+      messagesPage: ['items', 'next_cursor'],
+      memberRemoved: ['project_id', 'user_id'],
+      messageDeleted: ['id', 'project_id'],
+    },
   },
 } as const;
 

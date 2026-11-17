@@ -10,6 +10,9 @@ import { CreateProjectDto } from '../projects/dto/create-project-dto';
 import { UpdateProjectDto } from '../projects/dto/update-project-dto';
 import { CreateUserDto } from '../user/dto/create-user-dto';
 import { UpdateUserDto } from '../user/dto/update-user-dto';
+import { AddMemberDto } from '../chat/dto/add-member.dto';
+import { SendMessageDto } from '../chat/dto/send-message.dto';
+import { ListMessagesQueryDto } from '../chat/dto/list-messages-query.dto';
 
 const L = API_CONTRACT.limits;
 
@@ -109,6 +112,25 @@ describe('API contract', () => {
     ]);
   });
 
+  it('chat DTOs use the contract limits', () => {
+    expect(constraint(SendMessageDto, 'body', 'maxLength')).toBe(
+      L.chatMessageMax,
+    );
+    expect(constraint(SendMessageDto, 'body', 'minLength')).toBe(1);
+    expect(constraint(ListMessagesQueryDto, 'limit', 'max')).toBe(
+      L.chatMessagesPageMax,
+    );
+    expect(constraint(AddMemberDto, 'username', 'minLength')).toBe(
+      L.usernameMin,
+    );
+    expect(constraint(AddMemberDto, 'username', 'maxLength')).toBe(
+      L.usernameMax,
+    );
+    expect(
+      (constraint(AddMemberDto, 'username', 'matches') as RegExp).source,
+    ).toBe(API_CONTRACT.patterns.username);
+  });
+
   it('privileged fields are not part of any client DTO', () => {
     for (const [cls, forbidden] of [
       [CreateUserDto, ['tier', 'role', 'status', 'user_id']],
@@ -118,6 +140,8 @@ describe('API contract', () => {
       [CreateTaskDto, ['user_id']],
       [CreateTaskSubInstanceDto, ['user_id']],
       [UpdateTaskDto, ['task_id', 'user_id', 'deletedAt', 'createdAt']],
+      [AddMemberDto, ['user_id', 'project_id', 'added_by']],
+      [SendMessageDto, ['user_id', 'project_id', 'id', 'created_at']],
     ] as [new () => object, string[]][]) {
       const props = getMetadataStorage()
         .getTargetValidationMetadatas(cls, '', false, false)
