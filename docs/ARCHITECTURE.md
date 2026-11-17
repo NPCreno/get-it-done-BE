@@ -1,12 +1,12 @@
 # Architecture — Backend
 
 ## Module dependency
-`AppModule` imports `ScheduleModule.forRoot()`, `ConfigModule` (global), `TypeOrmModule.forRoot` (PostgreSQL, `autoLoadEntities`), `EventEmitterModule`, and the feature modules: `AuthModule`, `UserModule`, `ProjectsModule`, `TaskModule`, `NotificationsModule`.
+`AppModule` imports `ScheduleModule.forRoot()`, `ConfigModule` (global), `TypeOrmModule.forRoot` (PostgreSQL, `autoLoadEntities`), `EventEmitterModule`, and the feature modules: `AuthModule`, `UserModule`, `ProjectsModule`, `TaskModule`, `NotificationsModule`, `ChatModule`.
 
 ## Request pipeline
 Request → (CORS from `FRONTEND_URL`) → route → `AuthorizeGuard` on protected controllers → controller → service → TypeORM repositories → PostgreSQL.
 
-`AuthorizeGuard` extracts the Bearer token, calls `jwtService.verifyAsync` and requires `type === 'access'`. Its 401s carry `code: TOKEN_MISSING | TOKEN_INVALID`, which is how the frontend tells a token problem from an ownership 401. The frontend middleware is only a UX layer; this guard is the security boundary.
+`AuthorizeGuard` extracts the Bearer token and calls `verifyAccessToken` (`jwtService.verifyAsync`, requires `type === 'access'`; the chat WebSocket uses the same function). Its 401s carry `code: TOKEN_MISSING | TOKEN_INVALID`, which is how the frontend tells a token problem from an ownership 401. The frontend middleware is only a UX layer; this guard is the security boundary.
 
 ## Authentication
 - Login returns an access token (`JWT_SECRET`, lifetime `JWT_ACCESS_EXPIRATION`) and a refresh token (`JWT_REFRESH_SECRET`, `1d` or `7d` with `rememberMe`).
@@ -31,11 +31,18 @@ Request → (CORS from `FRONTEND_URL`) → route → `AuthorizeGuard` on protect
 User ─┬─< Project ─< TaskInstance
       ├─< TaskInstance ─< TaskSubInstance
       ├─< TaskSubInstance
-      └─< Notification
+      ├─< Notification
+      ├─< ProjectMember >─ Project   (project_members, PK (project_id, user_id), both CASCADE)
+      └─< ChatMessage   >─ Project   (chat_messages, soft delete, both CASCADE)
 TaskTemplate ─< TaskInstance        (onDelete: SET NULL)
 AuthToken: stores user_id, sha256 token, expiry, family_id, remember_me, revoked_at, replaced_by_token_id, replay_ciphertext, ip_address (no ORM relation)
 ```
 Deleting a user cascades to projects, tasks, subtasks and notifications. Deleting a task instance cascades to its subtasks.
+
+## Project chat (FEAT-05)
+- Sharing: the owner (`project_entity.user_id`) adds members by username into `project_members`; members see the project's name, color and chat, never its tasks. `ChatAccessService.assertCanChat` is the one access check.
+- Live updates: `configureApp` installs `WsAdapter` (`@nestjs/platform-ws`), and `ChatGateway` serves `/api/chat/ws` on the HTTP port. The socket only receives: REST writes call `ChatRoomsService.broadcast` after the write, and member removal calls `kick`.
+- Rooms, like the notification stream and the rate-limit counters, live in memory: correct for one API instance only. More instances need a shared pub/sub.
 
 ## Events and schedules
 - `task.completed` is emitted by `TaskStatusService` and consumed by `NotificationsService`.

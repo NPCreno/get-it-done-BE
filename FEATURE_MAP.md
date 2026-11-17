@@ -38,3 +38,14 @@ Endpoint → implementing chain. All routes are under `/api`. "Guarded" means `A
   - Migration `AwardOnce` backfills the counter from current completed tasks and the ledger from surviving notification rows by exact `(type, title)` (streak and `taskDue` rows are not backfilled). Users below their historic peak may receive some milestones once more after the migration; the ledger prevents repeats afterwards
   - Known gap (no outbox): a crash between the status commit and the listener, or a listener DB error, loses that award without retry
 - `DELETE /api/notifications/clear/:user_id` clears a user's notifications. It does not touch `user_awards`.
+
+## Project chat (FEAT-05, all guarded) → `ChatController` → `ChatMembersService`, `ChatMessagesService`, both behind `ChatAccessService.assertCanChat`
+- Responses are `{status: 'success', data}`. A stranger, a missing project and a soft-deleted project are the same 404 `Project not found`; a member doing an owner-only action gets 403.
+- `GET /api/chat/projects/:project_id/members` (owner or member) → `{owner, members}`, each `{user_id, username, fullname}`
+- `POST /api/chat/projects/:project_id/members {username}` (owner; `@RateLimit('chatMember')`, 60/h per user) → 201 member. Exact username; unknown user 404 `User not found`; 409 already a member; 400 self or 20 members. The project row is locked for the add
+- `DELETE /api/chat/projects/:project_id/members/:user_id` (owner, or the member leaving) → `{project_id, user_id}`; then `ChatRoomsService.kick`
+- `GET /api/chat/shared-projects` → `[{project_id, title, color, owner_username}]`
+- `GET /api/chat/projects/:project_id/messages?limit&cursor` → `{items, next_cursor}`, newest first by `(created_at DESC, id)`, limit ≤ 50, opaque cursor
+- `POST /api/chat/projects/:project_id/messages {body}` (`@RateLimit('chatMessage')`, 30/min per user) → 201 message `{id, project_id, user_id, username, body, created_at}`; broadcast `message.created`
+- `DELETE /api/chat/projects/:project_id/messages/:id` (author or owner) → soft delete, `{id, project_id}`; broadcast `message.deleted`
+- WebSocket `/api/chat/ws` (`ChatGateway`): Origin must be `FRONTEND_URL` (else 403 on upgrade); first frame `{type:'auth', token}` within 5 s, checked by `verifyAccessToken`; `join`/`leave` with `project_id`. Server frames `{type, data}`: `ready`, `joined`, `left`, `removed`, `message.created`, `message.deleted`, `error {code}`. Close 4401 on missing/bad auth and at token expiry. Receive only; rooms in memory (one instance)
