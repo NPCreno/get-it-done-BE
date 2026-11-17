@@ -65,3 +65,12 @@ __tests__/
 
 # Yarn Integrity file
 .yarn-integrity
+
+# Local data and tooling (never in the build context)
+db_dumps/
+*.dump
+scripts/.env.dump
+.codegraph/
+docs/
+*.postman_collection.json
+postman-collection.json
