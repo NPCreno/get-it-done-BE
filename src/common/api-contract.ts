@@ -64,6 +64,8 @@ export const API_CONTRACT = {
     chatMessagesList: '/chat/projects/:project_id/messages',
     chatMessageSend: '/chat/projects/:project_id/messages',
     chatMessageDelete: '/chat/projects/:project_id/messages/:id',
+    chatUnread: '/chat/unread',
+    chatMarkRead: '/chat/projects/:project_id/read',
   },
   /**
    * Project chat (FEAT-05). REST responses are `{ status: 'success', data }`.
@@ -90,6 +92,13 @@ export const API_CONTRACT = {
       'error',
     ],
     errorCodes: ['NOT_FOUND', 'BAD_FRAME', 'TOO_MANY_ROOMS'],
+    // FEAT-08a: per-project unread counts stop here (the FE shows "99+").
+    unreadCap: 100,
+    // FEAT-08a: event type on the notifications SSE stream
+    // (/notifications/sse) when the user's chat unread counts changed. Its
+    // data is {"project_id"} (fields.unreadEvent); it has no `id:`, so it
+    // never moves Last-Event-ID. Refetch chatUnread on it.
+    sseEventType: 'chat',
     // Exact keys of each response object.
     fields: {
       member: ['user_id', 'username', 'fullname'],
@@ -106,6 +115,10 @@ export const API_CONTRACT = {
       messagesPage: ['items', 'next_cursor'],
       memberRemoved: ['project_id', 'user_id'],
       messageDeleted: ['id', 'project_id'],
+      unread: ['items', 'total'],
+      unreadItem: ['project_id', 'unread_count'],
+      readPoint: ['project_id', 'last_read_at'],
+      unreadEvent: ['project_id'],
     },
   },
 } as const;

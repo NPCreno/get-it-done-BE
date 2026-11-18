@@ -7,8 +7,9 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
 import { DataSource } from 'typeorm';
 import { API_CONTRACT } from 'src/common/api-contract';
-import { ChatAccessService } from './chat-access.service';
+import { ChatAccessService, MESSAGE_NOT_FOUND } from './chat-access.service';
 import { ChatRoomsService } from './chat-rooms.service';
+import { ChatUnreadService } from './chat-unread.service';
 import { decodeMessageCursor, encodeMessageCursor } from './chat-cursor';
 import {
   ChatMessageDto,
@@ -17,7 +18,7 @@ import {
   toMessageDto,
 } from './chat.dto';
 
-export const MESSAGE_NOT_FOUND = 'Message not found';
+export { MESSAGE_NOT_FOUND };
 const MESSAGE_COLUMNS = `m."id", m."project_id", m."user_id", u."username", m."body", m."created_at"`;
 
 interface MessageRow {
@@ -35,6 +36,7 @@ export class ChatMessagesService {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly access: ChatAccessService,
     private readonly rooms: ChatRoomsService,
+    private readonly unread: ChatUnreadService,
   ) {}
 
   /**
@@ -96,6 +98,8 @@ export class ChatMessagesService {
     );
     const message = toMessageDto(rows[0]);
     this.rooms.broadcast(projectId, 'message.created', message);
+    // FEAT-08a: everyone else's unread count changed (the insert is committed).
+    await this.unread.notifyOthers(projectId, userId);
     return message;
   }
 
@@ -125,6 +129,7 @@ export class ChatMessagesService {
     if (!affected) throw new NotFoundException(MESSAGE_NOT_FOUND);
     const data = { id: messageId, project_id: projectId };
     this.rooms.broadcast(projectId, 'message.deleted', data);
+    await this.unread.notifyOthers(projectId, actorId);
     return data;
   }
 }

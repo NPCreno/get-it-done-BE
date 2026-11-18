@@ -18,6 +18,11 @@ import { User } from 'src/user/models/user.interface';
 import { awardKeyFor } from './award-key';
 import { UserAwardEntity } from './models/user-award.entity';
 import { NotificationRule } from './models/notification.interfaces';
+import { API_CONTRACT } from 'src/common/api-contract';
+import {
+  CHAT_UNREAD_CHANGED,
+  ChatUnreadChangedEvent,
+} from 'src/chat/chat-events';
 
 @Injectable()
 export class NotificationsService {
@@ -159,6 +164,22 @@ export class NotificationsService {
         data: JSON.stringify(dto),
       },
     });
+  }
+
+  /**
+   * FEAT-08a: a chat write changed these users' unread counts. One `chat`
+   * event per user on their stream, with no `id` (Last-Event-ID stays on
+   * notifications) and no text or counts: the FE refetches GET /api/chat/unread.
+   */
+  @OnEvent(CHAT_UNREAD_CHANGED)
+  handleChatUnreadChanged(payload: ChatUnreadChangedEvent) {
+    const data = JSON.stringify({ project_id: payload.projectId });
+    for (const userId of new Set(payload.userIds)) {
+      this.notificationSubject.next({
+        userId,
+        event: { type: API_CONTRACT.chat.sseEventType, data },
+      });
+    }
   }
 
   async list(

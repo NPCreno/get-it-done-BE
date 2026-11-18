@@ -73,6 +73,8 @@ describe('API_CONTRACT.routes', () => {
       'deleteMessage',
       RequestMethod.DELETE,
     ],
+    ['chatUnread', ChatController, 'unreadCounts', RequestMethod.GET],
+    ['chatMarkRead', ChatController, 'markRead', RequestMethod.PUT],
   ];
 
   it('lists exactly the contract routes', () => {

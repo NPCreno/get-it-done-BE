@@ -8,6 +8,7 @@ import { DataSource, EntityManager } from 'typeorm';
 
 export const PROJECT_NOT_FOUND = 'Project not found';
 export const OWNER_ONLY = 'Only the project owner can do this.';
+export const MESSAGE_NOT_FOUND = 'Message not found';
 
 export interface ChatAccess {
   project_id: string;

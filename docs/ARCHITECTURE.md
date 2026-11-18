@@ -33,7 +33,8 @@ User ─┬─< Project ─< TaskInstance
       ├─< TaskSubInstance
       ├─< Notification
       ├─< ProjectMember >─ Project   (project_members, PK (project_id, user_id), both CASCADE)
-      └─< ChatMessage   >─ Project   (chat_messages, soft delete, both CASCADE)
+      ├─< ChatMessage   >─ Project   (chat_messages, soft delete, both CASCADE)
+      └─< ChatRead      >─ Project   (chat_reads, PK (project_id, user_id), last_read_at, both CASCADE)
 TaskTemplate ─< TaskInstance        (onDelete: SET NULL)
 AuthToken: stores user_id, sha256 token, expiry, family_id, remember_me, revoked_at, replaced_by_token_id, replay_ciphertext, ip_address (no ORM relation)
 ```
@@ -43,9 +44,12 @@ Deleting a user cascades to projects, tasks, subtasks and notifications. Deletin
 - Sharing: the owner (`project_entity.user_id`) adds members by username into `project_members`; members see the project's name, color and chat, never its tasks. `ChatAccessService.assertCanChat` is the one access check.
 - Live updates: `configureApp` installs `WsAdapter` (`@nestjs/platform-ws`), and `ChatGateway` serves `/api/chat/ws` on the HTTP port. The socket only receives: REST writes call `ChatRoomsService.broadcast` after the write, and member removal calls `kick`.
 - Rooms, like the notification stream and the rate-limit counters, live in memory: correct for one API instance only. More instances need a shared pub/sub.
+- Unread counts (FEAT-08a): `chat_reads` holds each user's read point per project. Unread = messages in a project the user can chat in that are not deleted, not their own, and newer than the later of `last_read_at` and (for a member) their join time `project_members.created_at`; the owner with no row counts everything. `GET /api/chat/unread` computes it in one query (a lateral `LIMIT 100` per project, so the cap also bounds the scan). `PUT .../read` upserts with `GREATEST`, so the point never moves back. Removing a member deletes their row in the same transaction. No notification rows are stored for chat.
+- Live unread signal: after a chat write commits, `ChatUnreadService` emits `chat.unread.changed {userIds, projectId}` on the global `EventEmitter2` (message created or deleted: owner and members minus the actor; mark-read: the reader; member removed: that user). `NotificationsService` listens and pushes `event: chat` with data `{project_id}` and no `id:` onto the same per-user SSE subject as notifications, so the FE needs no extra connection and `Last-Event-ID` stays on notifications. The FE refetches `GET /api/chat/unread` on it.
 
 ## Events and schedules
 - `task.completed` is emitted by `TaskStatusService` and consumed by `NotificationsService`.
+- `chat.unread.changed` is emitted by `ChatUnreadService` and consumed by `NotificationsService` (FEAT-08a); the modules don't import each other.
 - `TaskGeneratorService` runs daily at midnight and creates instances from templates.
 
 ## Database

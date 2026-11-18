@@ -1,0 +1,12 @@
+{
+  "status": "success",
+  "data": {
+    "items": [
+      {
+        "project_id": "PRJ-000000001",
+        "unread_count": 2
+      }
+    ],
+    "total": 2
+  }
+}

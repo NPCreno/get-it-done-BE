@@ -24,7 +24,7 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `projects` — project CRUD scoped to the owning user
 - `task` — tasks, subtasks, recurring templates and instances, dashboard analytics
 - `notifications` — SSE stream, notification creation on task completion
-- `chat` — FEAT-05: project sharing by username (`project_members`), project chat messages (`chat_messages`), WebSocket rooms
+- `chat` — FEAT-05: project sharing by username (`project_members`), project chat messages (`chat_messages`), WebSocket rooms; FEAT-08a unread counts (`chat_reads`) with a `chat` event on the notifications SSE stream
 
 ## Key files
 - `src/auth/auth.service.ts` — `generateAccessToken`, `generateRefreshToken`, `validateRefreshToken`, `revokeRefreshToken`, `revokeUserRefreshTokens`, `refreshAccessToken`
@@ -37,10 +37,10 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `src/task/task.service.ts` — task create/update/delete (`TaskService`); `task-query.service.ts` list reads; `subtask.service.ts` subtask writes; `task-status.service.ts` status transitions (award-once transaction, `task.completed` emit); `task-stats.service.ts` dashboard, trend, distribution, heatmap (SQL counts); `task-streak.service.ts` streak; `task-recurrence.service.ts` recurring deletes; `task-ids.ts` id generators. Each under about 400 lines (`service-size.spec.ts`)
 - `src/task/taskGenerator.service.ts` — daily cron that creates recurring task instances; also runs once at boot (`onModuleInit`)
 - `src/notifications/notifications.service.ts` — `@OnEvent('task.completed')` listener
-- `src/chat/chat-access.service.ts` — `assertCanChat` (owner or member, project not deleted; a stranger gets the missing-project 404); `chat-members.service.ts`, `chat-messages.service.ts`, `chat-rooms.service.ts` (in-memory rooms), `chat.gateway.ts`
+- `src/chat/chat-access.service.ts` — `assertCanChat` (owner or member, project not deleted; a stranger gets the missing-project 404); `chat-members.service.ts`, `chat-messages.service.ts`, `chat-rooms.service.ts` (in-memory rooms), `chat.gateway.ts`; `chat-unread.service.ts` (unread counts, mark-read, `chat.unread.changed` emit)
 - `src/main.ts` — CORS (`FRONTEND_URL`, default `http://localhost:3000`), listens on `PORT` (default 8000)
 
-## Entities (10)
+## Entities (11)
 - `UserEntity` (table `users`)
 - `AuthTokenEntity` (`src/auth/models/auth.entity.ts`) — refresh token records: sha256 hash, `family_id`, `remember_me`, `revoked_at`, `replaced_by_token_id`, `replay_ciphertext`, nullable `ip_address`
 - `ProjectEntity`
@@ -51,13 +51,14 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `UserAwardEntity` (`src/notifications/models/user-award.entity.ts`, table `user_awards`) — award ledger
 - `ProjectMemberEntity` (`src/chat/models/project-member.entity.ts`, table `project_members`, PK `(project_id, user_id)`) — users a project is shared with; the owner is never a row
 - `ChatMessageEntity` (`src/chat/models/chat-message.entity.ts`, table `chat_messages`) — uuid id from the app, `body` varchar(2000), `created_at`/`deleted_at` timestamptz(3), soft delete
+- `ChatReadEntity` (`src/chat/models/chat-read.entity.ts`, table `chat_reads`, PK `(project_id, user_id)`) — FEAT-08a read point `last_read_at` timestamptz(3); only moves forward (`GREATEST`); deleted with the membership
 
 ## Relationships
 - User 1→N Project, TaskInstance, TaskSubInstance, Notification, UserAward (all `onDelete: CASCADE`)
 - Project 1→N TaskInstance (`CASCADE`)
 - TaskTemplate 1→N TaskInstance (`SET NULL`)
 - TaskInstance 1→N TaskSubInstance (`CASCADE`)
-- Project 1→N ProjectMember, ChatMessage; User 1→N ProjectMember, ChatMessage (all `CASCADE`)
+- Project 1→N ProjectMember, ChatMessage, ChatRead; User 1→N ProjectMember, ChatMessage, ChatRead (all `CASCADE`)
 
 ## Auth
 - HS256. Access token signed with `JWT_SECRET`, lifetime from `JWT_ACCESS_EXPIRATION` (no default; the service throws if either is missing)
@@ -105,14 +106,14 @@ Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app run
 Validated at boot by `src/config/env.validation.ts` (`validateEnv`, called in `main.ts` before `AppModule` is loaded; any error prints the variable names and rules, never values, and exits 1). The migration CLI (`data-source.ts`) checks `DATABASE_URL` with the same `checkDatabaseUrl`. Required: `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_EXPIRATION`. Expiries need a unit (`15m`, `3600s`; a bare number is milliseconds to jsonwebtoken). Strict: `DATABASE_SYNCHRONIZE` is exactly `true`/`false`; `PORT` 1-65535; `REFRESH_REUSE_GRACE_SECONDS` 0-3600. `NODE_ENV` is `development|test|production` (default `development` locally, but required when `RENDER` (set by Render on every service), `RAILWAY_ENVIRONMENT_NAME` or `RAILWAY_PROJECT_ID` is present). Production-only: `FRONTEND_URL` required, an origin only and not local (`FRONTEND_URL_ALLOW_LOCAL=true` opts out for a smoke test), and `DATABASE_SYNCHRONIZE=true` is an error; secrets under 32 characters or equal only warn. `AppEnv` is a diagnostic view; readers keep their own reads and defaults. A good boot logs `[Env] configuration valid (NODE_ENV=...)`.
 `NODE_ENV`, `FRONTEND_URL_ALLOW_LOCAL`, `DATABASE_URL`, `DATABASE_SYNCHRONIZE`, `JWT_SECRET`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRATION`, `JWT_REFRESH_EXPIRATION_SHORT`, `REFRESH_REUSE_GRACE_SECONDS`, `INTERNAL_API_SECRET`, `FRONTEND_URL`, `PORT`
 
-## API endpoints (45)
+## API endpoints (47)
 - `GET /` — health check (1)
 - `/api/auth` — `POST refresh`, `POST logout` (2)
 - `/api/user` — create, loginEmail, loginUsername, get/:id, getAll, delete :id, :id/hard, update/:user_id (8)
 - `/api/projects` — getAll, getAll/:user_id, :project_id (get, patch, delete), create, :project_id/hard (7)
 - `/api/tasks` — 18 endpoints, see `FEATURE_MAP.md`
-- `/api/chat` — `projects/:project_id/members` (GET, POST `{username}`, DELETE `:user_id`), `shared-projects` (GET), `projects/:project_id/messages` (GET `limit`/`cursor`, POST `{body}`, DELETE `:id`) (7). Responses `{status:'success', data}`; shapes and socket frames in `API_CONTRACT.chat` and `FEATURE_MAP.md`. WebSocket `/api/chat/ws` (not counted): Origin = `FRONTEND_URL`, first frame `{type:'auth', token}` within 5 s, close 4401 on bad auth or token expiry, `join`/`leave`, server frames `{type, data}`. Rooms are in memory (one instance)
-- `/api/notifications` — `GET` (list: `limit`, opaque `cursor`; `{items, unread_count, next_cursor}`), `PATCH read-all`, `PATCH :notif_id/read` (idempotent; unknown or foreign id is 404), `GET sse` (typed `notification` events with `id:`, 25 s `ping`, ends at token `exp`), `DELETE clear/:user_id` (5). The list is the source of truth; the stream only signals. `metadata` and `actionTarget` are never exposed
+- `/api/chat` — `projects/:project_id/members` (GET, POST `{username}`, DELETE `:user_id`), `shared-projects` (GET), `projects/:project_id/messages` (GET `limit`/`cursor`, POST `{body}`, DELETE `:id`), FEAT-08a `unread` (GET, `{items: [{project_id, unread_count}], total}`, counts capped at 100) and `projects/:project_id/read` (PUT `{message_id}`, never moves back) (9). Responses `{status:'success', data}`; shapes and socket frames in `API_CONTRACT.chat` and `FEATURE_MAP.md`. WebSocket `/api/chat/ws` (not counted): Origin = `FRONTEND_URL`, first frame `{type:'auth', token}` within 5 s, close 4401 on bad auth or token expiry, `join`/`leave`, server frames `{type, data}`. Rooms are in memory (one instance)
+- `/api/notifications` — `GET` (list: `limit`, opaque `cursor`; `{items, unread_count, next_cursor}`), `PATCH read-all`, `PATCH :notif_id/read` (idempotent; unknown or foreign id is 404), `GET sse` (typed `notification` events with `id:`, 25 s `ping`, ends at token `exp`), `DELETE clear/:user_id` (5). The list is the source of truth; the stream only signals. FEAT-08a adds `event: chat` (data `{project_id}`, no `id:`) when the user's chat unread counts changed; refetch `GET /api/chat/unread` `metadata` and `actionTarget` are never exposed
 - Everything except `GET /`, `refresh`, `create`, `loginEmail`, `loginUsername` and the two notification routes uses `AuthorizeGuard`
 
 ## Commands

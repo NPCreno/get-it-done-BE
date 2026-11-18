@@ -7,6 +7,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -18,6 +19,8 @@ import { ChatMessagesService } from './chat-messages.service';
 import { AddMemberDto } from './dto/add-member.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { ListMessagesQueryDto } from './dto/list-messages-query.dto';
+import { MarkReadDto } from './dto/mark-read.dto';
+import { ChatUnreadService } from './chat-unread.service';
 
 /**
  * Project sharing and chat (FEAT-05). Its own prefix, so nothing collides with
@@ -32,6 +35,7 @@ export class ChatController {
   constructor(
     private readonly members: ChatMembersService,
     private readonly messages: ChatMessagesService,
+    private readonly unread: ChatUnreadService,
   ) {}
 
   @Get('shared-projects')
@@ -116,6 +120,25 @@ export class ChatController {
     return {
       status: 'success',
       data: await this.messages.remove(projectId, userId, messageId),
+    };
+  }
+
+  /** FEAT-08a: unread counts per project (only > 0) and their total. */
+  @Get('unread')
+  async unreadCounts(@AuthUserId() userId: string) {
+    return { status: 'success', data: await this.unread.unread(userId) };
+  }
+
+  /** FEAT-08a: moves the caller's read point; never back. Idempotent. */
+  @Put('projects/:project_id/read')
+  async markRead(
+    @AuthUserId() userId: string,
+    @Param('project_id') projectId: string,
+    @Body() dto: MarkReadDto,
+  ) {
+    return {
+      status: 'success',
+      data: await this.unread.markRead(projectId, userId, dto.message_id),
     };
   }
 }

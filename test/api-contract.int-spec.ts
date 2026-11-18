@@ -363,6 +363,46 @@ describe('api contract (integration)', () => {
       fixture('notifications-list', res.body);
     });
 
+    it('chat unread and mark-read shapes; captures fixtures (FEAT-08a)', async () => {
+      const owner = await signupAndLogin(app, 'unreadowner');
+      const member = await signupAndLogin(app, 'unreadmember');
+      const proj = await request(server())
+        .post('/api/projects/create')
+        .set(bearer(owner))
+        .send({ title: 'Shared', color: '#3366ff', colorLabel: 'Blue' });
+      const pid = proj.body.data.project_id as string;
+      await request(server())
+        .post(`/api/chat/projects/${pid}/members`)
+        .set(bearer(owner))
+        .send({ username: member.username });
+      let last = '';
+      for (const body of ['one', 'two']) {
+        const m = await request(server())
+          .post(`/api/chat/projects/${pid}/messages`)
+          .set(bearer(member))
+          .send({ body });
+        last = m.body.data.id as string;
+      }
+      const unread = await request(server())
+        .get('/api/chat/unread')
+        .set(bearer(owner));
+      expect(unread.body).toEqual({
+        status: 'success',
+        data: { items: [{ project_id: pid, unread_count: 2 }], total: 2 },
+      });
+      fixture('chat-unread', unread.body);
+      const read = await request(server())
+        .put(`/api/chat/projects/${pid}/read`)
+        .set(bearer(owner))
+        .send({ message_id: last });
+      expect(read.status).toBe(200);
+      expect(Object.keys(read.body.data).sort()).toEqual([
+        'last_read_at',
+        'project_id',
+      ]);
+      fixture('chat-read', read.body);
+    });
+
     it('getTasksByUser includes project_id; captures fixtures', async () => {
       const proj = await request(server())
         .post('/api/projects/create')

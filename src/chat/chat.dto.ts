@@ -61,3 +61,20 @@ export function toMessageDto(row: {
     created_at: new Date(row.created_at).toISOString(),
   };
 }
+
+/** FEAT-08a: GET /api/chat/unread. Only projects with unread > 0; counts capped at API_CONTRACT.chat.unreadCap. */
+export interface ChatUnreadItemDto {
+  project_id: string;
+  unread_count: number;
+}
+
+export interface ChatUnreadDto {
+  items: ChatUnreadItemDto[];
+  total: number;
+}
+
+/** FEAT-08a: PUT /api/chat/projects/:project_id/read. */
+export interface ChatReadPointDto {
+  project_id: string;
+  last_read_at: string;
+}

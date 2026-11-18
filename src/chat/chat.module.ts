@@ -9,17 +9,24 @@ import { ChatMessagesService } from './chat-messages.service';
 import { ChatRoomsService } from './chat-rooms.service';
 import { ProjectMemberEntity } from './models/project-member.entity';
 import { ChatMessageEntity } from './models/chat-message.entity';
+import { ChatReadEntity } from './models/chat-read.entity';
+import { ChatUnreadService } from './chat-unread.service';
 
 @Module({
   imports: [
     AuthModule,
-    TypeOrmModule.forFeature([ProjectMemberEntity, ChatMessageEntity]),
+    TypeOrmModule.forFeature([
+      ProjectMemberEntity,
+      ChatMessageEntity,
+      ChatReadEntity,
+    ]),
   ],
   controllers: [ChatController],
   providers: [
     ChatAccessService,
     ChatMembersService,
     ChatMessagesService,
+    ChatUnreadService,
     ChatRoomsService,
     ChatGateway,
   ],

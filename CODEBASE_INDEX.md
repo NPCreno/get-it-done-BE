@@ -63,10 +63,11 @@ One line per source file. Paths are relative to the repo root.
 - `chat-rooms.service.ts` — in-memory rooms, `broadcast`, `kick` (one API instance)
 - `chat.gateway.ts` — receive-only WebSocket at `/api/chat/ws` (origin check, auth frame, join/leave, 4401); `ws-origin.ts` — `isAllowedOrigin`
 - `chat-cursor.ts` — opaque `(created_at, id)` page cursor; `chat.dto.ts` — response shapes and `toMessageDto`
-- `dto/add-member.dto.ts`, `dto/send-message.dto.ts`, `dto/list-messages-query.dto.ts` — request payloads
-- `models/project-member.entity.ts`, `models/chat-message.entity.ts` — `ProjectMemberEntity`, `ChatMessageEntity`
-- `../migrations/1763100000000-ProjectChat.ts` — `project_members`, `chat_messages`
-- `*.spec.ts` — access, cursor, DTO validation, rooms and origin unit specs; `../../test/chat.int-spec.ts`, `chat-ws.int-spec.ts`, `project-chat-migration.int-spec.ts`, `chat-fixtures.ts`
+- `chat-unread.service.ts` — FEAT-08a unread counts (one query), mark-read upsert, recipients and `notify`; `chat-events.ts` — `CHAT_UNREAD_CHANGED`, pure `unreadRecipients`
+- `dto/add-member.dto.ts`, `dto/send-message.dto.ts`, `dto/list-messages-query.dto.ts`, `dto/mark-read.dto.ts` — request payloads
+- `models/project-member.entity.ts`, `models/chat-message.entity.ts`, `models/chat-read.entity.ts` — `ProjectMemberEntity`, `ChatMessageEntity`, `ChatReadEntity`
+- `../migrations/1763100000000-ProjectChat.ts` — `project_members`, `chat_messages`; `1763200000000-ChatReads.ts` — `chat_reads` (FEAT-08a)
+- `*.spec.ts` — access, cursor, DTO validation, rooms and origin unit specs; `../../test/chat.int-spec.ts`, `chat-ws.int-spec.ts`, `project-chat-migration.int-spec.ts`, `chat-unread.int-spec.ts`, `chat-reads-migration.int-spec.ts`, `chat-fixtures.ts`
 
 ## pipes (`src/pipes/`)
 - `status-validation.pipe.ts` — validates task status values

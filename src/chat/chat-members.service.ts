@@ -14,6 +14,7 @@ import {
   PROJECT_NOT_FOUND,
 } from './chat-access.service';
 import { ChatRoomsService } from './chat-rooms.service';
+import { ChatUnreadService } from './chat-unread.service';
 import {
   ChatMemberDto,
   ChatMembersDto,
@@ -30,6 +31,7 @@ export class ChatMembersService {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly access: ChatAccessService,
     private readonly rooms: ChatRoomsService,
+    private readonly unread: ChatUnreadService,
   ) {}
 
   /** Owner plus members (soft-deleted users are left out). */
@@ -114,13 +116,23 @@ export class ChatMembersService {
     if (!access.isOwner && targetUserId !== actorId) {
       throw new ForbiddenException(OWNER_ONLY);
     }
-    const [, affected]: [unknown, number] = await this.dataSource.query(
-      `DELETE FROM "project_members" WHERE "project_id" = $1 AND "user_id" = $2`,
-      [projectId, targetUserId],
-    );
-    if (!affected) throw new NotFoundException(MEMBER_NOT_FOUND);
-    // After the commit: the removed user's sockets leave the room.
+    // The read point goes with the membership (FEAT-08a), so a re-added member
+    // starts again from their new join time.
+    await this.dataSource.transaction(async (manager) => {
+      const [, affected]: [unknown, number] = await manager.query(
+        `DELETE FROM "project_members" WHERE "project_id" = $1 AND "user_id" = $2`,
+        [projectId, targetUserId],
+      );
+      if (!affected) throw new NotFoundException(MEMBER_NOT_FOUND);
+      await manager.query(
+        `DELETE FROM "chat_reads" WHERE "project_id" = $1 AND "user_id" = $2`,
+        [projectId, targetUserId],
+      );
+    });
+    // After the commit: the removed user's sockets leave the room, and their
+    // badge for this project goes away.
     this.rooms.kick(projectId, targetUserId);
+    this.unread.notify([targetUserId], projectId);
     return { project_id: projectId, user_id: targetUserId };
   }
 
