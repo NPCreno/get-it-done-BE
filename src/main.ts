@@ -19,6 +19,9 @@ async function bootstrap() {
   }
   for (const w of warnings) console.warn(`[Env] warning: ${w}`);
   console.log(`[Env] configuration valid (NODE_ENV=${env.NODE_ENV})`);
+  // Which build this process runs (Render sets RENDER_GIT_COMMIT), so the logs
+  // tell a new deploy's process from a restarted older one.
+  console.log(`[Boot] commit ${bootCommit()}`);
 
   const { AppModule } = await import('./app.module');
   const app = await NestFactory.create(AppModule);
@@ -27,7 +30,16 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 8000;
   await app.listen(port);
-  console.log(`Application is running on: http://localhost:${port}`);
+  console.log(
+    `Application is running on: http://localhost:${port} (commit ${bootCommit()})`,
+  );
+}
+
+function bootCommit(): string {
+  const sha = process.env.RENDER_GIT_COMMIT;
+  return typeof sha === 'string' && /^[0-9a-f]{7,40}$/i.test(sha)
+    ? sha.slice(0, 7)
+    : 'unknown';
 }
 
 bootstrap().catch((err) => {
