@@ -79,4 +79,43 @@ notifications), re-complete adds nothing, notifications list, token refresh:
 
 ## 2. Neon rehearsal branch `catchup-rehearsal` (A1 and A7)
 
-_Pending: needs the branch's direct connection string in `.env.local`._
+Run on 2026-11-18 against the branch's direct host (checked first: the
+rehearsal endpoint, no `-pooler`, not the production endpoint). The connection
+string stayed in the git-ignored `.env.local`; `channel_binding` was stripped
+in memory for the run.
+
+### A1: before (entities as on `master` `5a61aa3`)
+
+The same **20 statements** as section 1, line for line. No other drift.
+Counts only: 8 users, 13 tasks, 7 token rows; no `migrations`,
+`notifications` or `user_awards` table. Passwords: 8 bcrypt, **0 non-bcrypt**.
+
+### A7: `npm run start:render` on the branch code
+
+```
+0 migrations are already loaded in the database.
+4 migrations were found in the source code.
+4 migrations are new migrations must be executed.
+[CatchUpBaseline] created notifications (empty)
+Migration CatchUpBaseline1762700000000 has been executed successfully.
+Migration AuthTokenRotation1762800000000 has been executed successfully.
+[HashPlaintextPasswords] rehashed 0 account(s)
+Migration HashPlaintextPasswords1762900000000 has been executed successfully.
+[AwardOnce] backfilled 0 award(s) from 0 notification row(s); 0 unmapped row(s)
+Migration AwardOnce1763000000000 has been executed successfully.
+```
+
+Then the app started. A second `migration:run`: `No migrations are pending`.
+Data kept: 8 users, 13 tasks, 7 token rows; `migrations` has 4 rows.
+
+### A7: after
+
+The same **4 name-only statements** as section 1 (the AwardOnce FK and the
+AuthTokenRotation index names). Nothing else; the task `id` entry is gone.
+
+### A7: smoke test (app on the branch, port 8010)
+
+Signup, log in, create a task, task list with a uuid string `id`, complete it
+(3 award notifications: Level Up!, 1-Day Streak, First Task Completed!),
+re-complete adds nothing, notifications list, token refresh: **8/8 passed**.
+No errors in the app log.
