@@ -96,8 +96,9 @@ export const API_CONTRACT = {
     unreadCap: 100,
     // FEAT-08a: event type on the notifications SSE stream
     // (/notifications/sse) when the user's chat unread counts changed. Its
-    // data is {"project_id"} (fields.unreadEvent); it has no `id:`, so it
-    // never moves Last-Event-ID. Refetch chatUnread on it.
+    // data is {"project_id"} (fields.unreadEvent). It carries no notification
+    // id: Nest numbers id-less frames itself (like `ping`), so Last-Event-ID is
+    // not a notification id and is not used. Refetch chatUnread on it.
     sseEventType: 'chat',
     // Exact keys of each response object.
     fields: {

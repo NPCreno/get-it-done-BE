@@ -168,8 +168,9 @@ export class NotificationsService {
 
   /**
    * FEAT-08a: a chat write changed these users' unread counts. One `chat`
-   * event per user on their stream, with no `id` (Last-Event-ID stays on
-   * notifications) and no text or counts: the FE refetches GET /api/chat/unread.
+   * event per user on their stream, with no notification id (Nest numbers
+   * id-less frames, as for `ping`) and no text or counts: the FE refetches
+   * GET /api/chat/unread.
    */
   @OnEvent(CHAT_UNREAD_CHANGED)
   handleChatUnreadChanged(payload: ChatUnreadChangedEvent) {

@@ -300,8 +300,9 @@ describe('chat unread (FEAT-08a)', () => {
       expect([...chatEvents(O), ...chatEvents(M)]).toEqual([]);
     });
 
-    it('E5: chat events carry no id, so Last-Event-ID stays on notifications', () => {
-      // E1-E4 asserted the whole event object: { type, data } and nothing else.
+    it('E5: the service sends { type, data } only: no notification id', () => {
+      // E1-E4 asserted the whole event object. On the wire Nest's SseStream
+      // numbers id-less frames itself, the same as `ping`.
       expect(API_CONTRACT.chat.sseEventType).toBe('chat');
     });
   });
