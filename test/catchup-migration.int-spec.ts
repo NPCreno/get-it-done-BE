@@ -53,7 +53,7 @@ async function synchronizeSchema(): Promise<void> {
 
 /**
  * Production as found on 2026-11-17: the synchronize schema from before
- * DATA-01 and the award ledger. No notifications (unless kept), no
+ * DATA-01, the award ledger and chat. No notifications (unless kept), no chat tables, no
  * user_awards, no lifetime count, no token rotation columns or index; task
  * `id` is uuid. Seeds one user with two completed tasks and a token row.
  */
@@ -62,6 +62,8 @@ async function seedProductionShape(
   keepNotifications: boolean,
 ): Promise<void> {
   await ds.query('DROP TABLE "user_awards"');
+  // FEAT-05 chat tables postdate production (migration ProjectChat).
+  await ds.query('DROP TABLE "chat_messages", "project_members"');
   if (!keepNotifications) {
     await ds.query('DROP TABLE "notifications"');
     await ds.query(
@@ -158,6 +160,12 @@ describe('CatchUpBaseline migration', () => {
     const left = await drift();
     expect(left.filter((q) => /notifications/.test(q))).toEqual([]);
     expect(left.filter((q) => /task_instance_entity/.test(q))).toEqual([]);
+    // ProjectChat creates exactly what the chat entities describe.
+    expect(await exists('project_members')).toBe(true);
+    expect(await exists('chat_messages')).toBe(true);
+    expect(left.filter((q) => /project_members|chat_messages/.test(q))).toEqual(
+      [],
+    );
   });
 
   it('C2 notifications already there: catch-up is a no-op and the rest run', async () => {
