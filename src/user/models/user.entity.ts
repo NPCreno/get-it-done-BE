@@ -1,3 +1,4 @@
+import { normalizeEmail } from '../identifier';
 import { ProjectEntity } from 'src/projects/models/projects.entity';
 import {
   BeforeInsert,
@@ -29,7 +30,7 @@ export class UserEntity {
 
   @BeforeInsert()
   emailToLowerCase() {
-    this.email = this.email.toLowerCase(); // Convert the email to lowercase before saving to the database
+    this.email = normalizeEmail(this.email); // trimmed and lower-cased before saving (BUG-01)
   }
 
   @Column()

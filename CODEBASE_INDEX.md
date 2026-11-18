@@ -22,7 +22,7 @@ One line per source file. Paths are relative to the repo root.
 - `streak.ts` — pure `computeStreak` (count and run start); `test/award-once*.int-spec.ts`, `test/jest-global-tz.ts` (TZ=UTC for jest)
 - `client-ip.ts` — `getClientIp(req)` for audit records
 - `rate-limit/` — `ip.ts`, `client-key.ts`, `identifier-key.ts`, `rate-limits.ts` (throttler table), `rate-limit.decorator.ts`, `auth-throttler.guard.ts`, `rate-limit-config.module.ts` (SEC-09)
-- `../user/identifier.ts` — shared email-like test used by login lookup and rate limiting
+- `../user/identifier.ts` — shared email-like test and `normalizeEmail` (trim + lower-case, BUG-01) used by signup, login lookup and rate limiting
 - `guards/authorize.guard.ts` — Bearer JWT guard
 - `verify-access-token.ts` — `verifyAccessToken()`, the access-token check shared by `AuthorizeGuard` and the chat gateway
 - `models/auth.entity.ts` — `AuthTokenEntity`
@@ -78,7 +78,7 @@ One line per source file. Paths are relative to the repo root.
 - `../app.setup.ts` — `configureApp()` (helmet, CORS, global ValidationPipe, `WsAdapter`)
 - `../auth/token-user.ts` — `toTokenUser()` allowlist; `../auth/decorators/auth-user-id.decorator.ts` — `@AuthUserId()`; `../auth/decorators/current-user.decorator.ts` — `@CurrentUser()`; `../auth/guards/self-param.guard.ts` — `SelfParam()` (the one id comparison); `../auth/guards/admin-only.guard.ts`; `../common/controller-identity.spec.ts` — scans controllers
 - `../auth/rehash-passwords.ts`, `../migrations/1762900000000-HashPlaintextPasswords.ts`, `../../scripts/rehash-plaintext-passwords.ts`, `../../scripts/export-contract.ts`
-- `../../test/` — `int-env.ts`, `int-db.ts`, `int-app.ts`, `int-auth.ts`, `authorization.int-spec.ts`, `api-contract.int-spec.ts`, `password-migration.int-spec.ts`, `catchup-migration.int-spec.ts`, `fixtures/responses/`
+- `../../test/` — `int-env.ts`, `int-db.ts`, `int-app.ts`, `int-auth.ts`, `authorization.int-spec.ts`, `api-contract.int-spec.ts`, `password-migration.int-spec.ts`, `catchup-migration.int-spec.ts`, `login-email-case.int-spec.ts` (BUG-01), `fixtures/responses/`
 
 ## Root config
 - `package.json`, `tsconfig.json`, `nest-cli.json`, `codegraph.json`

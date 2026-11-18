@@ -8,7 +8,7 @@ Endpoint → implementing chain. All routes are under `/api`. "Guarded" means `A
 
 ## User
 - `POST /api/user/create` → `UserController.create` → `UserService.createUser`
-- `POST /api/user/loginEmail` → `UserController.loginEmail` → `UserService.loginEmail` → `AuthService.generateAccessToken` + `generateRefreshToken`. IP from `getClientIp(req)`.
+- `POST /api/user/loginEmail` (email matched case-insensitively and trimmed: `lower(email) = normalizeEmail(input)`, BUG-01) → `UserController.loginEmail` → `UserService.loginEmail` → `AuthService.generateAccessToken` + `generateRefreshToken`. IP from `getClientIp(req)`.
 - `POST /api/user/loginUsername` → same chain through `UserService.loginUsername`
 - Guarded: `GET get/:id`, `GET getAll`, `DELETE :id`, `DELETE :id/hard`, `PATCH update/:user_id`. `get/:id` allows only the token owner or an admin.
 

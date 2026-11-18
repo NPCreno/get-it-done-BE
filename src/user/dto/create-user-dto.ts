@@ -5,7 +5,9 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { API_CONTRACT } from 'src/common/api-contract';
+import { trimString } from '../identifier';
 
 const { limits, patterns } = API_CONTRACT;
 
@@ -21,6 +23,8 @@ export class CreateUserDto {
   @Matches(new RegExp(patterns.username))
   username!: string;
 
+  /** Trimmed before validation (BUG-01); a bad email gets the same error. */
+  @Transform(trimString)
   @IsEmail()
   email!: string;
 

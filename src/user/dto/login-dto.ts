@@ -6,8 +6,12 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { trimString } from '../identifier';
 
 export class LoginEmailDto {
+  /** Trimmed before validation (BUG-01); a bad email gets the same error. */
+  @Transform(trimString)
   @IsEmail()
   email!: string;
 

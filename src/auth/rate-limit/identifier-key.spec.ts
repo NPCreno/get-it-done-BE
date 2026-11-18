@@ -11,7 +11,15 @@ describe('identifierKey (U3)', () => {
     // a non-email value sent as "email" is looked up as a username
     expect(identifierKey({ email: 'abc' })).toBe(user);
   });
-  it('does not fold case or trim (lookup is exact)', () => {
+  it('normalizes an email like the lookup does (BUG-01)', () => {
+    const key = identifierKey({ email: 'a@b.co' });
+    expect(identifierKey({ email: 'A@B.co' })).toBe(key);
+    expect(identifierKey({ email: 'a@b.co ' })).toBe(key);
+    expect(identifierKey({ email: ' A@B.CO ' })).toBe(key);
+    expect(identifierKey({ username: 'A@b.Co' })).toBe(key);
+    expect(identifierKey({ email: 'a@b.cd' })).not.toBe(key);
+  });
+  it('does not fold case or trim a username (lookup is exact)', () => {
     expect(identifierKey({ username: 'Abc' })).not.toBe(
       identifierKey({ username: 'abc' }),
     );

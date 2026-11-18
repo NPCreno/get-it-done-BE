@@ -1,4 +1,4 @@
-import { isEmailLike } from './identifier';
+import { isEmailLike, normalizeEmail } from './identifier';
 import {
   BadRequestException,
   ConflictException,
@@ -56,7 +56,7 @@ export class UserService {
       const newUser = this.userRepository.create({
         fullname: String(userDto.fullname),
         username: String(userDto.username),
-        email: String(userDto.email).toLowerCase(),
+        email: normalizeEmail(String(userDto.email)),
         password: String(passwordHash), // Ensure it's a primitive string
         tier: 'free',
         role: 'standard',
@@ -266,9 +266,13 @@ export class UserService {
     const isEmail = isEmailLike(emailOrUsername);
 
     if (isEmail) {
-      const user = await this.userRepository.findOne({
-        where: { email: emailOrUsername },
-      });
+      // BUG-01: case-insensitive and trimmed, one query.
+      const user = await this.userRepository
+        .createQueryBuilder('u')
+        .where('lower(u.email) = :email', {
+          email: normalizeEmail(emailOrUsername),
+        })
+        .getOne();
       if (!user) {
         throw new NotFoundException(
           `User with email ${emailOrUsername} not found`,
