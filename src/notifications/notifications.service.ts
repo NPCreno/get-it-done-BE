@@ -187,6 +187,7 @@ export class NotificationsService {
     userId: string,
     limit = 50,
     cursor?: string,
+    unreadOnly = false,
   ): Promise<{
     items: NotificationDto[];
     unread_count: number;
@@ -199,6 +200,7 @@ export class NotificationsService {
       .take(limit + 1);
     if (cursor)
       page.andWhere('n.id < :before', { before: decodeCursor(cursor) });
+    if (unreadOnly) page.andWhere('n.read = false');
     const rows = await page.getMany();
     const unread_count = await this.notificationsRepository
       .createQueryBuilder('n')

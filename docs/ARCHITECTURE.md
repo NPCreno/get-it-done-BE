@@ -1,12 +1,14 @@
 # Architecture — Backend
 
 ## Module dependency
-`AppModule` imports `ScheduleModule.forRoot()`, `ConfigModule` (global), `TypeOrmModule.forRoot` (PostgreSQL, `autoLoadEntities`), `EventEmitterModule`, and the feature modules: `AuthModule`, `UserModule`, `ProjectsModule`, `TaskModule`, `NotificationsModule`, `ChatModule`.
+`AppModule` imports `ScheduleModule.forRoot()`, `ConfigModule` (global), `TypeOrmModule.forRoot` (PostgreSQL, `autoLoadEntities`), `EventEmitterModule`, and the feature modules: `AuthModule`, `UserModule`, `ProjectsModule`, `TaskModule`, `NotificationsModule`, `ChatModule`, `TokensModule`, `McpModule`. `McpModule` imports the feature modules whose services the tools call (they export them); nothing imports `McpModule`.
 
 ## Request pipeline
 Request → (CORS from `FRONTEND_URL`) → route → `AuthorizeGuard` on protected controllers → controller → service → TypeORM repositories → PostgreSQL.
 
 `AuthorizeGuard` extracts the Bearer token and calls `verifyAccessToken` (`jwtService.verifyAsync`, requires `type === 'access'`; the chat WebSocket uses the same function). Its 401s carry `code: TOKEN_MISSING | TOKEN_INVALID`, which is how the frontend tells a token problem from an ownership 401. The frontend middleware is only a UX layer; this guard is the security boundary.
+
+Two credentials, two gates. Website JWTs pass `AuthorizeGuard` on the REST routes. Personal access tokens (FEAT-07a) pass only `requireBearerAuth` + `PatVerifier`, mounted as Nest middleware on `/mcp`; since `AuthorizeGuard` verifies a JWT signature, a PAT is 401 everywhere else.
 
 ## Authentication
 - Login returns an access token (`JWT_SECRET`, lifetime `JWT_ACCESS_EXPIRATION`) and a refresh token (`JWT_REFRESH_SECRET`, `1d` or `7d` with `rememberMe`).
@@ -34,7 +36,8 @@ User ─┬─< Project ─< TaskInstance
       ├─< Notification
       ├─< ProjectMember >─ Project   (project_members, PK (project_id, user_id), both CASCADE)
       ├─< ChatMessage   >─ Project   (chat_messages, soft delete, both CASCADE)
-      └─< ChatRead      >─ Project   (chat_reads, PK (project_id, user_id), last_read_at, both CASCADE)
+      ├─< ChatRead      >─ Project   (chat_reads, PK (project_id, user_id), last_read_at, both CASCADE)
+      └─< PersonalAccessToken        (personal_access_tokens, unique prefix, sha256 secret_hash, CASCADE)
 TaskTemplate ─< TaskInstance        (onDelete: SET NULL)
 AuthToken: stores user_id, sha256 token, expiry, family_id, remember_me, revoked_at, replaced_by_token_id, replay_ciphertext, ip_address (no ORM relation)
 ```
@@ -46,6 +49,12 @@ Deleting a user cascades to projects, tasks, subtasks and notifications. Deletin
 - Rooms, like the notification stream and the rate-limit counters, live in memory: correct for one API instance only. More instances need a shared pub/sub.
 - Unread counts (FEAT-08a): `chat_reads` holds each user's read point per project. Unread = messages in a project the user can chat in that are not deleted, not their own, and newer than the later of `last_read_at` and (for a member) their join time `project_members.created_at`; the owner with no row counts everything. `GET /api/chat/unread` computes it in one query (a lateral `LIMIT 100` per project, so the cap also bounds the scan). `PUT .../read` upserts with `GREATEST`, so the point never moves back. Removing a member deletes their row in the same transaction. No notification rows are stored for chat.
 - Live unread signal: after a chat write commits, `ChatUnreadService` emits `chat.unread.changed {userIds, projectId}` on the global `EventEmitter2` (message created or deleted: owner and members minus the actor; mark-read: the reader; member removed: that user). `NotificationsService` listens and pushes `event: chat` with data `{project_id}` onto the same per-user SSE subject as notifications, so the FE needs no extra connection. It has no notification id; Nest's `SseStream` numbers id-less frames (`ping` too), so `Last-Event-ID` is not a notification id, and nothing reads it (clients refetch on reconnect). The FE refetches `GET /api/chat/unread` on it.
+
+## MCP server (FEAT-07a)
+- `ALL /mcp`, outside `/api`. Order: `mcpJsonParser` (1 MB, in `configureApp`) → helmet/CORS (as for every route) → `mcpOriginCheck` (403) → `requireBearerAuth` from `@modelcontextprotocol/express` with `PatVerifier` (401 + `WWW-Authenticate: Bearer`) → `AuthThrottlerGuard` (`mcp` group keyed on `req.auth.clientId`, the token id) → `McpController` → `toNodeHandler(createMcpHandler(() => factory.create()))` with the parsed body.
+- Stateless: a fresh `McpServer` (name `get-it-done`, package version, `instructions`) per request, no sessions, nothing in memory between requests. The SDK serves 2026-07-28 requests and 2025-era ones (initialize, tools/list, tools/call) through its stateless legacy path; a 2025 GET/DELETE is 405.
+- Tools call the REST services with the token's user id; they pre-check ownership so a foreign id answers like a missing one, and run the REST DTOs' class-validator rules on mapped input. Services that answer with `{status: 'error'}` envelopes are unwrapped into a generic error (logged, never shown).
+- Phase 2 (FEAT-07c/d) adds OAuth and `/.well-known/oauth-protected-resource`; the verifier interface stays.
 
 ## Events and schedules
 - `task.completed` is emitted by `TaskStatusService` and consumed by `NotificationsService`.

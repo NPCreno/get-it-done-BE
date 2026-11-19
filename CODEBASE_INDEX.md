@@ -69,6 +69,21 @@ One line per source file. Paths are relative to the repo root.
 - `../migrations/1763100000000-ProjectChat.ts` — `project_members`, `chat_messages`; `1763200000000-ChatReads.ts` — `chat_reads` (FEAT-08a)
 - `*.spec.ts` — access, cursor, DTO validation, rooms and origin unit specs; `../../test/chat.int-spec.ts`, `chat-ws.int-spec.ts`, `project-chat-migration.int-spec.ts`, `chat-unread.int-spec.ts`, `chat-reads-migration.int-spec.ts`, `chat-fixtures.ts`
 
+## tokens (`src/tokens/`) — FEAT-07a personal access tokens
+- `tokens.module.ts`, `tokens.controller.ts` — `/api/tokens` (list, create, revoke; website JWT; `no-store`)
+- `tokens.service.ts` — list, create (10 active, users row lock), revoke, `verify` (prefix lookup, constant-time hash check, active user), `touch` (`last_used_at` once a minute), `tokenStatus`, `toTokenDto`
+- `pat-format.ts` — `generatePat`, `parsePat`, `hashSecret`, `secretMatches` (`gid_pat_<10 base62>_<43 base64url>`)
+- `dto/create-token.dto.ts`; `models/personal-access-token.entity.ts`; `../migrations/1763300000000-PersonalAccessTokens.ts`
+- `pat-format.spec.ts`; `../../test/tokens.int-spec.ts`, `pat-migration.int-spec.ts`
+
+## mcp (`src/mcp/`) — FEAT-07a MCP server
+- `mcp.module.ts` — middleware (`mcpOriginCheck`, `requireBearerAuth`) on `/mcp`; `mcp.controller.ts` — `@All('mcp')`, `@RateLimit('mcp')`, `toNodeHandler(createMcpHandler(...))`
+- `mcp-server.factory.ts` — `McpServerFactory` (one `McpServer` per request), `ALL_TOOLS`, `MCP_INSTRUCTIONS`
+- `pat-verifier.ts` — `PatVerifier` (`OAuthTokenVerifier`)
+- `mcp-tool.ts` — `defineTool`, `McpDeps`, result/error helpers, call logging; `mcp-shapes.ts` — zod output schemas and safe mappers; `mcp-validate.ts` — `toDto` (REST DTO rules); `mcp-errors.ts` — `toolErrorMessage`, `unwrap`; `mcp-origin.ts` — `parseAllowedOrigins`, `originAllowed`, `mcpOriginCheck`
+- `tools/account-tools.ts`, `tools/task-tools.ts`, `tools/project-tools.ts`, `tools/chat-tools.ts` — the 21 tools
+- `pat-verifier.spec.ts`, `mcp-units.spec.ts`; `../../test/mcp.int-spec.ts`, `mcp-helpers.ts`; user docs `../../docs/MCP.md`
+
 ## pipes (`src/pipes/`)
 - `status-validation.pipe.ts` — validates task status values
 

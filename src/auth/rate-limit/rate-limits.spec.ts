@@ -65,6 +65,8 @@ describe('throttler config (U4)', () => {
     expect(running('signup')).toEqual(['signup-client-1h', 'signup-client-1d']);
     expect(running('chatMessage')).toEqual(['chat-message-user-1m']);
     expect(running('chatMember')).toEqual(['chat-member-user-1h']);
+    expect(running('tokenCreate')).toEqual(['token-create-user-1h']);
+    expect(running('mcp')).toEqual(['mcp-token-1m']);
   });
 
   it('chat throttlers key on the token user, never the IP', () => {
@@ -76,6 +78,18 @@ describe('throttler config (U4)', () => {
     expect(tracker({ ...attested(), user: { sub: 'u1' } })).toBe('user:u1');
     expect(tracker({ ...attested(), user: { sub: 'u2' } })).toBe('user:u2');
     expect(tracker(attested())).toBe('user:unknown');
+  });
+
+  it('the mcp throttler keys on the personal access token id', () => {
+    const t = buildThrottlers({}).find((i) => i.name === 'mcp-token-1m')!;
+    expect([t.limit, t.ttl]).toEqual([120, 60_000]);
+    const tracker = t.getTracker as (r: Record<string, any>) => string;
+    expect(tracker({ ...attested(), auth: { clientId: 't1' } })).toBe('pat:t1');
+    expect(tracker(attested())).toBe('pat:unknown');
+    const create = buildThrottlers({}).find(
+      (i) => i.name === 'token-create-user-1h',
+    )!;
+    expect([create.limit, create.ttl]).toEqual([10, 3_600_000]);
   });
 
   it('generateKey ignores the handler and separates names', () => {

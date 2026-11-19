@@ -4,12 +4,43 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, In, IsNull, LessThan, Repository } from 'typeorm';
+import {
+  Between,
+  FindOptionsWhere,
+  ILike,
+  In,
+  IsNull,
+  LessThan,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  Not,
+  Repository,
+} from 'typeorm';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
 import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
 import { UserEntity } from 'src/user/models/user.entity';
 import { ProjectEntity } from 'src/projects/models/projects.entity';
 import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
+
+/** Filters for listOwnTasks (FEAT-07a MCP list_tasks / get_project). */
+export interface OwnTaskFilters {
+  status?: 'Pending' | 'Complete' | 'Overdue';
+  project_id?: string;
+  due_from?: Date;
+  due_to?: Date;
+  /** Title contains, case-insensitive. */
+  search?: string;
+  include_completed?: boolean;
+  limit: number;
+}
+
+export interface SubtaskCounts {
+  total: number;
+  completed: number;
+}
+
+/** Escapes LIKE wildcards so a search is a plain substring match. */
+const likeEscape = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 @Injectable()
 export class TaskQueryService {
@@ -172,5 +203,82 @@ export class TaskQueryService {
       console.error(`Error fetching tasks for project ${project_id}:`, error);
       return []; // Return empty array on error
     }
+  }
+
+  /**
+   * The caller's own, non-deleted tasks with optional filters, soonest due
+   * first (no due date last), then newest. Scoped by the token user: another
+   * user's task never appears.
+   */
+  async listOwnTasks(
+    userId: string,
+    f: OwnTaskFilters,
+  ): Promise<TaskInstanceEntity[]> {
+    const where: FindOptionsWhere<TaskInstanceEntity> = {
+      user: { user_id: userId },
+    };
+    if (f.status) where.status = f.status;
+    else if (f.include_completed === false) where.status = Not('Complete');
+    if (f.project_id) where.project = { project_id: f.project_id };
+    if (f.due_from && f.due_to) where.due_date = Between(f.due_from, f.due_to);
+    else if (f.due_from) where.due_date = MoreThanOrEqual(f.due_from);
+    else if (f.due_to) where.due_date = LessThanOrEqual(f.due_to);
+    if (f.search) where.title = ILike(`%${likeEscape(f.search)}%`);
+    return this.taskInstanceRepository.find({
+      where,
+      relations: ['project', 'template'],
+      order: {
+        due_date: { direction: 'ASC', nulls: 'LAST' },
+        createdAt: 'DESC',
+      },
+      take: f.limit,
+    });
+  }
+
+  /** The caller's own task, or null when it is missing, deleted or not theirs. */
+  async findOwnTask(
+    userId: string,
+    taskId: string,
+  ): Promise<TaskInstanceEntity | null> {
+    return this.taskInstanceRepository.findOne({
+      where: { task_id: taskId, user: { user_id: userId } },
+      relations: ['project', 'template'],
+    });
+  }
+
+  /** The caller's own sub-task (with its task id), or null. */
+  async findOwnSubtask(
+    userId: string,
+    subtaskId: string,
+  ): Promise<TaskSubInstanceEntity | null> {
+    return this.taskSubInstanceRepository.findOne({
+      where: { taskSubInstance_id: subtaskId, user: { user_id: userId } },
+      relations: ['instance'],
+    });
+  }
+
+  /** A task's non-deleted sub-tasks, oldest first. */
+  async subtasksOf(taskId: string): Promise<TaskSubInstanceEntity[]> {
+    return this.taskSubInstanceRepository.find({
+      where: { instance: { task_id: taskId } },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  /** Sub-task counts per task id, one aggregate query. */
+  async subtaskCounts(taskIds: string[]): Promise<Map<string, SubtaskCounts>> {
+    const out = new Map<string, SubtaskCounts>();
+    if (taskIds.length === 0) return out;
+    const rows = await this.taskSubInstanceRepository
+      .createQueryBuilder('s')
+      .select('"s"."task_id"', 'task_id')
+      .addSelect('count(*)::int', 'total')
+      .addSelect(`count(*) FILTER (WHERE s.status = 'Complete')::int`, 'done')
+      .where('"s"."task_id" IN (:...ids)', { ids: taskIds })
+      .groupBy('"s"."task_id"')
+      .getRawMany<{ task_id: string; total: number; done: number }>();
+    for (const r of rows)
+      out.set(r.task_id, { total: Number(r.total), completed: Number(r.done) });
+    return out;
   }
 }

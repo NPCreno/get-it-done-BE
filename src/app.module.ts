@@ -12,6 +12,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { RateLimitModule } from './auth/rate-limit/rate-limit-config.module';
 import { ChatModule } from './chat/chat.module';
+import { TokensModule } from './tokens/tokens.module';
+import { McpModule } from './mcp/mcp.module';
 @Module({
   imports: [
     RateLimitModule,
@@ -31,6 +33,8 @@ import { ChatModule } from './chat/chat.module';
     TaskModule,
     NotificationsModule,
     ChatModule,
+    TokensModule,
+    McpModule,
     EventEmitterModule.forRoot(),
   ],
   controllers: [AppController],

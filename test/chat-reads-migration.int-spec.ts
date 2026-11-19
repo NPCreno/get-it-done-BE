@@ -2,7 +2,9 @@
  * FEAT-08a ChatReads migration on production's shape after ProjectChat: the
  * schema the current entities describe minus chat_reads, with the first five
  * migrations recorded as run. Exactly one migration runs, a second run does
- * nothing, and synchronize finds no drift. Uses its own DB.
+ * nothing, and synchronize finds no drift. Uses its own DB. Later migrations
+ * (PersonalAccessTokens, FEAT-07a) are left out and their tables dropped, so
+ * the database is exactly production after ProjectChat.
  */
 import { BASE_URL } from './int-env';
 import { readdirSync } from 'fs';
@@ -30,13 +32,21 @@ function allMigrations(): (new () => MigrationInterface)[] {
 
 describe('ChatReads migration (FEAT-08a)', () => {
   let ds: DataSource;
-  const migrations = allMigrations();
+  const all = allMigrations();
+  const migrations = all.slice(
+    0,
+    all.findIndex((M) => new M().name === 'ChatReads1763200000000') + 1,
+  );
+  /** Tables of migrations after ChatReads, which this suite leaves out. */
+  const LATER = /personal_access_tokens/;
   const exists = async (table: string) =>
     (
       await ds.query(`SELECT to_regclass($1)::text AS t`, [`public.${table}`])
     )[0].t !== null;
   const drift = async () =>
-    (await ds.driver.createSchemaBuilder().log()).upQueries.map((q) => q.query);
+    (await ds.driver.createSchemaBuilder().log()).upQueries
+      .map((q) => q.query)
+      .filter((q) => !LATER.test(q));
 
   beforeEach(async () => {
     await resetDatabase(BASE_URL, DB);
@@ -58,7 +68,7 @@ describe('ChatReads migration (FEAT-08a)', () => {
     });
     await ds.initialize();
     // Production after ProjectChat: no chat_reads, five migrations recorded.
-    await ds.query('DROP TABLE "chat_reads"');
+    await ds.query('DROP TABLE "chat_reads", "personal_access_tokens"');
     await ds.query(`CREATE TABLE "migrations" (
       "id" SERIAL PRIMARY KEY, "timestamp" bigint NOT NULL, "name" varchar NOT NULL)`);
     for (const M of migrations.slice(0, -1)) {

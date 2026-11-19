@@ -8,7 +8,9 @@ export type RateLimitGroup =
   | 'logout'
   | 'signup'
   | 'chatMessage'
-  | 'chatMember';
+  | 'chatMember'
+  | 'tokenCreate'
+  | 'mcp';
 
 /** The only way a route is rate limited: there is no global guard. */
 export const RateLimit = (group: RateLimitGroup) =>

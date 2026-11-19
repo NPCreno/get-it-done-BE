@@ -1,4 +1,5 @@
 import { JwtService } from '@nestjs/jwt';
+import { parseAllowedOrigins } from '../mcp/mcp-origin';
 
 /**
  * Boot-time environment validation. Pure: returns problems, never prints and
@@ -21,6 +22,8 @@ export interface AppEnv {
   JWT_REFRESH_EXPIRATION_SHORT: string;
   REFRESH_REUSE_GRACE_SECONDS: number;
   INTERNAL_API_SECRET?: string;
+  /** FEAT-07a: browser origins allowed on /mcp (empty: none). */
+  MCP_ALLOWED_ORIGINS: string[];
 }
 
 export interface EnvResult {
@@ -232,6 +235,10 @@ export function validateEnv(raw: NodeJS.ProcessEnv): EnvResult {
       );
   }
 
+  // MCP_ALLOWED_ORIGINS (optional, comma-separated origins)
+  const mcpOrigins = parseAllowedOrigins(raw.MCP_ALLOWED_ORIGINS);
+  if (mcpOrigins.error) err('MCP_ALLOWED_ORIGINS', mcpOrigins.error);
+
   return {
     env: {
       NODE_ENV: nodeEnv,
@@ -246,6 +253,7 @@ export function validateEnv(raw: NodeJS.ProcessEnv): EnvResult {
       JWT_REFRESH_EXPIRATION_SHORT: refreshShort,
       REFRESH_REUSE_GRACE_SECONDS: grace,
       INTERNAL_API_SECRET: raw.INTERNAL_API_SECRET || undefined,
+      MCP_ALLOWED_ORIGINS: mcpOrigins.origins,
     },
     errors,
     warnings,

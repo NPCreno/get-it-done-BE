@@ -348,4 +348,30 @@ export class TaskService {
     await this.taskInstanceRepository.remove(task);
     return task;
   }
+
+  /**
+   * Moves the caller's task into one of their projects, or out of any
+   * (null). A missing or foreign task or project is the same 404.
+   */
+  async setProject(
+    task_id: string,
+    project_id: string | null,
+    tokenUserId: string,
+  ): Promise<void> {
+    if (project_id !== null) {
+      const project = await this.projectsRepository.findOne({
+        where: { project_id },
+      });
+      if (!project || project.user_id !== tokenUserId)
+        throw new NotFoundException('Project not found');
+    }
+    const [, affected]: [unknown, number] =
+      await this.taskInstanceRepository.query(
+        `UPDATE "task_instance_entity"
+            SET "project_id" = $1, "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "task_id" = $2 AND "user_id" = $3 AND "deletedAt" IS NULL`,
+        [project_id, task_id, tokenUserId],
+      );
+    if (!affected) throw new NotFoundException('Task not found');
+  }
 }

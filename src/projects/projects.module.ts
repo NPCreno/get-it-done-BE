@@ -24,5 +24,6 @@ import { TaskSubInstanceEntity } from 'src/task/models/taskSubInstance.entity';
   ],
   providers: [ProjectsService],
   controllers: [ProjectsController],
+  exports: [ProjectsService],
 })
 export class ProjectsModule {}

@@ -229,6 +229,23 @@ describe('validateEnv', () => {
     expect(errorsFor({ RENDER: 'true', NODE_ENV: 'development' })).toEqual([]);
   });
 
+  it('E16 MCP_ALLOWED_ORIGINS (FEAT-07a): optional list of origins', () => {
+    expect(validateEnv(base()).env.MCP_ALLOWED_ORIGINS).toEqual([]);
+    const ok = validateEnv({
+      ...base(),
+      MCP_ALLOWED_ORIGINS: 'https://a.example.com, http://localhost:6274',
+    });
+    expect(ok.errors).toEqual([]);
+    expect(ok.env.MCP_ALLOWED_ORIGINS).toEqual([
+      'https://a.example.com',
+      'http://localhost:6274',
+    ]);
+    const bad = errorsFor({ MCP_ALLOWED_ORIGINS: 'https://a.example.com/x' });
+    expect(bad).toHaveLength(1);
+    expect(bad[0]).toMatch(/^MCP_ALLOWED_ORIGINS: /);
+    expect(bad[0]).not.toContain('a.example.com');
+  });
+
   it('E15 the AppEnv view mirrors the runtime defaults', () => {
     const only: NodeJS.ProcessEnv = {
       DATABASE_URL: base().DATABASE_URL,

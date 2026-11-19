@@ -64,6 +64,8 @@ async function seedProductionShape(
   await ds.query('DROP TABLE "user_awards"');
   // FEAT-05 chat tables postdate production (migrations ProjectChat, ChatReads).
   await ds.query('DROP TABLE "chat_reads", "chat_messages", "project_members"');
+  // FEAT-07a personal_access_tokens postdates production (PersonalAccessTokens).
+  await ds.query('DROP TABLE "personal_access_tokens"');
   if (!keepNotifications) {
     await ds.query('DROP TABLE "notifications"');
     await ds.query(
@@ -169,6 +171,9 @@ describe('CatchUpBaseline migration', () => {
     // ChatReads (FEAT-08a) likewise.
     expect(await exists('chat_reads')).toBe(true);
     expect(left.filter((q) => /chat_reads/.test(q))).toEqual([]);
+    // PersonalAccessTokens (FEAT-07a) likewise.
+    expect(await exists('personal_access_tokens')).toBe(true);
+    expect(left.filter((q) => /personal_access_tokens/.test(q))).toEqual([]);
   });
 
   it('C2 notifications already there: catch-up is a no-op and the rest run', async () => {

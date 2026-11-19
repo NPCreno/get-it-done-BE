@@ -40,6 +40,14 @@ import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
     TaskGeneratorService,
   ],
   controllers: [TaskController],
-  exports: [TaskQueryService, TaskStreakService, TaskGeneratorService],
+  exports: [
+    TaskService,
+    TaskQueryService,
+    SubTaskService,
+    TaskStatusService,
+    TaskStatsService,
+    TaskStreakService,
+    TaskGeneratorService,
+  ],
 })
 export class TaskModule {}

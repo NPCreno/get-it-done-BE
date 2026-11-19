@@ -320,4 +320,46 @@ export class ProjectsService {
       };
     }
   }
+
+  /**
+   * The caller's non-deleted projects (or one of them) with task counts over
+   * all their non-deleted tasks. One aggregate query, newest project first.
+   */
+  async listWithCounts(
+    userId: string,
+    projectId?: string,
+  ): Promise<ProjectWithCounts[]> {
+    const params: unknown[] = [userId];
+    let one = '';
+    if (projectId !== undefined) {
+      params.push(projectId);
+      one = 'AND p."project_id" = $2';
+    }
+    const rows: ProjectWithCounts[] = await this.projectsRepository.query(
+      `SELECT p."project_id", p."title", p."description", p."color",
+              p."colorLabel", p."due_date", p."createdAt",
+              count(t."id")::int AS "task_count",
+              (count(t."id") FILTER (WHERE t."status" = 'Complete'))::int AS "tasks_completed"
+         FROM "project_entity" p
+         LEFT JOIN "task_instance_entity" t
+           ON t."project_id" = p."project_id" AND t."deletedAt" IS NULL
+        WHERE p."user_id" = $1 AND p."deletedAt" IS NULL ${one}
+        GROUP BY p."id"
+        ORDER BY p."createdAt" DESC, p."project_id"`,
+      params,
+    );
+    return rows;
+  }
+}
+
+export interface ProjectWithCounts {
+  project_id: string;
+  title: string | null;
+  description: string | null;
+  color: string | null;
+  colorLabel: string | null;
+  due_date: Date | null;
+  createdAt: Date;
+  task_count: number;
+  tasks_completed: number;
 }

@@ -11,6 +11,7 @@ import { join } from 'path';
 import { createTestApp } from './int-app';
 import { bearer, signupAndLogin, TestUser } from './int-auth';
 import { queryDb } from './int-db';
+import { API_CONTRACT } from '../src/common/api-contract';
 
 const q = (sql: string, params: unknown[] = []) =>
   queryDb(BASE_URL, API_TEST_DB, sql, params);
@@ -401,6 +402,44 @@ describe('api contract (integration)', () => {
         'project_id',
       ]);
       fixture('chat-read', read.body);
+    });
+
+    it('personal access tokens (FEAT-07a): exact keys; captures fixtures', async () => {
+      const keys = API_CONTRACT.tokens.fields;
+      const created = await request(server())
+        .post('/api/tokens')
+        .set(bearer(A))
+        .send({ name: 'Claude Code', expires_in_days: 90 });
+      expect(created.status).toBe(201);
+      expect(Object.keys(created.body.data).sort()).toEqual(
+        [...keys.createdToken].sort(),
+      );
+      await request(server())
+        .post('/api/tokens')
+        .set(bearer(A))
+        .send({ name: 'Cursor', expires_in_days: null });
+      const list = await request(server()).get('/api/tokens').set(bearer(A));
+      for (const t of list.body.data)
+        expect(Object.keys(t).sort()).toEqual([...keys.token].sort());
+      const revoked = await request(server())
+        .delete(`/api/tokens/${created.body.data.id}`)
+        .set(bearer(A));
+      expect(Object.keys(revoked.body.data).sort()).toEqual(
+        [...keys.token].sort(),
+      );
+      // Never write a real-looking secret into a committed file.
+      const fake = (b: unknown) =>
+        JSON.parse(
+          JSON.stringify(b)
+            .replace(
+              /gid_pat_[0-9A-Za-z]{10}_[A-Za-z0-9_-]{43}/g,
+              `gid_pat_AAAAAAAAAA_${'A'.repeat(43)}`,
+            )
+            .replace(/"prefix":"[0-9A-Za-z]{10}"/g, '"prefix":"AAAAAAAAAA"'),
+        ) as unknown;
+      fixture('token-created', fake(created.body));
+      fixture('tokens-list', fake(list.body));
+      fixture('token-revoked', fake(revoked.body));
     });
 
     it('getTasksByUser includes project_id; captures fixtures', async () => {

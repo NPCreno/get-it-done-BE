@@ -10,6 +10,7 @@ import { ProjectsController } from '../projects/projects.controller';
 import { TaskController } from '../task/task.controller';
 import { NotificationsController } from '../notifications/notifications.controller';
 import { ChatController } from '../chat/chat.controller';
+import { TokensController } from '../tokens/tokens.controller';
 
 /**
  * Rule: every @Body() is a fully decorated class, or an explicitly documented
@@ -53,6 +54,7 @@ const controllers = [
   TaskController,
   NotificationsController,
   ChatController,
+  TokensController,
 ];
 
 describe('@Body() DTOs', () => {
@@ -91,6 +93,7 @@ describe('@Body() DTOs', () => {
       'CreateTaskSubInstanceDto',
       'AddMemberDto',
       'SendMessageDto',
+      'CreateTokenDto',
     ]) {
       expect(names).toContain(n);
     }

@@ -4,6 +4,7 @@ export interface UserCleanupResponse {
   username: string;
   email: string;
   tier: string;
+  theme?: string | null;
   role: string;
   status: string;
   createdAt: Date;

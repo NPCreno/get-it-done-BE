@@ -24,7 +24,7 @@ const DAY = 24 * HOUR;
 export interface ThrottlerDef {
   name: string;
   groups: RateLimitGroup[];
-  tracker: string; // 'client' | 'identifier' | 'user' | a constant bucket name
+  tracker: string; // 'client' | 'identifier' | 'user' | 'pat' | a constant bucket name
   runsFor: 'attested' | 'unattested' | 'noip' | 'identifier' | 'user';
   limit: number;
   ttl: number;
@@ -144,6 +144,25 @@ export const THROTTLER_DEFS: ThrottlerDef[] = [
     limit: 60,
     ttl: HOUR,
   },
+  // FEAT-07a: token create runs after AuthorizeGuard (token user).
+  {
+    name: 'token-create-user-1h',
+    groups: ['tokenCreate'],
+    tracker: 'user',
+    runsFor: 'user',
+    limit: API_CONTRACT.tokens.createsPerHour,
+    ttl: HOUR,
+  },
+  // FEAT-07a: /mcp runs after the bearer middleware, keyed on the personal
+  // access token's id (req.auth.clientId), so each token has its own budget.
+  {
+    name: 'mcp-token-1m',
+    groups: ['mcp'],
+    tracker: 'pat',
+    runsFor: 'user',
+    limit: 120,
+    ttl: MIN,
+  },
   {
     name: 'bff-noip-1m',
     groups: ['login', 'refresh', 'logout', 'signup'],
@@ -164,6 +183,13 @@ function keyOf(req: Request): ClientKey {
     memo.set(req, k);
   }
   return k;
+}
+
+/** The personal access token id set by the MCP bearer middleware. */
+function patOf(req: Record<string, any>): string {
+  const id: unknown = (req.auth as { clientId?: unknown } | undefined)
+    ?.clientId;
+  return typeof id === 'string' && id !== '' ? id : 'unknown';
 }
 
 /** The token user set by AuthorizeGuard; one shared bucket if it is missing. */
@@ -202,6 +228,7 @@ function trackerFor(def: ThrottlerDef) {
     if (def.tracker === 'client') return keyOf(req as Request).key;
     if (def.tracker === 'identifier') return identifierKey(req.body) ?? '';
     if (def.tracker === 'user') return `user:${userOf(req)}`;
+    if (def.tracker === 'pat') return `pat:${patOf(req)}`;
     return def.tracker;
   };
 }

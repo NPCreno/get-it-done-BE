@@ -52,3 +52,32 @@ Endpoint → implementing chain. All routes are under `/api`. "Guarded" means `A
 - `PUT /api/chat/projects/:project_id/read {message_id}` (FEAT-08a; uuid, a deleted message counts) → `{project_id, last_read_at}`. Upsert with `GREATEST`, never moves back, idempotent. A stranger 404 `Project not found`; a message not in this project 404 `Message not found`
 - SSE `event: chat` on `GET /api/notifications/sse` (FEAT-08a): data `{project_id}`, no notification id (Nest numbers the frame, as it does `ping`). Sent after the write to the owner and members minus the actor on message create/delete, to the reader on mark-read, and to a removed member. Refetch `GET /api/chat/unread`; no counts or text in the event. Removing a member also deletes their `chat_reads` row
 - WebSocket `/api/chat/ws` (`ChatGateway`): Origin must be `FRONTEND_URL` (else 403 on upgrade); first frame `{type:'auth', token}` within 5 s, checked by `verifyAccessToken`; `join`/`leave` with `project_id`. Server frames `{type, data}`: `ready`, `joined`, `left`, `removed`, `message.created`, `message.deleted`, `error {code}`. Close 4401 on missing/bad auth and at token expiry. Receive only; rooms in memory (one instance)
+
+## Personal access tokens (FEAT-07a, website JWT) → `TokensController` → `TokensService`
+- `GET /api/tokens` → `[{id, name, prefix, created_at, last_used_at, expires_at, revoked_at, status}]`, newest first, every status (`active`/`expired`/`revoked`). Never a hash or secret
+- `POST /api/tokens {name (trimmed, 1-60), expires_in_days: 30|90|365|null}` (omitted = 90; `@RateLimit('tokenCreate')`, 10/h per user) → 201 `{...token, token: 'gid_pat_…'}`, the only time the secret leaves the server. 11th active token → 400 `You can have at most 10 active tokens.`
+- `DELETE /api/tokens/:id` → revoke (`revoked_at`, kept on repeat); a missing, foreign or non-uuid id → 404 `Token not found`
+- All three: `Cache-Control: no-store`
+
+## MCP server (FEAT-07a) → `ALL /mcp` → `McpController` → `McpServerFactory` → tools in `src/mcp/tools/`
+Auth: personal access token (`Authorization: Bearer gid_pat_…`) through `requireBearerAuth` + `PatVerifier`. Origin check (403), rate limit 120/min per token (429). See `CLAUDE.md` (MCP) and `docs/MCP.md`.
+
+| Tool | Hint | Services |
+|---|---|---|
+| `get_profile` | read-only | `UserService.findOne` |
+| `get_dashboard` (`from?`, `to?`, default today UTC) | read-only | `TaskStatsService.getDashboardData`, `TaskStreakService.getStreakCount` |
+| `list_notifications` (`unread_only?`, `limit?`) | read-only | `NotificationsService.list` |
+| `mark_notification_read` | idempotent | `NotificationsService.markRead` |
+| `list_tasks` (`status?`, `project_id?`, `due_from?`, `due_to?`, `search?`, `include_completed?`, `limit?`) | read-only | `TaskQueryService.listOwnTasks`, `subtaskCounts` |
+| `get_task` | read-only | `TaskQueryService.findOwnTask`, `subtasksOf` |
+| `create_task` (+ recurrence) | write | `CreateTaskDto` rules → `TaskService.createTask` |
+| `update_task` (`project_id` null clears) | idempotent | `UpdateTaskDto` rules → `TaskService.updateOne`, `TaskService.setProject` |
+| `set_task_status` | idempotent | `TaskStatusService.updateTaskStatus` (awards, `task.completed`) |
+| `add_subtask` | write | `CreateTaskSubInstanceDto` rules → `SubTaskService.createTaskSubInstance` |
+| `set_subtask_status` | idempotent | `TaskStatusService.updateSubTaskStatus` |
+| `delete_task`, `delete_subtask` | destructive (soft) | `TaskService.softDeleteOne`, `SubTaskService.softDeleteSubTask` |
+| `list_projects`, `get_project` | read-only | `ProjectsService.listWithCounts` (one aggregate), `TaskQueryService.listOwnTasks` |
+| `create_project`, `update_project` (color = palette label) | write / idempotent | `CreateProjectDto`/`UpdateProjectDto` rules → `ProjectsService` |
+| `delete_project` | destructive (soft) | `ProjectsService.softDeleteOne` |
+| `list_shared_projects`, `list_chat_messages` (limit ≤ 50), `get_chat_unread` | read-only | `ChatMembersService.sharedWith`, `ChatMessagesService.list` (`assertCanChat`), `ChatUnreadService.unread` |
+

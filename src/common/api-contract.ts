@@ -44,6 +44,7 @@ export const API_CONTRACT = {
     chatMessageMax: 2000,
     chatMessagesPageMax: 50,
     chatMembersMax: 20,
+    tokenNameMax: 60,
   },
   patterns: {
     username: '^[A-Za-z0-9_]+$',
@@ -66,6 +67,64 @@ export const API_CONTRACT = {
     chatMessageDelete: '/chat/projects/:project_id/messages/:id',
     chatUnread: '/chat/unread',
     chatMarkRead: '/chat/projects/:project_id/read',
+    tokensList: '/tokens',
+    tokenCreate: '/tokens',
+    tokenRevoke: '/tokens/:id',
+  },
+  /**
+   * Project colors the website offers (label -> hex). The MCP create_project
+   * tool takes a label and stores both, like the website's color picker.
+   */
+  projectColors: [
+    { label: 'Lavender', hex: '#E6E6FA' },
+    { label: 'Mint', hex: '#B5EAD7' },
+    { label: 'Peach', hex: '#FFDAB9' },
+    { label: 'Sky', hex: '#A0D8EF' },
+    { label: 'Lemon', hex: '#FFFACD' },
+    { label: 'Rose', hex: '#FADADD' },
+    { label: 'Mauve', hex: '#E0B0FF' },
+    { label: 'Baby Blue', hex: '#BDE0FE' },
+    { label: 'Coral', hex: '#FFB5A7' },
+    { label: 'Seafoam', hex: '#C3FBD8' },
+  ],
+  /**
+   * Personal access tokens (FEAT-07a). Valid only on the MCP endpoint, never
+   * on the REST API. REST responses are `{ status: 'success', data }`; the
+   * secret (`token`) appears only in the create response.
+   */
+  tokens: {
+    prefix: 'gid_pat_',
+    expiresInDays: [30, 90, 365],
+    defaultExpiresInDays: 90,
+    maxActive: 10,
+    createsPerHour: 10,
+    statuses: ['active', 'expired', 'revoked'],
+    // Server path at the API ORIGIN, not under /api: strip a trailing /api
+    // from NEXT_PUBLIC_API_URL before appending it.
+    mcpPath: '/mcp',
+    fields: {
+      token: [
+        'id',
+        'name',
+        'prefix',
+        'created_at',
+        'last_used_at',
+        'expires_at',
+        'revoked_at',
+        'status',
+      ],
+      createdToken: [
+        'id',
+        'name',
+        'prefix',
+        'created_at',
+        'last_used_at',
+        'expires_at',
+        'revoked_at',
+        'status',
+        'token',
+      ],
+    },
   },
   /**
    * Project chat (FEAT-05). REST responses are `{ status: 'success', data }`.

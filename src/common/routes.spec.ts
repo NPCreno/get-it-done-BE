@@ -4,6 +4,7 @@ import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { TaskController } from '../task/task.controller';
 import { NotificationsController } from '../notifications/notifications.controller';
 import { ChatController } from '../chat/chat.controller';
+import { TokensController } from '../tokens/tokens.controller';
 import { API_CONTRACT } from './api-contract';
 
 /**
@@ -23,7 +24,8 @@ function pathOf(target: object, what: string): string {
 type Ctl =
   | typeof TaskController
   | typeof NotificationsController
-  | typeof ChatController;
+  | typeof ChatController
+  | typeof TokensController;
 
 function routeOf(controller: Ctl, method: string) {
   const handler = Object.getOwnPropertyDescriptor(controller.prototype, method)
@@ -75,6 +77,9 @@ describe('API_CONTRACT.routes', () => {
     ],
     ['chatUnread', ChatController, 'unreadCounts', RequestMethod.GET],
     ['chatMarkRead', ChatController, 'markRead', RequestMethod.PUT],
+    ['tokensList', TokensController, 'list', RequestMethod.GET],
+    ['tokenCreate', TokensController, 'create', RequestMethod.POST],
+    ['tokenRevoke', TokensController, 'revoke', RequestMethod.DELETE],
   ];
 
   it('lists exactly the contract routes', () => {

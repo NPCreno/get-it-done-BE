@@ -11,12 +11,13 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `task_instance_entity.id` is `uuid` (as production has it). Nothing joins on it; everything uses `task_id`. A local database built before OPS-04 has an integer `id`: synchronize recreates it as uuid on the next start, or drop it and restore a fresh dump (`npm run db:restore`)
 
 ## Architecture
-- 7 modules: AppModule, AuthModule, UserModule, ProjectsModule, TaskModule, NotificationsModule, ChatModule
+- 9 modules: AppModule, AuthModule, UserModule, ProjectsModule, TaskModule, NotificationsModule, ChatModule, TokensModule, McpModule
 - 1 guard: `AuthorizeGuard` (Bearer JWT checked with `JwtService.verifyAsync`). This is the security boundary
 - 1 pipe: `StatusValidationPipe` (allows `Pending`, `Complete`, `Overdue`)
 - Event-driven notifications through `@nestjs/event-emitter` (`task.completed`)
 - Daily recurring-task generation through `@nestjs/schedule` (`@Cron('0 0 * * *')`)
 - One WebSocket gateway (`ChatGateway`, `@nestjs/platform-ws` `WsAdapter` set in `configureApp`) at `/api/chat/ws`, receive only
+- One MCP endpoint (FEAT-07a, `McpModule`) at `/mcp` (no `/api`), MCP TypeScript SDK v2, personal access tokens only (see MCP below)
 
 ## Modules
 - `auth` — access and refresh token generation, refresh rotation and revocation
@@ -24,6 +25,8 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `projects` — project CRUD scoped to the owning user
 - `task` — tasks, subtasks, recurring templates and instances, dashboard analytics
 - `notifications` — SSE stream, notification creation on task completion
+- `tokens` — FEAT-07a personal access tokens (`/api/tokens`, website JWT): list, create, revoke; `verify`/`touch` for the MCP verifier
+- `mcp` — FEAT-07a MCP server: 21 tools over the same services as the REST routes
 - `chat` — FEAT-05: project sharing by username (`project_members`), project chat messages (`chat_messages`), WebSocket rooms; FEAT-08a unread counts (`chat_reads`) with a `chat` event on the notifications SSE stream
 
 ## Key files
@@ -40,7 +43,7 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `src/chat/chat-access.service.ts` — `assertCanChat` (owner or member, project not deleted; a stranger gets the missing-project 404); `chat-members.service.ts`, `chat-messages.service.ts`, `chat-rooms.service.ts` (in-memory rooms), `chat.gateway.ts`; `chat-unread.service.ts` (unread counts, mark-read, `chat.unread.changed` emit)
 - `src/main.ts` — CORS (`FRONTEND_URL`, default `http://localhost:3000`), listens on `PORT` (default 8000)
 
-## Entities (11)
+## Entities (12)
 - `UserEntity` (table `users`)
 - `AuthTokenEntity` (`src/auth/models/auth.entity.ts`) — refresh token records: sha256 hash, `family_id`, `remember_me`, `revoked_at`, `replaced_by_token_id`, `replay_ciphertext`, nullable `ip_address`
 - `ProjectEntity`
@@ -51,6 +54,7 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `UserAwardEntity` (`src/notifications/models/user-award.entity.ts`, table `user_awards`) — award ledger
 - `ProjectMemberEntity` (`src/chat/models/project-member.entity.ts`, table `project_members`, PK `(project_id, user_id)`) — users a project is shared with; the owner is never a row
 - `ChatMessageEntity` (`src/chat/models/chat-message.entity.ts`, table `chat_messages`) — uuid id from the app, `body` varchar(2000), `created_at`/`deleted_at` timestamptz(3), soft delete
+- `PersonalAccessTokenEntity` (`src/tokens/models/personal-access-token.entity.ts`, table `personal_access_tokens`) — FEAT-07a: uuid id from the app, `user_id` (CASCADE), `name` varchar(60), `prefix` varchar(16) UNIQUE (10 base62 chars, public), `secret_hash` char(64) (sha256 of the secret part), `scopes` (`mcp`), `created_at`, `last_used_at`, `expires_at`, `revoked_at`
 - `ChatReadEntity` (`src/chat/models/chat-read.entity.ts`, table `chat_reads`, PK `(project_id, user_id)`) — FEAT-08a read point `last_read_at` timestamptz(3); only moves forward (`GREATEST`); deleted with the membership
 
 ## Relationships
@@ -59,6 +63,7 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - TaskTemplate 1→N TaskInstance (`SET NULL`)
 - TaskInstance 1→N TaskSubInstance (`CASCADE`)
 - Project 1→N ProjectMember, ChatMessage, ChatRead; User 1→N ProjectMember, ChatMessage, ChatRead (all `CASCADE`)
+- User 1→N PersonalAccessToken (`CASCADE`)
 
 ## Auth
 - HS256. Access token signed with `JWT_SECRET`, lifetime from `JWT_ACCESS_EXPIRATION` (no default; the service throws if either is missing)
@@ -70,6 +75,7 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `AuthMaintenanceService` (hourly cron) nulls expired replay ciphertext and deletes rows expired more than a day
 - Client IP is audit data only. `getClientIp()` returns `X-Client-IP` only when `X-Internal-Secret` matches `INTERNAL_API_SECRET` and the value is a valid IP; otherwise `null`. No `X-Real-IP`/`req.ip` fallback. Never use the IP for an auth decision
 - Rate limiting (SEC-09, `src/auth/rate-limit/`): only login (`loginEmail`/`loginUsername`, shared buckets), `refresh`, `logout`, signup (`user/create`), chat message send (`chatMessage`, 30/min per token user) and chat member add (`chatMember`, 60/h per token user) carry `@RateLimit(group)`; there is no global guard. Chat groups key on the token `sub`, so `AuthorizeGuard` must run first (class-level `@UseGuards`). Client key order: `attested` (valid secret + IP, IPv6 as /64) > `bff-noip` (shared bucket) > `unattested` (single valid `X-Real-IP`, else socket; `X-Forwarded-For` and an unattested `X-Client-IP` are never read; Render documents no `X-Real-IP`, so on Render unattested callers usually share the proxy's socket bucket and the global cap bounds them). Unattested traffic also hits a global cap per group. Login adds a per-identifier limit keyed on the lookup value: an email trimmed and lower-cased (`normalizeEmail`, BUG-01), a username exact (no case folding). No `trust proxy`. Counters are in memory, so this assumes ONE API instance (same as the notification stream). A 429 has `Retry-After` in seconds and the fixed message; logs carry the throttler name only, never IP, identifier or key. Tests override the limits via the `RATE_LIMITS` token (`createTestApp()` uses high limits, `createTestApp({})` the real ones). Signup must go through the FE BFF (`/api/auth/signup`) so it is attested
+- Personal access tokens (FEAT-07a): `gid_pat_<prefix>_<secret>`, shown once at creation, stored as sha256 of the secret (compared with `timingSafeEqual`). Valid ONLY on `/mcp`: `AuthorizeGuard` accepts only JWTs, so a PAT on any REST route is 401. Expiry 30/90 (default)/365 days or none; 10 active per user (users row lock); revoke is idempotent; `last_used_at` at most once a minute. Never log a token or hash; the prefix is fine. `/api/tokens` responses carry `Cache-Control: no-store`; create is `@RateLimit('tokenCreate')` (10/h per user)
 - Helmet is set in `configureApp` (CSP `default-src 'none'`, HSTS 180 days without `includeSubDomains` until the API hostname is confirmed)
 - Compose: Postgres 17 on volume `pgdata17`, bound to 127.0.0.1, `POSTGRES_PASSWORD` required. `DATABASE_SYNCHRONIZE` stays true in `.env.example` until REF-14 adds a baseline migration
 
@@ -102,19 +108,31 @@ Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app run
 - Password changes are bcrypt-hashed (cost 12). Migration `HashPlaintextPasswords` fixes old plaintext rows; `npm run db:rehash-passwords` is the idempotent straggler script. bcrypt 6 ships prebuilt Node-API binaries (glibc and musl, no `tar`, no node-pre-gyp, no compiler in the image); `src/auth/bcrypt-compat.spec.ts` pins hashes made by 5.1.1
 - Tests: `pnpm test` (contract and body-DTO unit specs), `pnpm test:int` (authorization, contract, migration, auth). `WRITE_FIXTURES=1 pnpm test:int` rewrites `test/fixtures/responses/`
 
+## MCP (FEAT-07a, `src/mcp/`)
+- SDK v2: `@modelcontextprotocol/server` 2.4.0 (`createMcpHandler`, `McpServer`), `@modelcontextprotocol/node` 2.1.2 (`toNodeHandler`), `@modelcontextprotocol/express` 2.0.2 (`requireBearerAuth`, Express middleware), zod 4 (`zod/v4`, used only in `src/mcp/`); the test client is `@modelcontextprotocol/client` 2.4.0. Exact versions pinned
+- Pipeline for `ALL /mcp`: `app.use('/mcp', mcpJsonParser)` (1 MB; the wrapper must not be named `jsonParser` or Nest skips its own parser for every route) → `mcpOriginCheck` (403 when an `Origin` header is not in `MCP_ALLOWED_ORIGINS`; empty by default) → `requireBearerAuth({ verifier: PatVerifier, requiredScopes: ['mcp'] })` (401 + `WWW-Authenticate: Bearer`, no `resource_metadata` until OAuth in phase 2) → `@RateLimit('mcp')` (120/min per token id, 429 + `Retry-After`) → `McpController` → `toNodeHandler(createMcpHandler(factory))`
+- Stateless: one `McpServer` per request (`McpServerFactory.create`). Serves 2026-07-28 and 2025-era clients (default `legacy: 'stateless'`); a 2025 GET/DELETE is 405
+- `PatVerifier.verifyAccessToken` → `AuthInfo { clientId: token id, scopes: ['mcp'], expiresAt (token expiry, or now + 1 h for no expiry: the SDK rejects an unset one), extra: { userId, prefix } }`
+- Tools (`src/mcp/tools/*.ts`, `defineTool` in `mcp-tool.ts`): strict zod input with `.describe()` on every field (a unit spec enforces it), never a user id; `userId` comes from `ctx.http.authInfo.extra`. Output is a text summary + compact JSON + `structuredContent` with an `outputSchema`; safe shapes only (`mcp-shapes.ts`). Writes run the REST DTOs' class-validator rules (`toDto`) and call the same services. Ownership is checked first, so a foreign and a missing item give the same 404 label. Errors (`mcp-errors.ts`): safe 404 label, 401/403 "Not allowed", 400 message passed through, anything else "Something went wrong" (logged in full). One log line per call: tool, token prefix, user, ms, ok/error; never arguments or results
+- Nullable output fields render as `type: ["string","null"]` (zod 4 always collapses them); the Inspector's 56 "schema portability" warnings are exactly these, all in output schemas. Input schemas have none. Claude Code connects fine
+- Deletes are soft and `destructiveHint: true`; hard-delete and admin routes are never exposed. User docs: `docs/MCP.md`
+
 ## Environment
 Validated at boot by `src/config/env.validation.ts` (`validateEnv`, called in `main.ts` before `AppModule` is loaded; any error prints the variable names and rules, never values, and exits 1). The migration CLI (`data-source.ts`) checks `DATABASE_URL` with the same `checkDatabaseUrl`. Required: `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_EXPIRATION`. Expiries need a unit (`15m`, `3600s`; a bare number is milliseconds to jsonwebtoken). Strict: `DATABASE_SYNCHRONIZE` is exactly `true`/`false`; `PORT` 1-65535; `REFRESH_REUSE_GRACE_SECONDS` 0-3600. `NODE_ENV` is `development|test|production` (default `development` locally, but required when `RENDER` (set by Render on every service), `RAILWAY_ENVIRONMENT_NAME` or `RAILWAY_PROJECT_ID` is present). Production-only: `FRONTEND_URL` required, an origin only and not local (`FRONTEND_URL_ALLOW_LOCAL=true` opts out for a smoke test), and `DATABASE_SYNCHRONIZE=true` is an error; secrets under 32 characters or equal only warn. `AppEnv` is a diagnostic view; readers keep their own reads and defaults. A good boot logs `[Env] configuration valid (NODE_ENV=...)`.
-`NODE_ENV`, `FRONTEND_URL_ALLOW_LOCAL`, `DATABASE_URL`, `DATABASE_SYNCHRONIZE`, `JWT_SECRET`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRATION`, `JWT_REFRESH_EXPIRATION_SHORT`, `REFRESH_REUSE_GRACE_SECONDS`, `INTERNAL_API_SECRET`, `FRONTEND_URL`, `PORT`
+Optional `MCP_ALLOWED_ORIGINS` (FEAT-07a): comma-separated origins allowed to call `/mcp` from a browser; each must be an origin only, else boot fails.
+`NODE_ENV`, `FRONTEND_URL_ALLOW_LOCAL`, `MCP_ALLOWED_ORIGINS`, `DATABASE_URL`, `DATABASE_SYNCHRONIZE`, `JWT_SECRET`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRATION`, `JWT_REFRESH_EXPIRATION_SHORT`, `REFRESH_REUSE_GRACE_SECONDS`, `INTERNAL_API_SECRET`, `FRONTEND_URL`, `PORT`
 
-## API endpoints (47)
+## API endpoints (50)
 - `GET /` — health check (1)
 - `/api/auth` — `POST refresh`, `POST logout` (2)
 - `/api/user` — create, loginEmail, loginUsername, get/:id, getAll, delete :id, :id/hard, update/:user_id (8)
 - `/api/projects` — getAll, getAll/:user_id, :project_id (get, patch, delete), create, :project_id/hard (7)
 - `/api/tasks` — 18 endpoints, see `FEATURE_MAP.md`
 - `/api/chat` — `projects/:project_id/members` (GET, POST `{username}`, DELETE `:user_id`), `shared-projects` (GET), `projects/:project_id/messages` (GET `limit`/`cursor`, POST `{body}`, DELETE `:id`), FEAT-08a `unread` (GET, `{items: [{project_id, unread_count}], total}`, counts capped at 100) and `projects/:project_id/read` (PUT `{message_id}`, never moves back) (9). Responses `{status:'success', data}`; shapes and socket frames in `API_CONTRACT.chat` and `FEATURE_MAP.md`. WebSocket `/api/chat/ws` (not counted): Origin = `FRONTEND_URL`, first frame `{type:'auth', token}` within 5 s, close 4401 on bad auth or token expiry, `join`/`leave`, server frames `{type, data}`. Rooms are in memory (one instance)
+- `/api/tokens` (FEAT-07a) — `GET` (list), `POST {name, expires_in_days}` (201, the only response with the secret), `DELETE :id` (revoke) (3). Responses `{status:'success', data}`; shapes in `API_CONTRACT.tokens.fields`
+- `/mcp` (not counted, not under `/api`) — the MCP endpoint, personal access tokens only
 - `/api/notifications` — `GET` (list: `limit`, opaque `cursor`; `{items, unread_count, next_cursor}`), `PATCH read-all`, `PATCH :notif_id/read` (idempotent; unknown or foreign id is 404), `GET sse` (typed `notification` events with `id:`, 25 s `ping`, ends at token `exp`), `DELETE clear/:user_id` (5). The list is the source of truth; the stream only signals. FEAT-08a adds `event: chat` (data `{project_id}`) when the user's chat unread counts changed; refetch `GET /api/chat/unread`. Frames without a notification id (`ping`, `chat`) get Nest's own counter as `id:`, so `Last-Event-ID` is not a notification id and nothing reads it. `metadata` and `actionTarget` are never exposed
-- Everything except `GET /`, `refresh`, `create`, `loginEmail`, `loginUsername` and the two notification routes uses `AuthorizeGuard`
+- Everything except `GET /`, `refresh`, `create`, `loginEmail`, `loginUsername`, the two notification routes and `/mcp` uses `AuthorizeGuard` (`/mcp` uses `requireBearerAuth` with personal access tokens)
 
 ## Commands
 - `pnpm start:dev` — dev server with watch
