@@ -24,17 +24,18 @@ export const invalidClient = () =>
   new OAuthHttpError(401, 'invalid_client', 'Unknown client.');
 
 /**
- * The consent page's error (GET /api/oauth/authorize/check and the decision):
- * 400 `{ statusCode, error, message, fatal, redirect_to? }`. Fatal: show it,
- * never redirect. Not fatal: `redirect_to` carries `error=` for the client.
+ * The consent decision's fatal error (POST /api/oauth/authorize): 400
+ * `{ statusCode, error, message, fatal: true }`. Show it, never redirect.
+ * Redirectable problems are answered 200 with `redirect_to` instead.
  */
-export function authorizeHttpError(e: AuthorizeError): BadRequestException {
+export function authorizeHttpError(
+  e: Extract<AuthorizeError, { fatal: true }>,
+): BadRequestException {
   return new BadRequestException({
     statusCode: 400,
     error: e.error,
     message: e.description,
-    fatal: e.fatal,
-    ...(e.fatal ? {} : { redirect_to: e.redirectTo }),
+    fatal: true,
   });
 }
 

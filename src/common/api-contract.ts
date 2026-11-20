@@ -136,11 +136,14 @@ export const API_CONTRACT = {
    * (`authorizePath` on the FE origin) and get opaque tokens valid only on
    * /mcp. The consent page calls `routes.oauthAuthorizeCheck` and
    * `routes.oauthAuthorize` with the website JWT; "Connected apps" uses
-   * `routes.oauthGrantsList` / `oauthGrantRevoke`. Success responses are
-   * `{ status: 'success', data }`. An authorize error is a 400 with
-   * `fields.authorizeError`: `fatal: true` means show it and never redirect;
-   * `fatal: false` carries `redirect_to` (the client's redirect URI with
-   * `error=`). Any other non-2xx from the check is fatal too.
+   * `routes.oauthGrantsList` / `oauthGrantRevoke`. Responses are
+   * `{ status: 'success', data }`. The check always answers 200 with `data`
+   * a union on `outcome` (`checkOutcomes`): `ok` (`fields.authorizeCheck`),
+   * `redirect` (`fields.authorizeCheckRedirect`: navigate to `redirect_to`,
+   * which carries `error=`), `fatal` (`fields.authorizeCheckFatal`: show it,
+   * never redirect). The decision answers 200 `{ redirect_to }` for allow,
+   * deny and redirectable problems, and 400 `fields.authorizeError` (always
+   * `fatal: true`) for the fatal ones. Any other non-2xx is fatal too.
    */
   oauth: {
     // The FE page that is the OAuth authorization endpoint (on FRONTEND_URL).
@@ -162,6 +165,7 @@ export const API_CONTRACT = {
     tokenRequestsPerMinute: 60,
     authorizePerMinute: 30,
     decisions: ['allow', 'deny'],
+    checkOutcomes: ['ok', 'redirect', 'fatal'],
     // Query parameters of the authorize request, passed through unchanged by
     // the consent page (check: query string; decision: JSON body + decision).
     authorizeParams: [
@@ -176,20 +180,17 @@ export const API_CONTRACT = {
     ],
     fields: {
       authorizeCheck: [
+        'outcome',
         'client_name',
         'redirect_host',
         'loopback_only',
         'scopes',
       ],
+      authorizeCheckRedirect: ['outcome', 'error', 'redirect_to'],
+      authorizeCheckFatal: ['outcome', 'error'],
       authorizeDecision: ['redirect_to'],
-      // 400 body; redirect_to is present only when fatal is false.
-      authorizeError: [
-        'statusCode',
-        'error',
-        'message',
-        'fatal',
-        'redirect_to',
-      ],
+      // The decision's 400 body (fatal only).
+      authorizeError: ['statusCode', 'error', 'message', 'fatal'],
       grant: [
         'id',
         'client_name',
