@@ -32,7 +32,13 @@ function allMigrations(): (new () => MigrationInterface)[] {
 
 describe('PersonalAccessTokens migration (FEAT-07a)', () => {
   let ds: DataSource;
-  const migrations = allMigrations();
+  // Migrations after PersonalAccessTokens are left out; their schema (REF-14c
+  // foreign keys) is already there from synchronize, so it adds no drift.
+  const all = allMigrations();
+  const migrations = all.slice(
+    0,
+    all.findIndex((M) => new M().name === NAME) + 1,
+  );
   const exists = async (table: string) =>
     (
       await ds.query(`SELECT to_regclass($1)::text AS t`, [`public.${table}`])
@@ -81,6 +87,7 @@ describe('PersonalAccessTokens migration (FEAT-07a)', () => {
   it('PM1 exactly one migration runs; a second run does nothing; no drift', async () => {
     expect(migrations).toHaveLength(7);
     expect(new migrations[6]().name).toBe(NAME);
+    expect(all.length).toBeGreaterThan(7);
     const ran = await ds.runMigrations();
     expect(ran.map((m) => m.name)).toEqual([NAME]);
     expect(await exists('personal_access_tokens')).toBe(true);

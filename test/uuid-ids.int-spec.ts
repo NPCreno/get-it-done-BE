@@ -116,9 +116,13 @@ describe('collision-proof ids (REF-14b)', () => {
 
   it('I2: old-format ids still read, update and delete through the API', async () => {
     // A fresh user with no rows yet, renamed to the old format, then logged in
-    // again so the token carries the old id.
+    // again so the token carries the old id. Its signup refresh-token rows go
+    // first: FK_auth_token_user (REF-14c) blocks renaming a referenced id.
     const fresh = await signupAndLogin(app, 'oldfmt');
     const oldUser = 'user-012345678';
+    await q('DELETE FROM auth_token_entity WHERE user_id = $1', [
+      fresh.user_id,
+    ]);
     await q('UPDATE users SET user_id = $1 WHERE user_id = $2', [
       oldUser,
       fresh.user_id,

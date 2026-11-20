@@ -19,6 +19,7 @@ One line per source file. Paths are relative to the repo root.
 - `../migrations/1762700000000-CatchUpBaseline.ts` — OPS-04: creates `notifications` (synchronize's DDL) where production lacks it; no-op elsewhere. `test/catchup-migration.int-spec.ts`; drift record `docs/migrations/2026-11-17-prod-drift.md`
 - `../migrations/1762800000000-AuthTokenRotation.ts` — hand-written migration for the new token columns
 - `../migrations/1763000000000-AwardOnce.ts` — lifetime counter, `user_awards` ledger, award backfill from notifications
+- `../migrations/1763400000000-TemplateAndTokenForeignKeys.ts` — REF-14c: `FK_task_template_user`, `FK_task_template_project`, `FK_auth_token_user` (all CASCADE); `test/template-token-fks.int-spec.ts`
 - `streak.ts` — pure `computeStreak` (count and run start); `test/award-once*.int-spec.ts`, `test/jest-global-tz.ts` (TZ=UTC for jest)
 - `client-ip.ts` — `getClientIp(req)` for audit records
 - `rate-limit/` — `ip.ts`, `client-key.ts`, `identifier-key.ts`, `rate-limits.ts` (throttler table), `rate-limit.decorator.ts`, `auth-throttler.guard.ts`, `rate-limit-config.module.ts` (SEC-09)

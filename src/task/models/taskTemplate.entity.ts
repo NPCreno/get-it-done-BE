@@ -3,11 +3,15 @@ import {
   CreateDateColumn,
   DeleteDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { TaskInstanceEntity } from './taskInstance.entity';
+import { UserEntity } from 'src/user/models/user.entity';
+import { ProjectEntity } from 'src/projects/models/projects.entity';
 
 @Entity()
 export class TaskTemplateEntity {
@@ -19,6 +23,31 @@ export class TaskTemplateEntity {
 
   @Column({ nullable: true })
   project_id!: string;
+
+  /** REF-14c: migration TemplateAndTokenForeignKeys. The code reads user_id. */
+  @ManyToOne(() => UserEntity, {
+    onDelete: 'CASCADE',
+    createForeignKeyConstraints: true,
+  })
+  @JoinColumn({
+    name: 'user_id',
+    referencedColumnName: 'user_id',
+    foreignKeyConstraintName: 'FK_task_template_user',
+  })
+  user?: UserEntity;
+
+  /** REF-14c: hard-deleting a project removes its templates. */
+  @ManyToOne(() => ProjectEntity, {
+    onDelete: 'CASCADE',
+    nullable: true,
+    createForeignKeyConstraints: true,
+  })
+  @JoinColumn({
+    name: 'project_id',
+    referencedColumnName: 'project_id',
+    foreignKeyConstraintName: 'FK_task_template_project',
+  })
+  project?: ProjectEntity | null;
 
   @Column({ unique: true })
   taskTemplate_id!: string;

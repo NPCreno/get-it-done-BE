@@ -45,7 +45,7 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 
 ## Entities (12)
 - `UserEntity` (table `users`)
-- `AuthTokenEntity` (`src/auth/models/auth.entity.ts`) — refresh token records: sha256 hash, `family_id`, `remember_me`, `revoked_at`, `replaced_by_token_id`, `replay_ciphertext`, nullable `ip_address`
+- `AuthTokenEntity` (`src/auth/models/auth.entity.ts`, `user_id` FK CASCADE since REF-14c) — refresh token records: sha256 hash, `family_id`, `remember_me`, `revoked_at`, `replaced_by_token_id`, `replay_ciphertext`, nullable `ip_address`
 - `ProjectEntity`
 - `TaskTemplateEntity` — recurring task definitions
 - `TaskInstanceEntity` — individual tasks
@@ -67,6 +67,7 @@ Business ids (`user_id`, `project_id`, `task_id`, `taskTemplate_id`, `taskSubIns
 - TaskInstance 1→N TaskSubInstance (`CASCADE`)
 - Project 1→N ProjectMember, ChatMessage, ChatRead; User 1→N ProjectMember, ChatMessage, ChatRead (all `CASCADE`)
 - User 1→N PersonalAccessToken (`CASCADE`)
+- REF-14c (migration `TemplateAndTokenForeignKeys`): User 1→N TaskTemplate (`FK_task_template_user`), Project 1→N TaskTemplate (`FK_task_template_project`, nullable), User 1→N AuthToken refresh rows (`FK_auth_token_user`), all `CASCADE`. The entities keep the plain `user_id`/`project_id` columns the code reads, next to the relation
 
 ## Auth
 - HS256. Access token signed with `JWT_SECRET`, lifetime from `JWT_ACCESS_EXPIRATION` (no default; the service throws if either is missing)

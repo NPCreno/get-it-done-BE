@@ -66,6 +66,13 @@ async function seedProductionShape(
   await ds.query('DROP TABLE "chat_reads", "chat_messages", "project_members"');
   // FEAT-07a personal_access_tokens postdates production (PersonalAccessTokens).
   await ds.query('DROP TABLE "personal_access_tokens"');
+  // REF-14c: production has no foreign keys on templates and token rows.
+  await ds.query(`ALTER TABLE "task_template_entity"
+    DROP CONSTRAINT "FK_task_template_user",
+    DROP CONSTRAINT "FK_task_template_project"`);
+  await ds.query(
+    'ALTER TABLE "auth_token_entity" DROP CONSTRAINT "FK_auth_token_user"',
+  );
   if (!keepNotifications) {
     await ds.query('DROP TABLE "notifications"');
     await ds.query(
@@ -174,6 +181,22 @@ describe('CatchUpBaseline migration', () => {
     // PersonalAccessTokens (FEAT-07a) likewise.
     expect(await exists('personal_access_tokens')).toBe(true);
     expect(left.filter((q) => /personal_access_tokens/.test(q))).toEqual([]);
+    // TemplateAndTokenForeignKeys (REF-14c): the three foreign keys, exactly
+    // as the entities describe them.
+    expect(
+      await ds.query(
+        `SELECT conname, confdeltype FROM pg_constraint
+          WHERE conname IN ('FK_task_template_user', 'FK_task_template_project',
+                            'FK_auth_token_user') ORDER BY conname`,
+      ),
+    ).toEqual([
+      { conname: 'FK_auth_token_user', confdeltype: 'c' },
+      { conname: 'FK_task_template_project', confdeltype: 'c' },
+      { conname: 'FK_task_template_user', confdeltype: 'c' },
+    ]);
+    expect(
+      left.filter((q) => /task_template_entity|FK_auth_token_user/.test(q)),
+    ).toEqual([]);
   });
 
   it('C2 notifications already there: catch-up is a no-op and the rest run', async () => {
