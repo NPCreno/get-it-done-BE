@@ -6,6 +6,7 @@ import { clientKey, ClientKey } from './client-key';
 import { identifierKey } from './identifier-key';
 import { RATE_LIMIT_GROUP, RateLimitGroup } from './rate-limit.decorator';
 import { API_CONTRACT } from '../../common/api-contract';
+import { isClientId } from '../../oauth/oauth-format';
 
 export const RATE_LIMITS = Symbol('RATE_LIMITS');
 
@@ -24,8 +25,14 @@ const DAY = 24 * HOUR;
 export interface ThrottlerDef {
   name: string;
   groups: RateLimitGroup[];
-  tracker: string; // 'client' | 'identifier' | 'user' | 'pat' | a constant bucket name
-  runsFor: 'attested' | 'unattested' | 'noip' | 'identifier' | 'user';
+  tracker: string; // 'client' | 'identifier' | 'user' | 'pat' | 'oauthClient' | a constant bucket name
+  runsFor:
+    | 'attested'
+    | 'unattested'
+    | 'noip'
+    | 'identifier'
+    | 'user'
+    | 'always';
   limit: number;
   ttl: number;
 }
@@ -153,14 +160,61 @@ export const THROTTLER_DEFS: ThrottlerDef[] = [
     limit: API_CONTRACT.tokens.createsPerHour,
     ttl: HOUR,
   },
-  // FEAT-07a: /mcp runs after the bearer middleware, keyed on the personal
-  // access token's id (req.auth.clientId), so each token has its own budget.
+  // FEAT-07a/07c: /mcp runs after the bearer middleware, keyed on
+  // req.auth.clientId (the personal access token id or the OAuth grant id), so
+  // each token or connected app has its own budget.
   {
     name: 'mcp-token-1m',
     groups: ['mcp'],
     tracker: 'pat',
     runsFor: 'user',
     limit: 120,
+    ttl: MIN,
+  },
+  // FEAT-07c: DCR. Callers are MCP clients (never the BFF), so every one is
+  // keyed by the client key (on Render usually the shared proxy socket) plus a
+  // global cap.
+  {
+    name: 'oauth-register-client-1h',
+    groups: ['oauthRegister'],
+    tracker: 'client',
+    runsFor: 'always',
+    limit: API_CONTRACT.oauth.registersPerHour,
+    ttl: HOUR,
+  },
+  {
+    name: 'oauth-register-global-1h',
+    groups: ['oauthRegister'],
+    tracker: 'oauth-register-global',
+    runsFor: 'always',
+    limit: 200,
+    ttl: HOUR,
+  },
+  // FEAT-07c: token and revoke, keyed on the posted client_id (one bucket for
+  // anything that is not a well-formed one), plus a global cap.
+  {
+    name: 'oauth-token-client-1m',
+    groups: ['oauthToken'],
+    tracker: 'oauthClient',
+    runsFor: 'always',
+    limit: API_CONTRACT.oauth.tokenRequestsPerMinute,
+    ttl: MIN,
+  },
+  {
+    name: 'oauth-token-global-1m',
+    groups: ['oauthToken'],
+    tracker: 'oauth-token-global',
+    runsFor: 'always',
+    limit: 600,
+    ttl: MIN,
+  },
+  // FEAT-07c: the consent decision runs after AuthorizeGuard (token user).
+  {
+    name: 'oauth-authorize-user-1m',
+    groups: ['oauthAuthorize'],
+    tracker: 'user',
+    runsFor: 'user',
+    limit: API_CONTRACT.oauth.authorizePerMinute,
     ttl: MIN,
   },
   {
@@ -192,6 +246,13 @@ function patOf(req: Record<string, any>): string {
   return typeof id === 'string' && id !== '' ? id : 'unknown';
 }
 
+/** The posted OAuth client_id, if well-formed; else one shared bucket. */
+function oauthClientOf(req: Record<string, any>): string {
+  const id: unknown = (req.body as { client_id?: unknown } | undefined)
+    ?.client_id;
+  return isClientId(id) ? id : 'invalid';
+}
+
 /** The token user set by AuthorizeGuard; one shared bucket if it is missing. */
 function userOf(req: Record<string, any>): string {
   const sub: unknown = (req.user as { sub?: unknown } | undefined)?.sub;
@@ -218,6 +279,7 @@ function skipIfFor(def: ThrottlerDef) {
       case 'identifier':
         return identifierKey(req.body) === null;
       case 'user':
+      case 'always':
         return false;
     }
   };
@@ -229,6 +291,7 @@ function trackerFor(def: ThrottlerDef) {
     if (def.tracker === 'identifier') return identifierKey(req.body) ?? '';
     if (def.tracker === 'user') return `user:${userOf(req)}`;
     if (def.tracker === 'pat') return `pat:${patOf(req)}`;
+    if (def.tracker === 'oauthClient') return `oauth:${oauthClientOf(req)}`;
     return def.tracker;
   };
 }

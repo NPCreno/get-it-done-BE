@@ -67,6 +67,30 @@ describe('throttler config (U4)', () => {
     expect(running('chatMember')).toEqual(['chat-member-user-1h']);
     expect(running('tokenCreate')).toEqual(['token-create-user-1h']);
     expect(running('mcp')).toEqual(['mcp-token-1m']);
+    expect(running('oauthRegister')).toEqual([
+      'oauth-register-client-1h',
+      'oauth-register-global-1h',
+    ]);
+    expect(running('oauthToken')).toEqual([
+      'oauth-token-client-1m',
+      'oauth-token-global-1m',
+    ]);
+    expect(running('oauthAuthorize')).toEqual(['oauth-authorize-user-1m']);
+  });
+
+  it('the OAuth token throttler keys on a well-formed posted client_id only (FEAT-07c)', () => {
+    const t = buildThrottlers({}).find(
+      (i) => i.name === 'oauth-token-client-1m',
+    )!;
+    expect(t.limit).toBe(60);
+    const tracker = t.getTracker as (r: Record<string, any>) => string;
+    const id = 'gid_cli_AAAAAAAAAAAAAAAAAAAAAA';
+    expect(tracker({ body: { client_id: id } })).toBe(`oauth:${id}`);
+    expect(tracker({ body: { client_id: 'x'.repeat(500) } })).toBe(
+      'oauth:invalid',
+    );
+    expect(tracker({ body: { client_id: [id] } })).toBe('oauth:invalid');
+    expect(tracker({})).toBe('oauth:invalid');
   });
 
   it('chat throttlers key on the token user, never the IP', () => {

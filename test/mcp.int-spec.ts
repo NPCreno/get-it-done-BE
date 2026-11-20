@@ -132,7 +132,10 @@ describe('MCP endpoint (FEAT-07a)', () => {
       expect(res.status).toBe(401);
       const challenge = res.headers.get('www-authenticate') ?? '';
       expect(challenge).toMatch(/^Bearer/);
-      expect(challenge).not.toContain('resource_metadata');
+      // FEAT-07c: the challenge points OAuth clients at the metadata.
+      expect(challenge).toContain(
+        'resource_metadata="http://localhost:8000/.well-known/oauth-protected-resource/mcp"',
+      );
     };
 
     it('no token -> 401 with a Bearer challenge', async () => {

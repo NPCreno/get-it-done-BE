@@ -235,6 +235,17 @@ export function validateEnv(raw: NodeJS.ProcessEnv): EnvResult {
       );
   }
 
+  // FEAT-07c: the OAuth issuer is RENDER_EXTERNAL_URL (set by Render), else
+  // PUBLIC_API_URL, else http://localhost:<PORT>.
+  if (raw.PUBLIC_API_URL !== undefined && raw.PUBLIC_API_URL !== '') {
+    const problem = checkFrontendUrl(raw.PUBLIC_API_URL);
+    if (problem) err('PUBLIC_API_URL', problem);
+  }
+  if (isProd && !raw.RENDER_EXTERNAL_URL && !raw.PUBLIC_API_URL)
+    warnings.push(
+      'neither RENDER_EXTERNAL_URL nor PUBLIC_API_URL is set: OAuth metadata names http://localhost, so MCP connectors cannot sign in',
+    );
+
   // MCP_ALLOWED_ORIGINS (optional, comma-separated origins)
   const mcpOrigins = parseAllowedOrigins(raw.MCP_ALLOWED_ORIGINS);
   if (mcpOrigins.error) err('MCP_ALLOWED_ORIGINS', mcpOrigins.error);
