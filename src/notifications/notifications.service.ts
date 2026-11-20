@@ -19,6 +19,7 @@ import { awardKeyFor } from './award-key';
 import { UserAwardEntity } from './models/user-award.entity';
 import { NotificationRule } from './models/notification.interfaces';
 import { API_CONTRACT } from 'src/common/api-contract';
+import { newId } from 'src/common/ids';
 import {
   CHAT_UNREAD_CHANGED,
   ChatUnreadChangedEvent,
@@ -37,11 +38,6 @@ export class NotificationsService {
     @InjectRepository(NotificationsEntity)
     private readonly notificationsRepository: Repository<NotificationsEntity>,
   ) {}
-
-  private generateNotifId(): string {
-    const randomNumber = Math.floor(Math.random() * 1_000_000_000); // 0 to 999,999,999
-    return 'notif-' + randomNumber.toString().padStart(9, '0');
-  }
 
   /**
    * Awards are given once: each matched rule maps to an award key
@@ -119,7 +115,7 @@ export class NotificationsService {
       if (!raw || raw.length === 0) return null;
 
       const notification = manager.create(NotificationsEntity, {
-        notif_id: this.generateNotifId(),
+        notif_id: newId('notif'),
         user: { user_id: userId } as User,
         type: rule.type,
         title: rule.title,

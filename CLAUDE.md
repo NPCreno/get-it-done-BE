@@ -37,7 +37,7 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `src/auth/client-ip.ts` — `getClientIp(req)`, audit-only IP from request headers; `hasValidInternalSecret(req)`
 - `src/auth/rate-limit/` — SEC-09: `@RateLimit(group)` + one `AuthThrottlerGuard`, named throttlers in `rate-limits.ts`, `clientKey()`, `identifierKey()`, `normalizeIp()`
 - `src/user/user.controller.ts`, `user.service.ts` — login, signup, user CRUD
-- `src/task/task.service.ts` — task create/update/delete (`TaskService`); `task-query.service.ts` list reads; `subtask.service.ts` subtask writes; `task-status.service.ts` status transitions (award-once transaction, `task.completed` emit); `task-stats.service.ts` dashboard, trend, distribution, heatmap (SQL counts); `task-streak.service.ts` streak; `task-recurrence.service.ts` recurring deletes; `task-ids.ts` id generators. Each under about 400 lines (`service-size.spec.ts`)
+- `src/task/task.service.ts` — task create/update/delete (`TaskService`); `task-query.service.ts` list reads; `subtask.service.ts` subtask writes; `task-status.service.ts` status transitions (award-once transaction, `task.completed` emit); `task-stats.service.ts` dashboard, trend, distribution, heatmap (SQL counts); `task-streak.service.ts` streak; `task-recurrence.service.ts` recurring deletes; `task-ids.ts` id generators (all through `newId`). Each under about 400 lines (`service-size.spec.ts`)
 - `src/task/taskGenerator.service.ts` — daily cron that creates recurring task instances; also runs once at boot (`onModuleInit`)
 - `src/notifications/notifications.service.ts` — `@OnEvent('task.completed')` listener
 - `src/chat/chat-access.service.ts` — `assertCanChat` (owner or member, project not deleted; a stranger gets the missing-project 404); `chat-members.service.ts`, `chat-messages.service.ts`, `chat-rooms.service.ts` (in-memory rooms), `chat.gateway.ts`; `chat-unread.service.ts` (unread counts, mark-read, `chat.unread.changed` emit)
@@ -56,6 +56,9 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `ChatMessageEntity` (`src/chat/models/chat-message.entity.ts`, table `chat_messages`) — uuid id from the app, `body` varchar(2000), `created_at`/`deleted_at` timestamptz(3), soft delete
 - `PersonalAccessTokenEntity` (`src/tokens/models/personal-access-token.entity.ts`, table `personal_access_tokens`) — FEAT-07a: uuid id from the app, `user_id` (CASCADE), `name` varchar(60), `prefix` varchar(16) UNIQUE (10 base62 chars, public), `secret_hash` char(64) (sha256 of the secret part), `scopes` (`mcp`), `created_at`, `last_used_at`, `expires_at`, `revoked_at`
 - `ChatReadEntity` (`src/chat/models/chat-read.entity.ts`, table `chat_reads`, PK `(project_id, user_id)`) — FEAT-08a read point `last_read_at` timestamptz(3); only moves forward (`GREATEST`); deleted with the membership
+
+## Ids
+Business ids (`user_id`, `project_id`, `task_id`, `taskTemplate_id`, `taskSubInstance_id`, `notif_id`) come from `newId(prefix)` (`src/common/ids.ts`, REF-14b): `<prefix>-<uuid v4>` with the prefixes `user`, `PRJ`, `task`, `generatedTask` (recurring instances), `TMP`, `subTask`, `notif`. No "is it free" lookup; the unique constraint is the final guard. Older rows keep the old formats (`user-123456789`, `TMP-<ms>-<n>`, ...), so ids are opaque: never parse a prefix or format. Chat messages and personal access tokens use a bare `randomUUID()`.
 
 ## Relationships
 - User 1→N Project, TaskInstance, TaskSubInstance, Notification, UserAward (all `onDelete: CASCADE`)

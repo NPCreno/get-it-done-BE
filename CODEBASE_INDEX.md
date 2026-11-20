@@ -90,11 +90,12 @@ One line per source file. Paths are relative to the repo root.
 ## common (`src/common/`)
 - `api-contract.ts` — canonical contract constants
 - `is-after-or-equal.ts` — class-validator `IsAfterOrEqual`
+- `ids.ts` — REF-14b `newId(prefix)`: `<prefix>-<uuid v4>` for every business id (user, PRJ, task, generatedTask, TMP, subTask, notif); `ids.spec.ts`
 - `api-contract.spec.ts`, `body-dtos.spec.ts` — unit specs
 - `../app.setup.ts` — `configureApp()` (helmet, CORS, global ValidationPipe, `WsAdapter`)
 - `../auth/token-user.ts` — `toTokenUser()` allowlist; `../auth/decorators/auth-user-id.decorator.ts` — `@AuthUserId()`; `../auth/decorators/current-user.decorator.ts` — `@CurrentUser()`; `../auth/guards/self-param.guard.ts` — `SelfParam()` (the one id comparison); `../auth/guards/admin-only.guard.ts`; `../common/controller-identity.spec.ts` — scans controllers
 - `../auth/rehash-passwords.ts`, `../migrations/1762900000000-HashPlaintextPasswords.ts`, `../../scripts/rehash-plaintext-passwords.ts`, `../../scripts/export-contract.ts`
-- `../../test/` — `int-env.ts`, `int-db.ts`, `int-app.ts`, `int-auth.ts`, `authorization.int-spec.ts`, `api-contract.int-spec.ts`, `password-migration.int-spec.ts`, `catchup-migration.int-spec.ts`, `login-email-case.int-spec.ts` (BUG-01), `fixtures/responses/`
+- `../../test/` — `int-env.ts`, `int-db.ts`, `int-app.ts`, `int-auth.ts`, `authorization.int-spec.ts`, `api-contract.int-spec.ts`, `password-migration.int-spec.ts`, `catchup-migration.int-spec.ts`, `login-email-case.int-spec.ts` (BUG-01), `uuid-ids.int-spec.ts` (REF-14b), `fixtures/responses/`
 
 ## Root config
 - `package.json`, `tsconfig.json`, `nest-cli.json`, `codegraph.json`

@@ -121,9 +121,6 @@ export class TaskService {
         }
       }
 
-      let task_id: string;
-      let taskTemplate_id: string;
-      let exists = true;
       if (taskDto.isRecurring) {
         if (!taskDto.repeat_every)
           throw new BadRequestException(
@@ -141,13 +138,9 @@ export class TaskService {
             'repeat days is required when repeat every is "Week"',
           );
         }
-        do {
-          taskTemplate_id = newTaskTemplateId();
-          const existing = await this.taskTemplateRepository.findOne({
-            where: { taskTemplate_id },
-          });
-          exists = !!existing;
-        } while (exists);
+        // REF-14b: a uuid id needs no "is it free" lookup; the unique
+        // constraint is the final guard.
+        const taskTemplate_id = newTaskTemplateId();
         const {
           title,
           description,
@@ -178,15 +171,7 @@ export class TaskService {
           data: savedTaskTemplate,
         };
       } else {
-        do {
-          // Generate unique task_id
-          task_id = newTaskInstanceId();
-          const existing = await this.taskInstanceRepository.findOne({
-            where: { task_id },
-          });
-          exists = !!existing;
-        } while (exists);
-
+        const task_id = newTaskInstanceId();
         const taskInstance = this.taskInstanceRepository.create({
           task_id,
           title: taskDto.title,

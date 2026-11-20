@@ -18,6 +18,7 @@ import { UpdateUserDto } from './dto/update-user-dto';
 import { AuthService, TokenPair } from 'src/auth/auth.service';
 import { UserCleanupResponse } from './models/userCleanupResponse';
 import { User } from './models/user.interface';
+import { newId } from 'src/common/ids';
 
 @Injectable()
 export class UserService {
@@ -26,11 +27,6 @@ export class UserService {
     private readonly userRepository: Repository<UserEntity>,
     private readonly authService: AuthService,
   ) {}
-
-  private generateUserId(): string {
-    const randomNumber = Math.floor(Math.random() * 1_000_000_000); // 0 to 999,999,999
-    return 'user-' + randomNumber.toString().padStart(9, '0');
-  }
 
   async createUser(userDto: CreateUserDto): Promise<{
     status: string;
@@ -50,7 +46,7 @@ export class UserService {
         throw new Error('Failed to hash password');
       }
 
-      const user_id = this.generateUserId();
+      const user_id = newId('user');
 
       // Create a new user instance with explicit typing
       const newUser = this.userRepository.create({

@@ -12,6 +12,7 @@ import { TaskInstanceEntity } from 'src/task/models/taskInstance.entity';
 import { TaskTemplateEntity } from 'src/task/models/taskTemplate.entity';
 import { TaskQueryService } from 'src/task/task-query.service';
 import { SanitizedProject } from './interfaces/sanitizedProject';
+import { newId } from 'src/common/ids';
 
 @Injectable()
 export class ProjectsService {
@@ -24,11 +25,6 @@ export class ProjectsService {
     @InjectRepository(TaskTemplateEntity)
     private readonly taskTemplateRepository: Repository<TaskTemplateEntity>,
   ) {}
-
-  private generateProjectId(): string {
-    const randomNumber = Math.floor(Math.random() * 1_000_000_000); // 0 to 999,999,999
-    return 'PRJ-' + randomNumber.toString().padStart(9, '0');
-  }
 
   async findOne(
     project_id: string,
@@ -149,17 +145,8 @@ export class ProjectsService {
     error?: any;
   }> {
     try {
-      let project_id: string;
-      let exists = true;
-
-      // Generate unique project_id
-      do {
-        project_id = this.generateProjectId();
-        const existing = await this.projectsRepository.findOne({
-          where: { project_id },
-        });
-        exists = !!existing;
-      } while (exists);
+      // REF-14b: uuid id, no "is it free" lookup (unique constraint guards)
+      const project_id = newId('PRJ');
 
       // Create and save the new project
       const project = this.projectsRepository.create({
