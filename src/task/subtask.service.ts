@@ -155,16 +155,8 @@ export class SubTaskService {
         );
       }
 
-      // Generate unique ID for the sub-instance
-      let taskSubInstanceId: string;
-      let exists = true;
-      do {
-        taskSubInstanceId = newTaskSubInstanceId();
-        const existing = await this.taskSubInstanceRepository.findOne({
-          where: { taskSubInstance_id: taskSubInstanceId },
-        });
-        exists = !!existing;
-      } while (exists);
+      // REF-14b: uuid id, no "is it free" lookup (unique constraint guards)
+      const taskSubInstanceId = newTaskSubInstanceId();
 
       // Create and save the sub-instance
       const subInstance = this.taskSubInstanceRepository.create({

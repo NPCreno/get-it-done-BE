@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TaskTemplateEntity } from './models/taskTemplate.entity';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
+import { newGeneratedTaskId } from './task-ids';
 
 @Injectable()
 export class TaskGeneratorService implements OnModuleInit {
@@ -20,10 +21,6 @@ export class TaskGeneratorService implements OnModuleInit {
 
   async onModuleInit() {
     await this.generateInstancesForCurrentMonth(); //trigger cronjob for generating task instances from task template
-  }
-
-  private generateTaskId(): string {
-    return `generatedTask-${Math.floor(Math.random() * 1_000_000_000)}`;
   }
 
   @Cron('0 0 * * *') // Every day at midnight
@@ -144,7 +141,7 @@ export class TaskGeneratorService implements OnModuleInit {
           }
 
           const instance = this.taskInstanceRepository.create({
-            task_id: this.generateTaskId(),
+            task_id: newGeneratedTaskId(),
             user: { user_id: template.user_id },
             project: { project_id: template.project_id },
             title: template.title,
