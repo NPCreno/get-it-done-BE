@@ -37,11 +37,13 @@ User ─┬─< Project ─< TaskInstance
       ├─< ProjectMember >─ Project   (project_members, PK (project_id, user_id), both CASCADE)
       ├─< ChatMessage   >─ Project   (chat_messages, soft delete, both CASCADE)
       ├─< ChatRead      >─ Project   (chat_reads, PK (project_id, user_id), last_read_at, both CASCADE)
-      └─< PersonalAccessToken        (personal_access_tokens, unique prefix, sha256 secret_hash, CASCADE)
+      ├─< PersonalAccessToken        (personal_access_tokens, unique prefix, sha256 secret_hash, CASCADE)
+      ├─< TaskTemplate  >─ Project   (FK_task_template_user / FK_task_template_project, both CASCADE, project nullable; REF-14c)
+      └─< AuthToken                  (FK_auth_token_user, CASCADE; REF-14c)
 TaskTemplate ─< TaskInstance        (onDelete: SET NULL)
-AuthToken: stores user_id, sha256 token, expiry, family_id, remember_me, revoked_at, replaced_by_token_id, replay_ciphertext, ip_address (no ORM relation)
+AuthToken: stores user_id, sha256 token, expiry, family_id, remember_me, revoked_at, replaced_by_token_id, replay_ciphertext, ip_address
 ```
-Deleting a user cascades to projects, tasks, subtasks and notifications. Deleting a task instance cascades to its subtasks.
+Deleting a user cascades to projects, tasks, subtasks, notifications, recurring templates and refresh-token rows. Deleting a project cascades to its tasks and templates (their instances keep existing with a null template link). Deleting a task instance cascades to its subtasks.
 
 ## Project chat (FEAT-05)
 - Sharing: the owner (`project_entity.user_id`) adds members by username into `project_members`; members see the project's name, color and chat, never its tasks. `ChatAccessService.assertCanChat` is the one access check.

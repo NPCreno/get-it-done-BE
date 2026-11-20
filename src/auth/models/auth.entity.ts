@@ -3,8 +3,11 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { UserEntity } from 'src/user/models/user.entity';
 
 @Entity()
 export class AuthTokenEntity {
@@ -17,6 +20,18 @@ export class AuthTokenEntity {
   @Index()
   @Column()
   user_id!: string;
+
+  /** REF-14c: migration TemplateAndTokenForeignKeys. The code reads user_id. */
+  @ManyToOne(() => UserEntity, {
+    onDelete: 'CASCADE',
+    createForeignKeyConstraints: true,
+  })
+  @JoinColumn({
+    name: 'user_id',
+    referencedColumnName: 'user_id',
+    foreignKeyConstraintName: 'FK_auth_token_user',
+  })
+  user?: UserEntity;
 
   /** sha256 hex of the refresh token (legacy rows: bcrypt hash, starts with `$2`). */
   @Column({ type: 'text' })
