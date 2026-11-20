@@ -305,6 +305,7 @@ describe('OAuth for MCP connectors (FEAT-07c)', () => {
       expect(r.body).toEqual({
         status: 'success',
         data: {
+          outcome: 'ok',
           client_name: 'Claude',
           redirect_host: 'claude.ai',
           loopback_only: false,
@@ -335,6 +336,7 @@ describe('OAuth for MCP connectors (FEAT-07c)', () => {
         .set(bearer(A));
       expect(r.status).toBe(200);
       expect(r.body.data).toMatchObject({
+        outcome: 'ok',
         redirect_host: 'localhost',
         loopback_only: true,
       });
@@ -371,7 +373,7 @@ describe('OAuth for MCP connectors (FEAT-07c)', () => {
       expect(back.searchParams.get('iss')).toBe(base);
     });
 
-    it('fatal errors never redirect (check and decision)', async () => {
+    it('fatal errors never redirect (check: 200 outcome fatal; decision: 400)', async () => {
       const clientId = await register();
       const cases = [
         params('gid_cli_AAAAAAAAAAAAAAAAAAAAAA', pkce().challenge),
@@ -381,22 +383,34 @@ describe('OAuth for MCP connectors (FEAT-07c)', () => {
         }),
         params(clientId, pkce().challenge, { redirect_uri: undefined }),
       ];
-      for (const p of cases) {
+      const errors = [
+        'invalid_client',
+        'invalid_client',
+        'invalid_request',
+        'invalid_request',
+      ];
+      for (const [i, p] of cases.entries()) {
         const check = await request(S())
           .get('/api/oauth/authorize/check')
           .query(p)
           .set(bearer(A));
-        expect(check.status).toBe(400);
-        expect(check.body).toMatchObject({ statusCode: 400, fatal: true });
-        expect(check.body).not.toHaveProperty('redirect_to');
+        expect(check.status).toBe(200);
+        expect(check.body).toEqual({
+          status: 'success',
+          data: { outcome: 'fatal', error: errors[i] },
+        });
         const d = await decide(A, p);
         expect(d.status).toBe(400);
-        expect(d.body.fatal).toBe(true);
-        expect(d.body).not.toHaveProperty('redirect_to');
+        expect(d.body).toEqual({
+          statusCode: 400,
+          error: errors[i],
+          message: expect.any(String),
+          fatal: true,
+        });
       }
     });
 
-    it('redirectable errors: 400 with fatal false and redirect_to (exact shape)', async () => {
+    it('redirectable errors: check 200 outcome redirect; decision 200 redirect_to (exact shapes)', async () => {
       const clientId = await register();
       const r = await request(S())
         .get('/api/oauth/authorize/check')
@@ -406,26 +420,41 @@ describe('OAuth for MCP connectors (FEAT-07c)', () => {
           }),
         )
         .set(bearer(A));
-      expect(r.status).toBe(400);
+      expect(r.status).toBe(200);
       expect(r.body).toEqual({
-        statusCode: 400,
-        error: 'invalid_request',
-        message: 'code_challenge_method must be S256',
-        fatal: false,
-        redirect_to: expect.any(String),
+        status: 'success',
+        data: {
+          outcome: 'redirect',
+          error: 'invalid_request',
+          redirect_to: expect.any(String),
+        },
       });
-      const back = new URL(r.body.redirect_to);
+      const back = new URL(r.body.data.redirect_to);
+      expect(back.origin + back.pathname).toBe(REDIRECT);
       expect(back.searchParams.get('error')).toBe('invalid_request');
       expect(back.searchParams.get('state')).toBe('state-123');
-      // the decision re-validates: allow is refused the same way
+      // the decision re-validates: allow goes back to the client with the error
       const d = await decide(
         A,
         params(clientId, pkce().challenge, {
           resource: 'https://other.example/mcp',
         }),
       );
-      expect(d.status).toBe(400);
-      expect(d.body).toMatchObject({ fatal: false, error: 'invalid_target' });
+      expect(d.status).toBe(200);
+      expect(d.body).toEqual({
+        status: 'success',
+        data: { redirect_to: expect.any(String) },
+      });
+      const dBack = new URL(d.body.data.redirect_to);
+      expect(dBack.searchParams.get('error')).toBe('invalid_target');
+      expect(dBack.searchParams.get('state')).toBe('state-123');
+      expect(dBack.searchParams.get('code')).toBeNull();
+      const grants = await q(
+        `SELECT 1 FROM oauth_grants g JOIN oauth_clients c ON c.id = g.client_id
+          WHERE c.client_id = $1`,
+        [clientId],
+      );
+      expect(grants).toHaveLength(0);
     });
   });
 
@@ -877,6 +906,7 @@ describe('OAuth for MCP connectors (FEAT-07c)', () => {
         .query(p)
         .set(bearer(A));
       expect(check.status).toBe(200);
+      expect(check.body.data.outcome).toBe('ok');
       expect(check.body.data.client_name).toBe('SDK test client');
       const d = await decide(A, p);
       expect(d.status).toBe(200);

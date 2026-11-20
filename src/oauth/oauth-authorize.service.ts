@@ -7,6 +7,7 @@ import { oauthUrls } from './oauth-config';
 import { generateCode } from './oauth-format';
 import {
   AuthorizeParams,
+  AuthorizeResult,
   isLoopbackHttp,
   OAuthScope,
   validateAuthorize,
@@ -16,8 +17,19 @@ import {
 import { authorizeHttpError } from './oauth-errors';
 import { OAuthClientsService } from './oauth-clients.service';
 
-/** What the consent page shows (GET /api/oauth/authorize/check). */
-export interface AuthorizeCheckDto {
+/**
+ * GET /api/oauth/authorize/check: always 200, a union on `outcome` (the FE's
+ * API client keeps only `message` from a non-2xx body).
+ *  - ok: what the consent page shows
+ *  - redirect: send the browser to `redirect_to` (it carries `error=`, `state`, `iss`)
+ *  - fatal: show an error, never redirect (unknown client, unregistered redirect URI)
+ */
+export type AuthorizeCheckDto =
+  | ({ outcome: 'ok' } & AuthorizeCheckOk)
+  | { outcome: 'redirect'; error: string; redirect_to: string }
+  | { outcome: 'fatal'; error: string };
+
+export interface AuthorizeCheckOk {
   client_name: string;
   /** The host the user is sent back to, e.g. claude.ai or localhost. */
   redirect_host: string;
@@ -47,17 +59,21 @@ export class OAuthAuthorizeService {
     private readonly clients: OAuthClientsService,
   ) {}
 
-  private async validate(p: AuthorizeParams): Promise<ValidAuthorize> {
+  private async validate(p: AuthorizeParams): Promise<AuthorizeResult> {
     const client = await this.clients.find(p.client_id);
-    const r = validateAuthorize(p, client, oauthUrls());
-    if (!r.ok) throw authorizeHttpError(r);
-    return r.value;
+    return validateAuthorize(p, client, oauthUrls());
   }
 
   async check(p: AuthorizeParams): Promise<AuthorizeCheckDto> {
-    const v = await this.validate(p);
+    const r = await this.validate(p);
+    if (!r.ok)
+      return r.fatal
+        ? { outcome: 'fatal', error: r.error }
+        : { outcome: 'redirect', error: r.error, redirect_to: r.redirectTo };
+    const v: ValidAuthorize = r.value;
     const url = new URL(v.redirectUri);
     return {
+      outcome: 'ok',
       client_name: v.client.client_name,
       redirect_host: url.hostname,
       loopback_only: isLoopbackHttp(url),
@@ -70,7 +86,14 @@ export class OAuthAuthorizeService {
     p: AuthorizeParams,
     decision: 'allow' | 'deny',
   ): Promise<AuthorizeDecisionDto> {
-    const v = await this.validate(p);
+    // Re-validated from scratch. Fatal: 400 (show, never redirect). Any other
+    // problem goes back to the client through its redirect URI, like a deny.
+    const r = await this.validate(p);
+    if (!r.ok) {
+      if (r.fatal) throw authorizeHttpError(r);
+      return { redirect_to: r.redirectTo };
+    }
+    const v = r.value;
     const { issuer } = oauthUrls();
     if (decision === 'deny')
       return {

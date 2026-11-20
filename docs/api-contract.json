@@ -195,6 +195,11 @@
       "allow",
       "deny"
     ],
+    "checkOutcomes": [
+      "ok",
+      "redirect",
+      "fatal"
+    ],
     "authorizeParams": [
       "response_type",
       "client_id",
@@ -207,10 +212,20 @@
     ],
     "fields": {
       "authorizeCheck": [
+        "outcome",
         "client_name",
         "redirect_host",
         "loopback_only",
         "scopes"
+      ],
+      "authorizeCheckRedirect": [
+        "outcome",
+        "error",
+        "redirect_to"
+      ],
+      "authorizeCheckFatal": [
+        "outcome",
+        "error"
       ],
       "authorizeDecision": [
         "redirect_to"
@@ -219,8 +234,7 @@
         "statusCode",
         "error",
         "message",
-        "fatal",
-        "redirect_to"
+        "fatal"
       ],
       "grant": [
         "id",

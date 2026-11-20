@@ -68,9 +68,9 @@ Discovery and client endpoints (no `/api`, CORS `*`, `no-store` except metadata)
 - `POST /oauth/revoke` (form, RFC 7009) → always 200; an access token alone, a refresh token ends its grant
 
 Website side (website JWT, `AuthorizeGuard`, `no-store`) → `OAuthApiController`:
-- `GET /api/oauth/authorize/check?<authorize params>` → `{status, data: {client_name, redirect_host, loopback_only, scopes}}`
+- `GET /api/oauth/authorize/check?<authorize params>` → always 200 `{status, data}`, `data` a union on `outcome`: `{outcome: 'ok', client_name, redirect_host, loopback_only, scopes}`, `{outcome: 'redirect', error, redirect_to}` (navigate there; it carries `error=`, `state`, `iss`) or `{outcome: 'fatal', error}` (unknown client, unregistered redirect URI: show, never redirect). A non-2xx (401, a ValidationPipe 400) is fatal too
 - `POST /api/oauth/authorize {…authorize params, decision: 'allow'|'deny'}` (`@RateLimit('oauthAuthorize')` 30/min per user) → `{status, data: {redirect_to}}` (allow: `code`, `state`, `iss`; deny: `error=access_denied`, `state`, `iss`)
-- Both: 400 `{statusCode: 400, error, message, fatal: true}` (unknown client, unregistered redirect URI: never redirect) or `{…, fatal: false, redirect_to}` (anything else; `redirect_to` carries `error=`). Any other non-2xx is fatal too
+- Decision: allow, deny and redirectable problems → 200 `{redirect_to}` (a problem carries `error=`, no code, no grant). Fatal → 400 `{statusCode: 400, error, message, fatal: true}`
 - `GET /api/oauth/grants` → `{status, data: [{id, client_name, redirect_host, created_at, last_used_at}]}` (working grants only, newest first)
 - `DELETE /api/oauth/grants/:id` → `{status, data: grant}`; revokes the grant and all its tokens; idempotent; missing/foreign/non-uuid → 404 `Connected app not found`
 
