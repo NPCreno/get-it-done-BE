@@ -14,6 +14,7 @@ import { RateLimitModule } from './auth/rate-limit/rate-limit-config.module';
 import { ChatModule } from './chat/chat.module';
 import { TokensModule } from './tokens/tokens.module';
 import { McpModule } from './mcp/mcp.module';
+import { OAuthModule } from './oauth/oauth.module';
 @Module({
   imports: [
     RateLimitModule,
@@ -34,6 +35,7 @@ import { McpModule } from './mcp/mcp.module';
     NotificationsModule,
     ChatModule,
     TokensModule,
+    OAuthModule,
     McpModule,
     EventEmitterModule.forRoot(),
   ],

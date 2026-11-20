@@ -246,6 +246,21 @@ describe('validateEnv', () => {
     expect(bad[0]).not.toContain('a.example.com');
   });
 
+  it('E17 OAuth issuer (FEAT-07c): PUBLIC_API_URL is an origin; production names one', () => {
+    expect(errorsFor({ PUBLIC_API_URL: 'http://localhost:8000' })).toEqual([]);
+    const bad = errorsFor({ PUBLIC_API_URL: 'https://api.example.com/mcp' });
+    expect(bad).toHaveLength(1);
+    expect(bad[0]).toMatch(/^PUBLIC_API_URL: /);
+    expect(bad[0]).not.toContain('api.example.com');
+    const missing = validateEnv(prod()).warnings;
+    expect(missing.some((w) => w.includes('RENDER_EXTERNAL_URL'))).toBe(true);
+    const onRender = validateEnv({
+      ...prod(),
+      RENDER_EXTERNAL_URL: 'https://get-it-done-be.onrender.com',
+    }).warnings;
+    expect(onRender.some((w) => w.includes('RENDER_EXTERNAL_URL'))).toBe(false);
+  });
+
   it('E15 the AppEnv view mirrors the runtime defaults', () => {
     const only: NodeJS.ProcessEnv = {
       DATABASE_URL: base().DATABASE_URL,

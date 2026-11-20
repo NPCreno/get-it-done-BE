@@ -11,6 +11,8 @@ import { TaskController } from '../task/task.controller';
 import { NotificationsController } from '../notifications/notifications.controller';
 import { ChatController } from '../chat/chat.controller';
 import { TokensController } from '../tokens/tokens.controller';
+import { OAuthApiController } from '../oauth/oauth-api.controller';
+import { OAuthPublicController } from '../oauth/oauth-public.controller';
 
 /**
  * Rule: every @Body() is a fully decorated class, or an explicitly documented
@@ -55,6 +57,8 @@ const controllers = [
   NotificationsController,
   ChatController,
   TokensController,
+  OAuthApiController,
+  OAuthPublicController,
 ];
 
 describe('@Body() DTOs', () => {
@@ -94,6 +98,7 @@ describe('@Body() DTOs', () => {
       'AddMemberDto',
       'SendMessageDto',
       'CreateTokenDto',
+      'AuthorizeDecisionBodyDto',
     ]) {
       expect(names).toContain(n);
     }

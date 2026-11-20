@@ -2,9 +2,27 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { json, NextFunction, Request, Response } from 'express';
+import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 
 /** MCP tool calls may carry more than the default 100 kB JSON limit. */
 export const MCP_BODY_LIMIT = '1mb';
+
+/**
+ * FEAT-07c: the routes MCP clients (browser-based ones included, like the MCP
+ * Inspector) call cross-origin without credentials: OAuth discovery,
+ * registration, token and revocation. Everything else, /api/oauth included,
+ * keeps the website-only CORS.
+ */
+export function isPublicOAuthPath(path: string): boolean {
+  return (
+    path === '/.well-known/oauth-authorization-server' ||
+    path === '/.well-known/oauth-protected-resource' ||
+    path === '/.well-known/oauth-protected-resource/mcp' ||
+    path === '/oauth/register' ||
+    path === '/oauth/token' ||
+    path === '/oauth/revoke'
+  );
+}
 
 /** Helmet, CORS, the global ValidationPipe and the WebSocket adapter. Shared by main.ts and the integration tests. */
 export function configureApp(app: INestApplication): void {
@@ -43,10 +61,21 @@ export function configureApp(app: INestApplication): void {
       referrerPolicy: { policy: 'no-referrer' },
     }),
   );
-  app.enableCors({
+  const siteCors: CorsOptions = {
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     credentials: true,
-  });
+  };
+  const publicCors: CorsOptions = {
+    origin: '*',
+    credentials: false,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'MCP-Protocol-Version'],
+    maxAge: 600,
+  };
+  app.enableCors(
+    (req: Request, cb: (err: Error | null, options: CorsOptions) => void) =>
+      cb(null, isPublicOAuthPath(req.path) ? publicCors : siteCors),
+  );
   // Plain `ws` (the browser's built-in WebSocket); the chat gateway shares the HTTP port.
   app.useWebSocketAdapter(new WsAdapter(app));
   app.useGlobalPipes(

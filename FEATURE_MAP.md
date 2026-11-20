@@ -59,8 +59,23 @@ Endpoint → implementing chain. All routes are under `/api`. "Guarded" means `A
 - `DELETE /api/tokens/:id` → revoke (`revoked_at`, kept on repeat); a missing, foreign or non-uuid id → 404 `Token not found`
 - All three: `Cache-Control: no-store`
 
+## OAuth for MCP connectors (FEAT-07c) → `src/oauth/`
+Discovery and client endpoints (no `/api`, CORS `*`, `no-store` except metadata):
+- `GET /.well-known/oauth-protected-resource/mcp`, `GET /.well-known/oauth-protected-resource` → `{resource, authorization_servers: [issuer], scopes_supported: ['mcp','offline_access'], bearer_methods_supported: ['header']}` (`OAuthMetadataController`, no DB, `max-age=300`)
+- `GET /.well-known/oauth-authorization-server` → RFC 8414 (`authorization_endpoint` = FE `/oauth/authorize`; token, registration, revocation on the BE; S256; `none`)
+- `POST /oauth/register` (JSON, `@RateLimit('oauthRegister')` 20/h per client key + 200/h global) → 201 `{client_id: 'gid_cli_…', client_id_issued_at, client_name, redirect_uris, grant_types, response_types, token_endpoint_auth_method: 'none'}`; 400 `invalid_redirect_uri` / `invalid_client_metadata` (`OAuthClientsService`)
+- `POST /oauth/token` (form; `@RateLimit('oauthToken')` 60/min per `client_id` + 600/min global) → `{access_token: 'gid_oat_…', token_type: 'Bearer', expires_in: 3600, refresh_token: 'gid_ort_…', scope}`; errors `invalid_request`, `invalid_client` (401), `invalid_grant`, `invalid_target`, `invalid_scope`, `unsupported_grant_type` (`OAuthTokenService`)
+- `POST /oauth/revoke` (form, RFC 7009) → always 200; an access token alone, a refresh token ends its grant
+
+Website side (website JWT, `AuthorizeGuard`, `no-store`) → `OAuthApiController`:
+- `GET /api/oauth/authorize/check?<authorize params>` → `{status, data: {client_name, redirect_host, loopback_only, scopes}}`
+- `POST /api/oauth/authorize {…authorize params, decision: 'allow'|'deny'}` (`@RateLimit('oauthAuthorize')` 30/min per user) → `{status, data: {redirect_to}}` (allow: `code`, `state`, `iss`; deny: `error=access_denied`, `state`, `iss`)
+- Both: 400 `{statusCode: 400, error, message, fatal: true}` (unknown client, unregistered redirect URI: never redirect) or `{…, fatal: false, redirect_to}` (anything else; `redirect_to` carries `error=`). Any other non-2xx is fatal too
+- `GET /api/oauth/grants` → `{status, data: [{id, client_name, redirect_host, created_at, last_used_at}]}` (working grants only, newest first)
+- `DELETE /api/oauth/grants/:id` → `{status, data: grant}`; revokes the grant and all its tokens; idempotent; missing/foreign/non-uuid → 404 `Connected app not found`
+
 ## MCP server (FEAT-07a) → `ALL /mcp` → `McpController` → `McpServerFactory` → tools in `src/mcp/tools/`
-Auth: personal access token (`Authorization: Bearer gid_pat_…`) through `requireBearerAuth` + `PatVerifier`. Origin check (403), rate limit 120/min per token (429). See `CLAUDE.md` (MCP) and `docs/MCP.md`.
+Auth: personal access token (`Bearer gid_pat_…`) or OAuth access token (`Bearer gid_oat_…`, FEAT-07c) through `requireBearerAuth` + `McpTokenVerifier`. 401s carry `resource_metadata`. Origin check (403), rate limit 120/min per token or grant (429). See `CLAUDE.md` (MCP) and `docs/MCP.md`.
 
 | Tool | Hint | Services |
 |---|---|---|

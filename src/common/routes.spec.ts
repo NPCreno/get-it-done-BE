@@ -5,6 +5,7 @@ import { TaskController } from '../task/task.controller';
 import { NotificationsController } from '../notifications/notifications.controller';
 import { ChatController } from '../chat/chat.controller';
 import { TokensController } from '../tokens/tokens.controller';
+import { OAuthApiController } from '../oauth/oauth-api.controller';
 import { API_CONTRACT } from './api-contract';
 
 /**
@@ -25,7 +26,8 @@ type Ctl =
   | typeof TaskController
   | typeof NotificationsController
   | typeof ChatController
-  | typeof TokensController;
+  | typeof TokensController
+  | typeof OAuthApiController;
 
 function routeOf(controller: Ctl, method: string) {
   const handler = Object.getOwnPropertyDescriptor(controller.prototype, method)
@@ -80,6 +82,10 @@ describe('API_CONTRACT.routes', () => {
     ['tokensList', TokensController, 'list', RequestMethod.GET],
     ['tokenCreate', TokensController, 'create', RequestMethod.POST],
     ['tokenRevoke', TokensController, 'revoke', RequestMethod.DELETE],
+    ['oauthAuthorizeCheck', OAuthApiController, 'check', RequestMethod.GET],
+    ['oauthAuthorize', OAuthApiController, 'decide', RequestMethod.POST],
+    ['oauthGrantsList', OAuthApiController, 'list', RequestMethod.GET],
+    ['oauthGrantRevoke', OAuthApiController, 'revoke', RequestMethod.DELETE],
   ];
 
   it('lists exactly the contract routes', () => {

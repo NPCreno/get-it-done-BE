@@ -70,6 +70,10 @@ export const API_CONTRACT = {
     tokensList: '/tokens',
     tokenCreate: '/tokens',
     tokenRevoke: '/tokens/:id',
+    oauthAuthorizeCheck: '/oauth/authorize/check',
+    oauthAuthorize: '/oauth/authorize',
+    oauthGrantsList: '/oauth/grants',
+    oauthGrantRevoke: '/oauth/grants/:id',
   },
   /**
    * Project colors the website offers (label -> hex). The MCP create_project
@@ -123,6 +127,75 @@ export const API_CONTRACT = {
         'revoked_at',
         'status',
         'token',
+      ],
+    },
+  },
+  /**
+   * OAuth for MCP connectors (FEAT-07c): claude.ai, the Claude apps, Claude
+   * Code and other MCP clients sign in through the website's consent page
+   * (`authorizePath` on the FE origin) and get opaque tokens valid only on
+   * /mcp. The consent page calls `routes.oauthAuthorizeCheck` and
+   * `routes.oauthAuthorize` with the website JWT; "Connected apps" uses
+   * `routes.oauthGrantsList` / `oauthGrantRevoke`. Success responses are
+   * `{ status: 'success', data }`. An authorize error is a 400 with
+   * `fields.authorizeError`: `fatal: true` means show it and never redirect;
+   * `fatal: false` carries `redirect_to` (the client's redirect URI with
+   * `error=`). Any other non-2xx from the check is fatal too.
+   */
+  oauth: {
+    // The FE page that is the OAuth authorization endpoint (on FRONTEND_URL).
+    authorizePath: '/oauth/authorize',
+    scopes: ['mcp', 'offline_access'],
+    defaultScope: 'mcp',
+    accessTokenPrefix: 'gid_oat_',
+    refreshTokenPrefix: 'gid_ort_',
+    clientIdPrefix: 'gid_cli_',
+    accessTokenSeconds: 3600,
+    refreshTokenDays: 30,
+    grantMaxDays: 180,
+    codeSeconds: 60,
+    refreshRetryGraceSeconds: 60,
+    redirectUrisMax: 5,
+    clientNameMax: 100,
+    defaultClientName: 'Unnamed app',
+    registersPerHour: 20,
+    tokenRequestsPerMinute: 60,
+    authorizePerMinute: 30,
+    decisions: ['allow', 'deny'],
+    // Query parameters of the authorize request, passed through unchanged by
+    // the consent page (check: query string; decision: JSON body + decision).
+    authorizeParams: [
+      'response_type',
+      'client_id',
+      'redirect_uri',
+      'code_challenge',
+      'code_challenge_method',
+      'scope',
+      'state',
+      'resource',
+    ],
+    fields: {
+      authorizeCheck: [
+        'client_name',
+        'redirect_host',
+        'loopback_only',
+        'scopes',
+      ],
+      authorizeDecision: ['redirect_to'],
+      // 400 body; redirect_to is present only when fatal is false.
+      authorizeError: [
+        'statusCode',
+        'error',
+        'message',
+        'fatal',
+        'redirect_to',
+      ],
+      grant: [
+        'id',
+        'client_name',
+        'redirect_host',
+        'created_at',
+        'last_used_at',
       ],
     },
   },

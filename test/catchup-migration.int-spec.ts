@@ -66,6 +66,10 @@ async function seedProductionShape(
   await ds.query('DROP TABLE "chat_reads", "chat_messages", "project_members"');
   // FEAT-07a personal_access_tokens postdates production (PersonalAccessTokens).
   await ds.query('DROP TABLE "personal_access_tokens"');
+  // FEAT-07c OAuth tables postdate production (OAuth).
+  await ds.query(
+    'DROP TABLE "oauth_tokens", "oauth_codes", "oauth_grants", "oauth_clients"',
+  );
   // REF-14c: production has no foreign keys on templates and token rows.
   await ds.query(`ALTER TABLE "task_template_entity"
     DROP CONSTRAINT "FK_task_template_user",
@@ -197,6 +201,15 @@ describe('CatchUpBaseline migration', () => {
     expect(
       left.filter((q) => /task_template_entity|FK_auth_token_user/.test(q)),
     ).toEqual([]);
+    // OAuth (FEAT-07c): the four tables exactly as the entities describe them.
+    for (const t of [
+      'oauth_clients',
+      'oauth_grants',
+      'oauth_codes',
+      'oauth_tokens',
+    ])
+      expect(await exists(t)).toBe(true);
+    expect(left.filter((q) => /oauth_/.test(q))).toEqual([]);
   });
 
   it('C2 notifications already there: catch-up is a no-op and the rest run', async () => {

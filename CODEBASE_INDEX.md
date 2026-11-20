@@ -80,10 +80,23 @@ One line per source file. Paths are relative to the repo root.
 ## mcp (`src/mcp/`) — FEAT-07a MCP server
 - `mcp.module.ts` — middleware (`mcpOriginCheck`, `requireBearerAuth`) on `/mcp`; `mcp.controller.ts` — `@All('mcp')`, `@RateLimit('mcp')`, `toNodeHandler(createMcpHandler(...))`
 - `mcp-server.factory.ts` — `McpServerFactory` (one `McpServer` per request), `ALL_TOOLS`, `MCP_INSTRUCTIONS`
-- `pat-verifier.ts` — `PatVerifier` (`OAuthTokenVerifier`)
+- `pat-verifier.ts` — `PatVerifier` (`OAuthTokenVerifier`); `mcp-token-verifier.ts` — FEAT-07c `McpTokenVerifier` (the `/mcp` verifier: `gid_pat_` → `PatVerifier`, `gid_oat_` → `OAuthGrantsService`)
 - `mcp-tool.ts` — `defineTool`, `McpDeps`, result/error helpers, call logging; `mcp-shapes.ts` — zod output schemas and safe mappers; `mcp-validate.ts` — `toDto` (REST DTO rules); `mcp-errors.ts` — `toolErrorMessage`, `unwrap`; `mcp-origin.ts` — `parseAllowedOrigins`, `originAllowed`, `mcpOriginCheck`
 - `tools/account-tools.ts`, `tools/task-tools.ts`, `tools/project-tools.ts`, `tools/chat-tools.ts` — the 21 tools
 - `pat-verifier.spec.ts`, `mcp-units.spec.ts`; `../../test/mcp.int-spec.ts`, `mcp-helpers.ts`; user docs `../../docs/MCP.md`
+
+## oauth (`src/oauth/`) — FEAT-07c OAuth for MCP connectors
+- `oauth.module.ts` — controllers, services, entities, `noStore` middleware
+- `oauth-metadata.controller.ts` — `/.well-known/oauth-protected-resource[/mcp]`, `/.well-known/oauth-authorization-server`
+- `oauth-public.controller.ts` — `POST /oauth/register`, `/oauth/token`, `/oauth/revoke` (`OAuthExceptionFilter`)
+- `oauth-api.controller.ts` — `/api/oauth/authorize/check`, `/api/oauth/authorize`, `/api/oauth/grants` (website JWT)
+- `oauth-config.ts` — `oauthUrls()` (issuer from `RENDER_EXTERNAL_URL`/`PUBLIC_API_URL`), metadata builders
+- `oauth-params.ts` — pure rules: `redirectUriProblem`, `redirectMatches` (loopback port rule), `validateRegistration`, `parseScope`, `validateAuthorize` (fatal vs redirectable), `withParams`
+- `oauth-format.ts` — `gid_oat_`/`gid_ort_` tokens, `gid_cli_` client ids, codes, PKCE `pkceS256`/`pkceMatches`
+- `oauth-errors.ts` — `OAuthHttpError`, `authorizeHttpError`, `OAuthExceptionFilter`
+- `oauth-clients.service.ts` (DCR, `find`), `oauth-authorize.service.ts` (check, decision), `oauth-token.service.ts` (code exchange, refresh rotation and retry grace, revoke), `oauth-grants.service.ts` (list, revoke, `revokeGrant`, `verifyAccess`, `touch`), `oauth-maintenance.service.ts` (daily cleanup)
+- `dto/authorize.dto.ts`; `models/oauth-{client,grant,code,token}.entity.ts`; `../migrations/1763500000000-OAuth.ts`
+- `oauth-units.spec.ts`; `../../test/oauth.int-spec.ts`, `oauth-migration.int-spec.ts`
 
 ## pipes (`src/pipes/`)
 - `status-validation.pipe.ts` — validates task status values

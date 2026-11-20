@@ -82,7 +82,11 @@
     "chatMarkRead": "/chat/projects/:project_id/read",
     "tokensList": "/tokens",
     "tokenCreate": "/tokens",
-    "tokenRevoke": "/tokens/:id"
+    "tokenRevoke": "/tokens/:id",
+    "oauthAuthorizeCheck": "/oauth/authorize/check",
+    "oauthAuthorize": "/oauth/authorize",
+    "oauthGrantsList": "/oauth/grants",
+    "oauthGrantRevoke": "/oauth/grants/:id"
   },
   "projectColors": [
     {
@@ -163,6 +167,67 @@
         "revoked_at",
         "status",
         "token"
+      ]
+    }
+  },
+  "oauth": {
+    "authorizePath": "/oauth/authorize",
+    "scopes": [
+      "mcp",
+      "offline_access"
+    ],
+    "defaultScope": "mcp",
+    "accessTokenPrefix": "gid_oat_",
+    "refreshTokenPrefix": "gid_ort_",
+    "clientIdPrefix": "gid_cli_",
+    "accessTokenSeconds": 3600,
+    "refreshTokenDays": 30,
+    "grantMaxDays": 180,
+    "codeSeconds": 60,
+    "refreshRetryGraceSeconds": 60,
+    "redirectUrisMax": 5,
+    "clientNameMax": 100,
+    "defaultClientName": "Unnamed app",
+    "registersPerHour": 20,
+    "tokenRequestsPerMinute": 60,
+    "authorizePerMinute": 30,
+    "decisions": [
+      "allow",
+      "deny"
+    ],
+    "authorizeParams": [
+      "response_type",
+      "client_id",
+      "redirect_uri",
+      "code_challenge",
+      "code_challenge_method",
+      "scope",
+      "state",
+      "resource"
+    ],
+    "fields": {
+      "authorizeCheck": [
+        "client_name",
+        "redirect_host",
+        "loopback_only",
+        "scopes"
+      ],
+      "authorizeDecision": [
+        "redirect_to"
+      ],
+      "authorizeError": [
+        "statusCode",
+        "error",
+        "message",
+        "fatal",
+        "redirect_to"
+      ],
+      "grant": [
+        "id",
+        "client_name",
+        "redirect_host",
+        "created_at",
+        "last_used_at"
       ]
     }
   },
