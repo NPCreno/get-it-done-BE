@@ -45,6 +45,7 @@ One line per source file. Paths are relative to the repo root.
 ## task (`src/task/`)
 - `task.module.ts`, `task.controller.ts` — wiring and routes; services: `task.service.ts` (task writes), `task-query.service.ts`, `subtask.service.ts`, `task-status.service.ts`, `task-stats.service.ts`, `task-streak.service.ts`, `task-recurrence.service.ts`; `task-ids.ts`, `service-size.spec.ts`
 - `taskGenerator.service.ts` — daily cron for recurring instances
+- FEAT-09a shared tasks: `task-access.service.ts` — `TaskAccessService` (`assertCanUseTask`, `assertCanUseProject` via `ChatAccessService`, `assertAssignable`, `assertCanDelete`), pure `decideTaskAccess`, `rethrowAccess` and the fixed messages; `task-scope.ts` — the shared SQL `responsibleSql`/`responsibleIs`/`accessibleTo`/`myTasks`; `task-assign.service.ts` — `TaskAssignService` (`setAssignee`, `notifyAssignment`, after-commit `tasksChanged` / `notificationCreated`); `task-events.ts` — `TASKS_CHANGED`, `NOTIFICATION_CREATED`, pure `tasksEventRecipients`, `assignmentMessage`; `dto/set-assignee-dto.ts`; `task-access.spec.ts`; `../migrations/1763600000000-SharedTasks.ts`; `../../test/shared-tasks.int-spec.ts`, `shared-tasks-migration.int-spec.ts`
 - `models/taskInstance.entity.ts`, `taskSubInstance.entity.ts`, `taskTemplate.entity.ts` — task entities
 - `dto/create-task-dto.ts`, `create-task-subInstance-dto.ts`, `update-task-dto.ts` — request payloads
 - `interfaces/` — `dashboardData`, `taskCompletionTrend`, `taskDistribution`, `calendarHeatmap`, `taskInstanceResponse`, `taskSubInstanceResponse`

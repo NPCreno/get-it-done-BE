@@ -2,6 +2,7 @@
   {
     "id": "00000000-0000-4000-8000-000000000001",
     "task_id": "task-000000001",
+    "assignee_id": null,
     "title": "With everything",
     "description": "details",
     "priority": "High",
@@ -10,11 +11,16 @@
     "createdAt": "2026-01-15T09:00:00.000Z",
     "updatedAt": "2026-01-15T09:00:00.000Z",
     "deletedAt": null,
-    "project_id": "PRJ-000000001"
+    "project_id": "PRJ-000000001",
+    "user_id": "user-000000001",
+    "creator_username": "user_a",
+    "assignee_username": null,
+    "can_delete": true
   },
   {
     "id": "00000000-0000-4000-8000-000000000002",
     "task_id": "task-000000002",
+    "assignee_id": null,
     "title": "Will complete",
     "description": null,
     "priority": "Low",
@@ -23,6 +29,10 @@
     "createdAt": "2026-01-15T09:00:00.000Z",
     "updatedAt": "2026-01-15T09:00:00.000Z",
     "deletedAt": null,
-    "project_id": "PRJ-000000001"
+    "project_id": "PRJ-000000001",
+    "user_id": "user-000000001",
+    "creator_username": "user_a",
+    "assignee_username": null,
+    "can_delete": true
   }
 ]

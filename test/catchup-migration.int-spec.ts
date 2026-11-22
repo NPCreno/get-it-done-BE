@@ -77,6 +77,10 @@ async function seedProductionShape(
   await ds.query(
     'ALTER TABLE "auth_token_entity" DROP CONSTRAINT "FK_auth_token_user"',
   );
+  // FEAT-09a task assignee postdates production (SharedTasks).
+  await ds.query(
+    'ALTER TABLE "task_instance_entity" DROP COLUMN "assignee_id"',
+  );
   if (!keepNotifications) {
     await ds.query('DROP TABLE "notifications"');
     await ds.query(
@@ -210,6 +214,16 @@ describe('CatchUpBaseline migration', () => {
     ])
       expect(await exists(t)).toBe(true);
     expect(left.filter((q) => /oauth_/.test(q))).toEqual([]);
+    // SharedTasks (FEAT-09a): the assignee column and FK as the entity says,
+    // and 'assignment' added to the enum CatchUpBaseline created.
+    expect(await columns('task_instance_entity')).toContain('assignee_id');
+    expect(
+      (
+        await ds.query(
+          `SELECT unnest(enum_range(NULL::notifications_type_enum))::text AS v`,
+        )
+      ).map((r: { v: string }) => r.v),
+    ).toContain('assignment');
   });
 
   it('C2 notifications already there: catch-up is a no-op and the rest run', async () => {

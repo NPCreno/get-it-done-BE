@@ -21,7 +21,7 @@ const WRITE = process.env.WRITE_FIXTURES === '1';
 /** Deterministic ids, fixed timestamps, no emails. Date-only strings are kept. */
 function scrub(body: unknown): unknown {
   const maps = new Map<string, Map<string, string>>();
-  const idRe = /^(user|PRJ|task|TMP|subTask|notif)-[\w-]+$/;
+  const idRe = /^(user|PRJ|task|generatedTask|TMP|subTask|notif)-[\w-]+$/;
   const text = JSON.stringify(body, (_k, v) => {
     if (typeof v !== 'string') return v;
     const m = idRe.exec(v);
@@ -535,6 +535,19 @@ describe('api contract (integration)', () => {
       expect(byProj.body.length).toBeGreaterThan(0);
       expect(byProj.body[0].project_id).toBe(pid);
       fixture('tasks-by-project', byProj.body);
+
+      // FEAT-09a: PATCH :task_id/assignee answers {status, data: task row}
+      const assigned = await request(server())
+        .patch(`/api/tasks/${byTitle('With everything').task_id}/assignee`)
+        .set(bearer(A))
+        .send({ assignee_id: A.user_id });
+      expect(assigned.status).toBe(200);
+      expect(assigned.body.data).toMatchObject({
+        assignee_id: A.user_id,
+        assignee_username: A.username,
+        can_delete: true,
+      });
+      fixture('task-assignee', assigned.body);
 
       const projects = await request(server())
         .get(`/api/projects/getAll/${A.user_id}`)

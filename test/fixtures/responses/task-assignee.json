@@ -1,0 +1,35 @@
+{
+  "status": "success",
+  "data": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "task_id": "task-000000001",
+    "assignee_id": "user-000000001",
+    "title": "With everything",
+    "description": "details",
+    "priority": "High",
+    "status": "Pending",
+    "due_date": "2026-01-15T09:00:00.000Z",
+    "createdAt": "2026-01-15T09:00:00.000Z",
+    "updatedAt": "2026-01-15T09:00:00.000Z",
+    "deletedAt": null,
+    "project_id": "PRJ-000000001",
+    "project_title": "Fixture project",
+    "project_owner_username": "user_a",
+    "template_id": null,
+    "subInstances": [
+      {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "taskSubInstance_id": "subTask-000000001",
+        "title": "First sub",
+        "status": "Pending",
+        "due_date": null,
+        "createdAt": "2026-01-15T09:00:00.000Z",
+        "updatedAt": "2026-01-15T09:00:00.000Z"
+      }
+    ],
+    "user_id": "user-000000001",
+    "creator_username": "user_a",
+    "assignee_username": "user_a",
+    "can_delete": true
+  }
+}

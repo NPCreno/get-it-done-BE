@@ -74,4 +74,14 @@ export class CreateTaskDto {
   @Type(() => Date)
   @IsDate()
   due_date?: Date;
+
+  /**
+   * FEAT-09a: assign at creation. Only for a non-recurring task in a project;
+   * the project owner or a member. Null or absent = unassigned.
+   */
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  assignee_id?: string | null;
 }

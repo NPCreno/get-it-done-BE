@@ -21,6 +21,17 @@ Endpoint → implementing chain. All routes are under `/api`. "Guarded" means `A
 - Update: `PATCH :task_id`, `PATCH update-task-status/:task_id/status/:status`, `PATCH update-subtask-status/:taskSubInstance_id/status/:status` (status checked by `StatusValidationPipe`)
 - Delete: `DELETE :task_id`, `DELETE :task_id/hard`, `DELETE /subTask/:subTask_id`, `DELETE deleteRecurringTasks/:taskTemplate_id`
 - Analytics: `GET getDashboardData/:user_id`, `GET completion-trend/:user_id`, `GET task-distribution/:user_id`, `GET calendar-heatmap/:user_id`, `GET streak/:user_id`
+- Assign (FEAT-09a): `PATCH :task_id/assignee {assignee_id: string | null}` → `TaskAssignService.setAssignee` → `{status: 'success', data: <getTasksByUser row>}`
+
+## Shared tasks (FEAT-09a) → `TaskAccessService` (one access check), `task-scope.ts` (shared SQL)
+- Who: a task without a project is its creator's only. In a project, the owner (also after a soft delete) and every current member (while the project is not deleted) add, edit, assign and complete any task and its sub-tasks. Delete: the owner any task, a member only tasks they created (403 `Only the project owner or the task's creator can delete it.`); a sub-task: the owner, the parent's creator or the sub-task's creator. Moving a task (`setProject`, MCP `update_task project_id`) is for its creator only, into a project they own or are a member of, and clears the assignee. Recurring delete: the template's creator or the project owner
+- Strangers get the same 404 as a missing item (`Task not found`, `Project not found`, `Subtask not found`), as real HTTP errors also on the envelope routes (`rethrowAccess`); `getTasksByProj` is 404 for a stranger (was `[]`)
+- "My tasks" (`getTasksByUser`, dashboard, trend, distribution, heatmap, streak, MCP `list_tasks` without a project) = `COALESCE(assignee_id, user_id) = me` AND accessible. Distribution groups my responsible completed tasks by the projects I own or am a member of. A completion credits the responsible person (lifetime counter, `task.completed` awards)
+- Rows of `getTasksByUser`, `getTasksByProj` and the assignee route add `user_id` (creator), `creator_username`, `assignee_id`, `assignee_username`, `can_delete`; `getTasksByUser` and the assignee route also `project_owner_username` (`API_CONTRACT.tasks.fields`)
+- Assignee: the project owner or a current member (400 `Assignee must be a member of this project.`); only tasks in a project (400 `Only a task in a project can be assigned.`); not at recurring create (400). `POST create` takes an optional `assignee_id` (counts as an assignment)
+- Notification (D4): a real change to someone other than the actor inserts `type: 'assignment'`, title `New task assigned`, message `<actor> assigned you "<task, 80 chars>" in <project>`, `actionType: 'acknowledge'`, in the same transaction; pushed on the SSE stream after the commit (`notification.created`). Unassign, same assignee and self-assignment send none
+- Live (D3): every task write on a task with a project emits `tasks.changed` after the commit; `NotificationsService` sends SSE `event: tasks`, data `{project_id}` to the owner and members minus the actor (a removed member too)
+- Member removal (`DELETE /api/chat/projects/:id/members/:user_id`): in the same transaction, every task in the project the member was responsible for gets `assignee_id = <owner>`
 
 ## Validation and identity (DATA-02)
 - Every create endpoint ignores a client `user_id`; the owner is the token `sub` (`@AuthUserId()`), and `project_id` must belong to the caller.
@@ -31,7 +42,7 @@ Endpoint → implementing chain. All routes are under `/api`. "Guarded" means `A
 - `TaskGeneratorService` `@Cron('0 0 * * *')` creates `TaskInstanceEntity` rows from `TaskTemplateEntity` every day at midnight.
 
 ## Notifications
-- `TaskStatusService` emits `task.completed` → `NotificationsService` `@OnEvent('task.completed')` creates a notification → streamed over `GET /api/notifications/sse`
+- `TaskStatusService` emits `task.completed` (user = the task's responsible person, FEAT-09a) → `NotificationsService` `@OnEvent('task.completed')` creates a notification → streamed over `GET /api/notifications/sse`
 - Award rules (each award is given once): `updateTaskStatus` changes the status only when it differs (`IS DISTINCT FROM`), and on a transition to Complete increments `users.lifetime_completed_count` in the same transaction (never decremented), then emits `task.completed {userId, taskId, lifetimeCount}` after commit. The listener maps each matching rule to an award key (`src/notifications/award-key.ts`) and inserts it into `user_awards` with the notification in one transaction; SSE is sent only for a newly inserted key.
   - `equals: n` on the lifetime count → `<type>:eq:<n>` (once ever); `every: n` → `<type>:every:<n>:<count>` (once per multiple); streak `equals: n` → `streak:eq:<n>:<run start date>` (once per streak run; a new run after a break can notify again)
   - `{count}` in messages is the lifetime count. The dashboard `complete_tasks` stat still counts current completed tasks
@@ -83,8 +94,8 @@ Auth: personal access token (`Bearer gid_pat_…`) or OAuth access token (`Beare
 | `get_dashboard` (`from?`, `to?`, default today UTC) | read-only | `TaskStatsService.getDashboardData`, `TaskStreakService.getStreakCount` |
 | `list_notifications` (`unread_only?`, `limit?`) | read-only | `NotificationsService.list` |
 | `mark_notification_read` | idempotent | `NotificationsService.markRead` |
-| `list_tasks` (`status?`, `project_id?`, `due_from?`, `due_to?`, `search?`, `include_completed?`, `limit?`) | read-only | `TaskQueryService.listOwnTasks`, `subtaskCounts` |
-| `get_task` | read-only | `TaskQueryService.findOwnTask`, `subtasksOf` |
+| `list_tasks` (`status?`, `project_id?`, `due_from?`, `due_to?`, `search?`, `include_completed?`, `limit?`) | read-only | `TaskQueryService.listOwnTasks` (FEAT-09a: responsible + accessible; with `project_id` every task of that project), `subtaskCounts` |
+| `get_task` | read-only | `TaskQueryService.findOwnTask` (any task the caller may work on), `subtasksOf` |
 | `create_task` (+ recurrence) | write | `CreateTaskDto` rules → `TaskService.createTask` |
 | `update_task` (`project_id` null clears) | idempotent | `UpdateTaskDto` rules → `TaskService.updateOne`, `TaskService.setProject` |
 | `set_task_status` | idempotent | `TaskStatusService.updateTaskStatus` (awards, `task.completed`) |

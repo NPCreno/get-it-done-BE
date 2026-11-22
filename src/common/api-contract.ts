@@ -28,6 +28,8 @@ export const API_CONTRACT = {
     'levelUp',
     'reward',
     'taskDue',
+    // FEAT-09a: "<username> assigned you "<task>" in <project>"
+    'assignment',
   ],
   limits: {
     fullnameMin: 3,
@@ -74,6 +76,8 @@ export const API_CONTRACT = {
     oauthAuthorize: '/oauth/authorize',
     oauthGrantsList: '/oauth/grants',
     oauthGrantRevoke: '/oauth/grants/:id',
+    // FEAT-09a: PATCH {assignee_id: string | null} -> {status, data: task row}
+    taskAssignee: '/tasks/:task_id/assignee',
   },
   /**
    * Project colors the website offers (label -> hex). The MCP create_project
@@ -198,6 +202,41 @@ export const API_CONTRACT = {
         'created_at',
         'last_used_at',
       ],
+    },
+  },
+  /**
+   * Shared tasks (FEAT-09a). The project owner and every member add, edit,
+   * assign and complete the project's tasks; the owner deletes any, a member
+   * only their own (`can_delete`). "My tasks" and every dashboard stat follow
+   * the responsible person, COALESCE(assignee_id, user_id); `user_id` is the
+   * creator.
+   */
+  tasks: {
+    // Event type on the notifications SSE stream (/notifications/sse) when a
+    // task in a shared project changed. Data {"project_id"} (fields.tasksEvent),
+    // no notification id, no task text. Refetch the project's tasks and
+    // getTasksByUser on it.
+    sseEventType: 'tasks',
+    fields: {
+      // Added to every row of getTasksByUser, getTasksByProj and the
+      // assignee route (all additions; old fields unchanged).
+      sharing: [
+        'user_id',
+        'creator_username',
+        'assignee_id',
+        'assignee_username',
+        'can_delete',
+      ],
+      // getTasksByUser rows and the assignee route's row also carry these.
+      userRowExtra: [
+        'project_id',
+        'project_title',
+        'project_owner_username',
+        'template_id',
+        'subInstances',
+      ],
+      assigneeBody: ['assignee_id'],
+      tasksEvent: ['project_id'],
     },
   },
   /**

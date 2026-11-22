@@ -42,7 +42,8 @@
     "streak",
     "levelUp",
     "reward",
-    "taskDue"
+    "taskDue",
+    "assignment"
   ],
   "limits": {
     "fullnameMin": 3,
@@ -86,7 +87,8 @@
     "oauthAuthorizeCheck": "/oauth/authorize/check",
     "oauthAuthorize": "/oauth/authorize",
     "oauthGrantsList": "/oauth/grants",
-    "oauthGrantRevoke": "/oauth/grants/:id"
+    "oauthGrantRevoke": "/oauth/grants/:id",
+    "taskAssignee": "/tasks/:task_id/assignee"
   },
   "projectColors": [
     {
@@ -242,6 +244,31 @@
         "redirect_host",
         "created_at",
         "last_used_at"
+      ]
+    }
+  },
+  "tasks": {
+    "sseEventType": "tasks",
+    "fields": {
+      "sharing": [
+        "user_id",
+        "creator_username",
+        "assignee_id",
+        "assignee_username",
+        "can_delete"
+      ],
+      "userRowExtra": [
+        "project_id",
+        "project_title",
+        "project_owner_username",
+        "template_id",
+        "subInstances"
+      ],
+      "assigneeBody": [
+        "assignee_id"
+      ],
+      "tasksEvent": [
+        "project_id"
       ]
     }
   },

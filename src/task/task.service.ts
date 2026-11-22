@@ -1,8 +1,8 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, Repository } from 'typeorm';
@@ -10,10 +10,18 @@ import { TaskInstanceEntity } from './models/taskInstance.entity';
 import { TaskTemplateEntity } from './models/taskTemplate.entity';
 import { CreateTaskDto } from './dto/create-task-dto';
 import { UserEntity } from 'src/user/models/user.entity';
-import { ProjectEntity } from 'src/projects/models/projects.entity';
 import { TaskGeneratorService } from './taskGenerator.service';
 import { UpdateTaskDto } from './dto/update-task-dto';
 import { newTaskInstanceId, newTaskTemplateId } from './task-ids';
+import {
+  ASSIGN_NEEDS_PROJECT,
+  MOVE_FORBIDDEN,
+  RECURRING_NOT_ASSIGNABLE,
+  rethrowAccess,
+  TaskAccessService,
+} from './task-access.service';
+import { TaskAssignService } from './task-assign.service';
+import { NotificationsEntity } from 'src/notifications/models/notifications.entity';
 
 @Injectable()
 export class TaskService {
@@ -24,9 +32,9 @@ export class TaskService {
     private readonly taskInstanceRepository: Repository<TaskInstanceEntity>,
     @InjectRepository(UserEntity)
     private readonly usersRepository: Repository<UserEntity>,
-    @InjectRepository(ProjectEntity)
-    private readonly projectsRepository: Repository<ProjectEntity>,
     private readonly taskGeneratorService: TaskGeneratorService,
+    private readonly access: TaskAccessService,
+    private readonly assign: TaskAssignService,
   ) {}
 
   async createBulkTasks(
@@ -109,16 +117,18 @@ export class TaskService {
         throw new NotFoundException(`User with ID ${user_id} not found`);
       }
 
-      // find project_id
+      // FEAT-09a: the owner or a member may add tasks to a project. A
+      // stranger gets the same 404 as a missing project (no existence oracle).
       const project_id = taskDto?.project_id;
       if (project_id !== undefined && project_id !== null) {
-        const projectExists = await this.projectsRepository.findOne({
-          where: { project_id },
-        });
-        // Same answer for "missing" and "someone else's": no existence oracle.
-        if (!projectExists || projectExists.user_id !== userId) {
-          throw new NotFoundException('Project not found');
-        }
+        await this.access.assertCanUseProject(project_id, userId);
+      }
+      const assigneeId = taskDto.assignee_id ?? null;
+      if (assigneeId !== null) {
+        if (taskDto.isRecurring)
+          throw new BadRequestException(RECURRING_NOT_ASSIGNABLE);
+        if (!project_id) throw new BadRequestException(ASSIGN_NEEDS_PROJECT);
+        await this.access.assertAssignable(project_id, assigneeId);
       }
 
       if (taskDto.isRecurring) {
@@ -165,6 +175,7 @@ export class TaskService {
         const savedTaskTemplate =
           await this.taskTemplateRepository.save(taskTemplate);
         await this.taskGeneratorService.generateInstancesForCurrentMonth(); //trigger cronjob for generating task instances from task template
+        this.assign.tasksChanged(project_id, userId);
         return {
           status: 'success',
           message: 'Recurring task created successfully',
@@ -172,20 +183,39 @@ export class TaskService {
         };
       } else {
         const task_id = newTaskInstanceId();
-        const taskInstance = this.taskInstanceRepository.create({
-          task_id,
-          title: taskDto.title,
-          description: taskDto.description,
-          priority: taskDto.priority,
-          status: taskDto.status,
-          due_date: taskDto.due_date,
-          user: { user_id: userId },
-          ...(taskDto.project_id
-            ? { project: { project_id: taskDto.project_id } }
-            : {}),
-        } as DeepPartial<TaskInstanceEntity>);
-
-        const savedTask = await this.taskInstanceRepository.save(taskInstance);
+        // One transaction: the task and (D4) the assignee's notification.
+        const { savedTask, notification } =
+          await this.taskInstanceRepository.manager.transaction(
+            async (manager) => {
+              const saved = await manager.save(
+                manager.create(TaskInstanceEntity, {
+                  task_id,
+                  title: taskDto.title,
+                  description: taskDto.description,
+                  priority: taskDto.priority,
+                  status: taskDto.status,
+                  due_date: taskDto.due_date,
+                  user: { user_id: userId },
+                  assignee_id: assigneeId,
+                  ...(taskDto.project_id
+                    ? { project: { project_id: taskDto.project_id } }
+                    : {}),
+                } as DeepPartial<TaskInstanceEntity>),
+              );
+              let notification: NotificationsEntity | null = null;
+              if (assigneeId !== null && assigneeId !== userId)
+                notification = await this.assign.notifyAssignment(manager, {
+                  assigneeId,
+                  actorId: userId,
+                  taskId: task_id,
+                  taskTitle: taskDto.title,
+                  projectId: taskDto.project_id!,
+                });
+              return { savedTask: saved, notification };
+            },
+          );
+        if (notification) this.assign.notificationCreated(notification);
+        this.assign.tasksChanged(taskDto.project_id, userId);
 
         return {
           status: 'success',
@@ -194,6 +224,7 @@ export class TaskService {
         };
       }
     } catch (error: any) {
+      rethrowAccess(error);
       console.error('Error creating task:', error);
       return {
         status: 'error',
@@ -214,26 +245,8 @@ export class TaskService {
     error?: any;
   }> {
     try {
-      const task = await this.taskInstanceRepository.findOne({
-        where: { task_id },
-        relations: ['user', 'project'],
-        select: {
-          id: true,
-          task_id: true,
-          project: {
-            project_id: true,
-          },
-          user: {
-            user_id: true,
-          },
-        },
-      });
-      if (!task) {
-        throw new NotFoundException(`Task with ID ${task_id} not found`);
-      }
-      if (tokenUserId !== task.user.user_id) {
-        throw new UnauthorizedException('Access denied: Not your data.');
-      }
+      // FEAT-09a D1: the creator, the project owner or a member.
+      const task = await this.access.assertCanUseTask(task_id, tokenUserId);
       const changes: Record<string, unknown> = {};
       for (const key of [
         'title',
@@ -251,12 +264,14 @@ export class TaskService {
         where: { task_id },
       });
       if (!updatedTask) throw new NotFoundException(`Updated task not found`);
+      this.assign.tasksChanged(task.project_id, tokenUserId);
       return {
         status: 'success',
         message: 'Task updated successfully',
         data: updatedTask,
       };
     } catch (error: any) {
+      rethrowAccess(error);
       return {
         status: 'error',
         message: 'Failed to update task',
@@ -275,26 +290,11 @@ export class TaskService {
     error?: any;
   }> {
     try {
-      const task = await this.taskInstanceRepository.findOne({
-        where: { task_id },
-        relations: ['user', 'project'],
-        select: {
-          id: true,
-          task_id: true,
-          project: {
-            project_id: true,
-          },
-          user: {
-            user_id: true,
-          },
-        },
-      });
-      if (!task)
-        throw new NotFoundException(`Task with ID ${task_id} not found`);
-      if (tokenUserId !== task.user.user_id) {
-        throw new UnauthorizedException('Access denied: Not your data.');
-      }
+      // FEAT-09a D1: the project owner or the task's creator (403 otherwise).
+      const task = await this.access.assertCanUseTask(task_id, tokenUserId);
+      TaskAccessService.assertCanDelete(task);
       await this.taskInstanceRepository.softDelete({ task_id });
+      this.assign.tasksChanged(task.project_id, tokenUserId);
 
       const deletedTask = await this.taskInstanceRepository.findOne({
         where: { task_id },
@@ -307,6 +307,7 @@ export class TaskService {
         data: deletedTask,
       };
     } catch (error: any) {
+      rethrowAccess(error);
       return {
         status: 'error',
         message: 'Failed to delete task',
@@ -319,44 +320,48 @@ export class TaskService {
     task_id: string,
     tokenUserId: string,
   ): Promise<TaskInstanceEntity> {
+    const access = await this.access.assertCanUseTask(task_id, tokenUserId, {
+      withDeleted: true,
+    });
+    TaskAccessService.assertCanDelete(access);
     const task = await this.taskInstanceRepository.findOne({
       where: { task_id },
       relations: ['user'],
       withDeleted: true,
     });
-    if (!task) {
-      throw new NotFoundException(`task with ID ${task_id} not found`);
-    }
-    if (tokenUserId !== task.user.user_id) {
-      throw new UnauthorizedException('Access denied: Not your data.');
-    }
+    if (!task) throw new NotFoundException('Task not found');
     await this.taskInstanceRepository.remove(task);
+    this.assign.tasksChanged(access.project_id, tokenUserId);
     return task;
   }
 
   /**
-   * Moves the caller's task into one of their projects, or out of any
-   * (null). A missing or foreign task or project is the same 404.
+   * Moves a task into a project, or out of any (null). FEAT-09a: only its
+   * creator, into a project they own or are a member of; a move to another
+   * project clears the assignee. A missing or foreign task or project is the
+   * same 404; another member's task is 403.
    */
   async setProject(
     task_id: string,
     project_id: string | null,
     tokenUserId: string,
   ): Promise<void> {
-    if (project_id !== null) {
-      const project = await this.projectsRepository.findOne({
-        where: { project_id },
-      });
-      if (!project || project.user_id !== tokenUserId)
-        throw new NotFoundException('Project not found');
-    }
+    const task = await this.access.assertCanUseTask(task_id, tokenUserId);
+    if (!task.isCreator) throw new ForbiddenException(MOVE_FORBIDDEN);
+    if (project_id !== null)
+      await this.access.assertCanUseProject(project_id, tokenUserId);
     const [, affected]: [unknown, number] =
       await this.taskInstanceRepository.query(
         `UPDATE "task_instance_entity"
-            SET "project_id" = $1, "updatedAt" = CURRENT_TIMESTAMP
+            SET "assignee_id" = CASE WHEN "project_id" IS DISTINCT FROM $1
+                                     THEN NULL ELSE "assignee_id" END,
+                "project_id" = $1, "updatedAt" = CURRENT_TIMESTAMP
           WHERE "task_id" = $2 AND "user_id" = $3 AND "deletedAt" IS NULL`,
         [project_id, task_id, tokenUserId],
       );
     if (!affected) throw new NotFoundException('Task not found');
+    this.assign.tasksChanged(task.project_id, tokenUserId);
+    if (project_id !== task.project_id)
+      this.assign.tasksChanged(project_id, tokenUserId);
   }
 }

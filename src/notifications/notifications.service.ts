@@ -24,6 +24,13 @@ import {
   CHAT_UNREAD_CHANGED,
   ChatUnreadChangedEvent,
 } from 'src/chat/chat-events';
+import {
+  NOTIFICATION_CREATED,
+  NotificationCreatedEvent,
+  TASKS_CHANGED,
+  TasksChangedEvent,
+  tasksEventRecipients,
+} from 'src/task/task-events';
 
 @Injectable()
 export class NotificationsService {
@@ -177,6 +184,55 @@ export class NotificationsService {
         event: { type: API_CONTRACT.chat.sseEventType, data },
       });
     }
+  }
+
+  /**
+   * FEAT-09a (D3): a task in a shared project changed. One `tasks` event
+   * (data `{project_id}`) to the owner and the members (members only while
+   * the project is not deleted), minus the actor; plus `alsoNotify` (a
+   * removed member). No task text, no notification row: the FE refetches.
+   */
+  @OnEvent(TASKS_CHANGED)
+  async handleTasksChanged(payload: TasksChangedEvent) {
+    try {
+      const recipients = await this.tasksRecipients(payload);
+      const data = JSON.stringify({ project_id: payload.projectId });
+      for (const userId of recipients) {
+        this.notificationSubject.next({
+          userId,
+          event: { type: API_CONTRACT.tasks.sseEventType, data },
+        });
+      }
+    } catch (error: any) {
+      this.logger.error(`tasks event failed: ${error?.message}`);
+    }
+  }
+
+  private async tasksRecipients(e: TasksChangedEvent): Promise<string[]> {
+    const rows: { owner_id: string; member_ids: string[] | null }[] =
+      await this.notificationsRepository.query(
+        `SELECT p."user_id" AS "owner_id",
+                array_agg(m."user_id") FILTER (WHERE m."user_id" IS NOT NULL)
+                  AS "member_ids"
+           FROM "project_entity" p
+           LEFT JOIN "project_members" m
+             ON m."project_id" = p."project_id" AND p."deletedAt" IS NULL
+          WHERE p."project_id" = $1
+          GROUP BY p."user_id"`,
+        [e.projectId],
+      );
+    return tasksEventRecipients(
+      rows[0]?.owner_id ?? null,
+      rows[0]?.member_ids ?? [],
+      e.actorId,
+      e.alsoNotify,
+    );
+  }
+
+  /** FEAT-09a (D4): a notification committed by TaskAssignService. */
+  @OnEvent(NOTIFICATION_CREATED)
+  handleNotificationCreated(payload: NotificationCreatedEvent) {
+    this.sendNotification(payload.userId, payload.notification);
   }
 
   async list(

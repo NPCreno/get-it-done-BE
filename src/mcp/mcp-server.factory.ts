@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { McpServer } from '@modelcontextprotocol/server';
 import { TaskService } from 'src/task/task.service';
+import { TaskAccessService } from 'src/task/task-access.service';
 import { TaskQueryService } from 'src/task/task-query.service';
 import { SubTaskService } from 'src/task/subtask.service';
 import { TaskStatusService } from 'src/task/task-status.service';
@@ -29,7 +30,7 @@ export const ALL_TOOLS = [
 ];
 
 export const MCP_INSTRUCTIONS =
-  "Get It Done is a personal task manager. These tools read and manage the signed-in user's tasks, sub-tasks, projects and notifications, and read the chat of projects they own or that are shared with them. Every call acts only on that user's data. Dates are ISO 8601 in UTC. Deletes are soft: deleted items disappear from lists but are kept and can be restored by support.";
+  'Get It Done is a personal task manager. These tools read and manage the signed-in user\'s tasks, sub-tasks, projects and notifications, and read the chat of projects they own or that are shared with them. In a shared project the owner and every member can add, edit, assign and complete its tasks; "your tasks" are the ones you\'re responsible for (yours, or assigned to you). Every call acts only on data that user may see. Dates are ISO 8601 in UTC. Deletes are soft: deleted items disappear from lists but are kept and can be restored by support.';
 
 /**
  * Builds one McpServer per request (stateless: createMcpHandler calls the
@@ -52,9 +53,11 @@ export class McpServerFactory {
     chatMembers: ChatMembersService,
     chatMessages: ChatMessagesService,
     chatUnread: ChatUnreadService,
+    taskAccess: TaskAccessService,
   ) {
     this.deps = {
       tasks,
+      taskAccess,
       taskQuery,
       subtasks,
       taskStatus,

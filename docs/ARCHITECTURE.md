@@ -31,7 +31,8 @@ Two gates. Website JWTs pass `AuthorizeGuard` on the REST routes. Personal acces
 ## Entity relationships
 ```
 User ─┬─< Project ─< TaskInstance
-      ├─< TaskInstance ─< TaskSubInstance
+      ├─< TaskInstance ─< TaskSubInstance   (user_id = creator)
+      ├─< TaskInstance                      (assignee_id, FK_task_assignee, SET NULL; FEAT-09a)
       ├─< TaskSubInstance
       ├─< Notification
       ├─< ProjectMember >─ Project   (project_members, PK (project_id, user_id), both CASCADE)
@@ -49,7 +50,7 @@ AuthToken: stores user_id, sha256 token, expiry, family_id, remember_me, revoked
 Deleting a user cascades to projects, tasks, subtasks, notifications, recurring templates and refresh-token rows. Deleting a project cascades to its tasks and templates (their instances keep existing with a null template link). Deleting a task instance cascades to its subtasks.
 
 ## Project chat (FEAT-05)
-- Sharing: the owner (`project_entity.user_id`) adds members by username into `project_members`; members see the project's name, color and chat, never its tasks. `ChatAccessService.assertCanChat` is the one access check.
+- Sharing: the owner (`project_entity.user_id`) adds members by username into `project_members`; members see the project's name, color and chat, and (FEAT-09a) work on its tasks. `ChatAccessService.assertCanChat` is the one access check.
 - Live updates: `configureApp` installs `WsAdapter` (`@nestjs/platform-ws`), and `ChatGateway` serves `/api/chat/ws` on the HTTP port. The socket only receives: REST writes call `ChatRoomsService.broadcast` after the write, and member removal calls `kick`.
 - Rooms, like the notification stream and the rate-limit counters, live in memory: correct for one API instance only. More instances need a shared pub/sub.
 - Unread counts (FEAT-08a): `chat_reads` holds each user's read point per project. Unread = messages in a project the user can chat in that are not deleted, not their own, and newer than the later of `last_read_at` and (for a member) their join time `project_members.created_at`; the owner with no row counts everything. `GET /api/chat/unread` computes it in one query (a lateral `LIMIT 100` per project, so the cap also bounds the scan). `PUT .../read` upserts with `GREATEST`, so the point never moves back. Removing a member deletes their row in the same transaction. No notification rows are stored for chat.
@@ -72,8 +73,15 @@ Deleting a user cascades to projects, tasks, subtasks, notifications, recurring 
 - Errors: `/oauth/*` answer RFC 6749 bodies (`OAuthExceptionFilter`, the 429 included) and `Cache-Control: no-store`. The consent check always answers 200 with a union on `outcome` (`ok`, `redirect` with `redirect_to`, `fatal`), because the FE's API client keeps only `message` from a non-2xx body; the decision answers 200 `{redirect_to}` for allow, deny and redirectable problems and 400 `{statusCode, error, message, fatal: true}` only for fatal ones.
 - Cleanup: `OAuthMaintenanceService` daily at 04:00 deletes codes expired over a day, tokens expired over 7 days, grants revoked or expired over 30 days (and consents over a day old that never got a token), and clients over 7 days old with no grant.
 
+## Shared tasks (FEAT-09a)
+- Access is decided in one place, `TaskAccessService` (pure `decideTaskAccess`): no project = the creator only; in a project = the owner (even after a soft delete) or a current member of a live project. Everyone allowed edits, assigns and completes; the owner and the creator delete. `ChatAccessService.assertCanChat` ("owner or member, not deleted") is the project check, exported from `ChatModule`.
+- `task_instance_entity.user_id` stays the creator; `assignee_id` (FK `FK_task_assignee`, SET NULL) is optional. The responsible person is `COALESCE(assignee_id, user_id)` (`task-scope.ts`), indexed by `idx_task_responsible`; every "my tasks" read and stat uses that expression plus the access predicate (`myTasks`), and a completion credits the responsible person.
+- Removing a member gives their responsible tasks in that project to the owner, in the same transaction as the membership delete.
+
 ## Events and schedules
 - `task.completed` is emitted by `TaskStatusService` and consumed by `NotificationsService`.
+- `tasks.changed` (FEAT-09a) is emitted after the commit by every task write on a task with a project and by member removal; `NotificationsService` sends `event: tasks` with data `{project_id}` on the same per-user SSE stream as `chat`, to the owner and members minus the actor (a removed member too). No text, no notification row; the FE refetches.
+- `notification.created` (FEAT-09a) carries an `assignment` notification committed by `TaskAssignService`; `NotificationsService` pushes it as `event: notification`.
 - `chat.unread.changed` is emitted by `ChatUnreadService` and consumed by `NotificationsService` (FEAT-08a); the modules don't import each other.
 - `TaskGeneratorService` runs daily at midnight and creates instances from templates.
 - `OAuthMaintenanceService` runs daily at 04:00 (FEAT-07c cleanup); `AuthMaintenanceService` hourly.

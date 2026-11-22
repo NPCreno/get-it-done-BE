@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { TASKS_CHANGED, TasksChangedEvent } from 'src/task/task-events';
 import { API_CONTRACT } from 'src/common/api-contract';
 import {
   ChatAccessService,
@@ -32,6 +34,7 @@ export class ChatMembersService {
     private readonly access: ChatAccessService,
     private readonly rooms: ChatRoomsService,
     private readonly unread: ChatUnreadService,
+    private readonly events: EventEmitter2,
   ) {}
 
   /** Owner plus members (soft-deleted users are left out). */
@@ -117,8 +120,18 @@ export class ChatMembersService {
       throw new ForbiddenException(OWNER_ONLY);
     }
     // The read point goes with the membership (FEAT-08a), so a re-added member
-    // starts again from their new join time.
+    // starts again from their new join time. FEAT-09a: every task in the
+    // project they were responsible for goes to the owner (their tasks stay
+    // in the project).
     await this.dataSource.transaction(async (manager) => {
+      await manager.query(
+        `UPDATE "task_instance_entity"
+            SET "assignee_id" = $3, "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "project_id" = $1
+            AND COALESCE("assignee_id", "user_id") = $2
+            AND "deletedAt" IS NULL`,
+        [projectId, targetUserId, access.owner_id],
+      );
       const [, affected]: [unknown, number] = await manager.query(
         `DELETE FROM "project_members" WHERE "project_id" = $1 AND "user_id" = $2`,
         [projectId, targetUserId],
@@ -133,6 +146,11 @@ export class ChatMembersService {
     // badge for this project goes away.
     this.rooms.kick(projectId, targetUserId);
     this.unread.notify([targetUserId], projectId);
+    this.events.emit(TASKS_CHANGED, {
+      projectId,
+      actorId,
+      alsoNotify: [targetUserId],
+    } satisfies TasksChangedEvent);
     return { project_id: projectId, user_id: targetUserId };
   }
 
