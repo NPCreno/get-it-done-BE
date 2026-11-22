@@ -8,6 +8,7 @@ import type {
 } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import type { TaskService } from 'src/task/task.service';
+import type { TaskAccessService } from 'src/task/task-access.service';
 import type { TaskQueryService } from 'src/task/task-query.service';
 import type { SubTaskService } from 'src/task/subtask.service';
 import type { TaskStatusService } from 'src/task/task-status.service';
@@ -24,6 +25,7 @@ import { toolErrorMessage } from './mcp-errors';
 /** The services the tools call: the same ones the REST routes use. */
 export interface McpDeps {
   tasks: TaskService;
+  taskAccess: TaskAccessService;
   taskQuery: TaskQueryService;
   subtasks: SubTaskService;
   taskStatus: TaskStatusService;

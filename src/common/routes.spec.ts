@@ -86,6 +86,7 @@ describe('API_CONTRACT.routes', () => {
     ['oauthAuthorize', OAuthApiController, 'decide', RequestMethod.POST],
     ['oauthGrantsList', OAuthApiController, 'list', RequestMethod.GET],
     ['oauthGrantRevoke', OAuthApiController, 'revoke', RequestMethod.DELETE],
+    ['taskAssignee', TaskController, 'setAssignee', RequestMethod.PATCH],
   ];
 
   it('lists exactly the contract routes', () => {

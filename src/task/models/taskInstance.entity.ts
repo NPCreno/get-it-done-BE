@@ -9,13 +9,22 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { TaskTemplateEntity } from './taskTemplate.entity';
 import { ProjectEntity } from 'src/projects/models/projects.entity';
 import { UserEntity } from 'src/user/models/user.entity';
 import { TaskSubInstanceEntity } from './taskSubInstance.entity';
 
+/**
+ * FEAT-09a indexes, created by migration SharedTasks only (TypeORM cannot
+ * declare an expression index; the partial one would show as drift):
+ * `idx_task_responsible` on `(COALESCE(assignee_id, user_id))` and
+ * `idx_task_assignee` on `(assignee_id) WHERE assignee_id IS NOT NULL`.
+ */
 @Entity()
+@Index('idx_task_responsible', { synchronize: false })
+@Index('idx_task_assignee', { synchronize: false })
 export class TaskInstanceEntity {
   /**
    * uuid, as production has always had it (OPS-04). Nothing joins on it:
@@ -30,6 +39,21 @@ export class TaskInstanceEntity {
   @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id', referencedColumnName: 'user_id' })
   user!: UserEntity;
+
+  /**
+   * FEAT-09a: who the task is assigned to (the project owner or a member), or
+   * null. `user` stays the creator. Responsible = COALESCE(assignee, creator).
+   */
+  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({
+    name: 'assignee_id',
+    referencedColumnName: 'user_id',
+    foreignKeyConstraintName: 'FK_task_assignee',
+  })
+  assignee!: UserEntity | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  assignee_id!: string | null;
 
   @ManyToOne(() => ProjectEntity, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'project_id', referencedColumnName: 'project_id' })

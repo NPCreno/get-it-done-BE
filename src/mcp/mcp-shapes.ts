@@ -27,6 +27,9 @@ export const TaskOut = z.object({
   due_date: isoOrNull,
   project_id: z.string().nullable(),
   project_title: z.string().nullable(),
+  // FEAT-09a: who it is assigned to, and the project's owner (shared projects)
+  assignee_username: z.string().nullable(),
+  project_owner_username: z.string().nullable(),
   is_recurring: z.boolean(),
   subtask_count: z.int(),
   subtasks_completed: z.int(),
@@ -95,6 +98,8 @@ export function toTaskOut(
     due_date: iso(t.due_date),
     project_id: t.project?.project_id ?? null,
     project_title: t.project?.title ?? null,
+    assignee_username: t.assignee?.username ?? null,
+    project_owner_username: t.project?.user?.username ?? null,
     is_recurring: Boolean(t.template),
     subtask_count: counts?.total ?? 0,
     subtasks_completed: counts?.completed ?? 0,

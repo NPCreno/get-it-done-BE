@@ -30,6 +30,11 @@ import { ChatUnreadService } from './chat-unread.service';
     ChatRoomsService,
     ChatGateway,
   ],
-  exports: [ChatMembersService, ChatMessagesService, ChatUnreadService],
+  exports: [
+    ChatAccessService,
+    ChatMembersService,
+    ChatMessagesService,
+    ChatUnreadService,
+  ],
 })
 export class ChatModule {}

@@ -34,6 +34,7 @@ export class NotificationsEntity {
       'levelUp',
       'reward',
       'taskDue',
+      'assignment',
     ],
   })
   type!:
@@ -42,7 +43,8 @@ export class NotificationsEntity {
     | 'streak'
     | 'levelUp'
     | 'reward'
-    | 'taskDue';
+    | 'taskDue'
+    | 'assignment';
 
   @Column()
   title!: string;

@@ -80,8 +80,8 @@ Every tool acts only on your own data, plus the chat of projects shared with you
 | `get_profile` | Your username, full name, email and theme |
 | `get_dashboard` | The dashboard numbers (tasks in a window, to do, completed, projects, streak); the window defaults to today |
 | `list_notifications`, `mark_notification_read` | Your notifications |
-| `list_tasks` | Your tasks, filtered by status, project, due dates, title text; up to 100 |
-| `get_task` | One task with its sub-tasks |
+| `list_tasks` | Tasks you're responsible for (yours, or assigned to you in shared projects), filtered by status, project, due dates, title text; up to 100. With a project: every task in that project |
+| `get_task` | One task with its sub-tasks (yours, or in a project you own or that is shared with you) |
 | `create_task` | A task or a recurring series (same rules as the website) |
 | `update_task` | Title, description, due date, priority, project |
 | `set_task_status` | Pending, Complete or Overdue (completing counts toward awards, as on the website) |

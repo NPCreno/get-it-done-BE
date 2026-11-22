@@ -39,6 +39,7 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `src/auth/client-ip.ts` — `getClientIp(req)`, audit-only IP from request headers; `hasValidInternalSecret(req)`
 - `src/auth/rate-limit/` — SEC-09: `@RateLimit(group)` + one `AuthThrottlerGuard`, named throttlers in `rate-limits.ts`, `clientKey()`, `identifierKey()`, `normalizeIp()`
 - `src/user/user.controller.ts`, `user.service.ts` — login, signup, user CRUD
+- `src/task/task-access.service.ts`, `task-scope.ts`, `task-assign.service.ts`, `task-events.ts` — FEAT-09a shared tasks (access, shared SQL, assignment, events)
 - `src/task/task.service.ts` — task create/update/delete (`TaskService`); `task-query.service.ts` list reads; `subtask.service.ts` subtask writes; `task-status.service.ts` status transitions (award-once transaction, `task.completed` emit); `task-stats.service.ts` dashboard, trend, distribution, heatmap (SQL counts); `task-streak.service.ts` streak; `task-recurrence.service.ts` recurring deletes; `task-ids.ts` id generators (all through `newId`). Each under about 400 lines (`service-size.spec.ts`)
 - `src/task/taskGenerator.service.ts` — daily cron that creates recurring task instances; also runs once at boot (`onModuleInit`)
 - `src/notifications/notifications.service.ts` — `@OnEvent('task.completed')` listener
@@ -50,7 +51,7 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `AuthTokenEntity` (`src/auth/models/auth.entity.ts`, `user_id` FK CASCADE since REF-14c) — refresh token records: sha256 hash, `family_id`, `remember_me`, `revoked_at`, `replaced_by_token_id`, `replay_ciphertext`, nullable `ip_address`
 - `ProjectEntity`
 - `TaskTemplateEntity` — recurring task definitions
-- `TaskInstanceEntity` — individual tasks
+- `TaskInstanceEntity` — individual tasks; `user_id` creator, nullable `assignee_id` (FEAT-09a)
 - `TaskSubInstanceEntity` — subtasks
 - `NotificationsEntity` (table `notifications`)
 - `UserAwardEntity` (`src/notifications/models/user-award.entity.ts`, table `user_awards`) — award ledger
@@ -60,11 +61,19 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - FEAT-07c OAuth (`src/oauth/models/`, migration `1763500000000-OAuth`): `OAuthClientEntity` (`oauth_clients`: uuid `id`, public `client_id` `gid_cli_…` UNIQUE, `client_name` varchar(100), `redirect_uris` text[]), `OAuthGrantEntity` (`oauth_grants`: `user_id` → users CASCADE, `client_id` uuid → oauth_clients.id CASCADE, `scopes` text[], `resource`, `expires_at` = 180-day limit, `revoked_at`, `last_used_at`), `OAuthCodeEntity` (`oauth_codes`: PK `code_hash` char(64), `grant_id` CASCADE, `redirect_uri`, `code_challenge`, `expires_at`, `used_at`), `OAuthTokenEntity` (`oauth_tokens`: `kind` access/refresh, `prefix` UNIQUE, `secret_hash` char(64), `pair_id` (access → its refresh), `rotated_at`, `replaced_by`, `used_at`, `revoked_at`, `expires_at`)
 - `ChatReadEntity` (`src/chat/models/chat-read.entity.ts`, table `chat_reads`, PK `(project_id, user_id)`) — FEAT-08a read point `last_read_at` timestamptz(3); only moves forward (`GREATEST`); deleted with the membership
 
+## Shared tasks (FEAT-09a)
+- Access goes through `TaskAccessService` only (`src/task/task-access.service.ts`); no route compares `task.user.user_id` with the token. No project: the creator only. In a project: the owner (also when soft-deleted) and current members of a live project add, edit, assign and complete tasks and sub-tasks; the owner deletes any task, a member only their own (403); moving a task is for its creator. Strangers get the same 404 as a missing item, also on envelope routes (`rethrowAccess`)
+- `user_id` is the creator and never changes. `assignee_id` (nullable, the owner or a member, SET NULL on user delete) is set by `PATCH /api/tasks/:task_id/assignee` or at create; a move to another project or removal of the member changes it (removal: to the owner)
+- Responsible = `COALESCE(assignee_id, user_id)`. "My tasks", every dashboard stat, the streak and MCP `list_tasks` use `myTasks()` from `task-scope.ts` (responsible AND accessible); write the expression exactly that way (index `idx_task_responsible`). Completions credit the responsible person
+- After the commit, task writes on a project task emit `tasks.changed` → SSE `event: tasks` `{project_id}`; an assignment to someone else inserts an `assignment` notification in the same transaction
+- Migration `1763600000000-SharedTasks`: the column, `FK_task_assignee`, `idx_task_assignee` (partial), `idx_task_responsible` (expression; both `synchronize: false` on the entity), `'assignment'` in `notifications_type_enum` (stays on down)
+
 ## Ids
 Business ids (`user_id`, `project_id`, `task_id`, `taskTemplate_id`, `taskSubInstance_id`, `notif_id`) come from `newId(prefix)` (`src/common/ids.ts`, REF-14b): `<prefix>-<uuid v4>` with the prefixes `user`, `PRJ`, `task`, `generatedTask` (recurring instances), `TMP`, `subTask`, `notif`. No "is it free" lookup; the unique constraint is the final guard. Older rows keep the old formats (`user-123456789`, `TMP-<ms>-<n>`, ...), so ids are opaque: never parse a prefix or format. Chat messages and personal access tokens use a bare `randomUUID()`.
 
 ## Relationships
 - User 1→N Project, TaskInstance, TaskSubInstance, Notification, UserAward (all `onDelete: CASCADE`)
+- User 1→N TaskInstance as assignee (`FK_task_assignee`, `SET NULL`, FEAT-09a)
 - Project 1→N TaskInstance (`CASCADE`)
 - TaskTemplate 1→N TaskInstance (`SET NULL`)
 - TaskInstance 1→N TaskSubInstance (`CASCADE`)
@@ -142,18 +151,18 @@ Optional `MCP_ALLOWED_ORIGINS` (FEAT-07a): comma-separated origins allowed to ca
 OAuth issuer (FEAT-07c): Render's automatic `RENDER_EXTERNAL_URL` (no setting to add), else optional `PUBLIC_API_URL` (an origin only, else boot fails), else `http://localhost:<PORT>`. Production with neither only warns.
 `NODE_ENV`, `FRONTEND_URL_ALLOW_LOCAL`, `MCP_ALLOWED_ORIGINS`, `PUBLIC_API_URL` (`RENDER_EXTERNAL_URL` from Render), `DATABASE_URL`, `DATABASE_SYNCHRONIZE`, `JWT_SECRET`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRATION`, `JWT_REFRESH_EXPIRATION_SHORT`, `REFRESH_REUSE_GRACE_SECONDS`, `INTERNAL_API_SECRET`, `FRONTEND_URL`, `PORT`
 
-## API endpoints (54)
+## API endpoints (55)
 - `GET /` — health check (1)
 - `/api/auth` — `POST refresh`, `POST logout` (2)
 - `/api/user` — create, loginEmail, loginUsername, get/:id, getAll, delete :id, :id/hard, update/:user_id (8)
 - `/api/projects` — getAll, getAll/:user_id, :project_id (get, patch, delete), create, :project_id/hard (7)
-- `/api/tasks` — 18 endpoints, see `FEATURE_MAP.md`
+- `/api/tasks` — 19 endpoints (FEAT-09a adds `PATCH :task_id/assignee`), see `FEATURE_MAP.md`
 - `/api/chat` — `projects/:project_id/members` (GET, POST `{username}`, DELETE `:user_id`), `shared-projects` (GET), `projects/:project_id/messages` (GET `limit`/`cursor`, POST `{body}`, DELETE `:id`), FEAT-08a `unread` (GET, `{items: [{project_id, unread_count}], total}`, counts capped at 100) and `projects/:project_id/read` (PUT `{message_id}`, never moves back) (9). Responses `{status:'success', data}`; shapes and socket frames in `API_CONTRACT.chat` and `FEATURE_MAP.md`. WebSocket `/api/chat/ws` (not counted): Origin = `FRONTEND_URL`, first frame `{type:'auth', token}` within 5 s, close 4401 on bad auth or token expiry, `join`/`leave`, server frames `{type, data}`. Rooms are in memory (one instance)
 - `/api/tokens` (FEAT-07a) — `GET` (list), `POST {name, expires_in_days}` (201, the only response with the secret), `DELETE :id` (revoke) (3). Responses `{status:'success', data}`; shapes in `API_CONTRACT.tokens.fields`
 - `/mcp` (not counted, not under `/api`) — the MCP endpoint, personal access tokens or OAuth access tokens
 - `/api/oauth` (FEAT-07c) — `GET authorize/check` (always 200, `data` a union on `outcome`: `ok` / `redirect` + `redirect_to` / `fatal`), `POST authorize` (consent decision: 200 `{redirect_to}` for allow, deny and redirectable problems; 400 `fatal: true` otherwise), `GET grants`, `DELETE grants/:id` (4). Website JWT. Shapes in `API_CONTRACT.oauth.fields` and `FEATURE_MAP.md`
 - Not counted, not under `/api` (FEAT-07c, CORS `*`): `GET /.well-known/oauth-protected-resource/mcp`, `GET /.well-known/oauth-protected-resource`, `GET /.well-known/oauth-authorization-server`, `POST /oauth/register`, `POST /oauth/token`, `POST /oauth/revoke`
-- `/api/notifications` — `GET` (list: `limit`, opaque `cursor`; `{items, unread_count, next_cursor}`), `PATCH read-all`, `PATCH :notif_id/read` (idempotent; unknown or foreign id is 404), `GET sse` (typed `notification` events with `id:`, 25 s `ping`, ends at token `exp`), `DELETE clear/:user_id` (5). The list is the source of truth; the stream only signals. FEAT-08a adds `event: chat` (data `{project_id}`) when the user's chat unread counts changed; refetch `GET /api/chat/unread`. Frames without a notification id (`ping`, `chat`) get Nest's own counter as `id:`, so `Last-Event-ID` is not a notification id and nothing reads it. `metadata` and `actionTarget` are never exposed
+- `/api/notifications` — `GET` (list: `limit`, opaque `cursor`; `{items, unread_count, next_cursor}`), `PATCH read-all`, `PATCH :notif_id/read` (idempotent; unknown or foreign id is 404), `GET sse` (typed `notification` events with `id:`, 25 s `ping`, ends at token `exp`), `DELETE clear/:user_id` (5). The list is the source of truth; the stream only signals. FEAT-09a adds `event: tasks` (data `{project_id}`) when a task in a shared project changed, and `assignment` notifications. FEAT-08a adds `event: chat` (data `{project_id}`) when the user's chat unread counts changed; refetch `GET /api/chat/unread`. Frames without a notification id (`ping`, `chat`) get Nest's own counter as `id:`, so `Last-Event-ID` is not a notification id and nothing reads it. `metadata` and `actionTarget` are never exposed
 - Everything except `GET /`, `refresh`, `create`, `loginEmail`, `loginUsername`, the two notification routes, `/mcp`, `/.well-known/*` and `/oauth/*` uses `AuthorizeGuard` (`/mcp` uses `requireBearerAuth` with personal access tokens or OAuth access tokens)
 
 ## Commands

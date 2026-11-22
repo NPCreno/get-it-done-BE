@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
 import { UserEntity } from 'src/user/models/user.entity';
 import { ProjectEntity } from 'src/projects/models/projects.entity';
@@ -8,7 +8,12 @@ import { IDashboardData } from './interfaces/dashboardData';
 import { TaskCompletionTrend } from './interfaces/taskCompletionTrend';
 import { TaskDistribution } from './interfaces/taskDistribution';
 import { CalendarHeatmap } from './interfaces/calendarHeatmap';
+import { myTasks } from './task-scope';
 
+/**
+ * FEAT-09a (D2): every count is over "my tasks", the tasks I'm responsible for
+ * (COALESCE(assignee_id, user_id) = me) that I may still see (`myTasks`).
+ */
 @Injectable()
 export class TaskStatsService {
   constructor(
@@ -24,7 +29,7 @@ export class TaskStatsService {
   async countCompletedTasks(user_id: string): Promise<number> {
     return this.taskInstanceRepository
       .createQueryBuilder('t')
-      .where('"t"."user_id" = :uid', { uid: user_id })
+      .where(myTasks('t'), { uid: user_id })
       .andWhere('"t"."status" = :status', { status: 'Complete' })
       .getCount();
   }
@@ -69,7 +74,7 @@ export class TaskStatsService {
           `count(*) FILTER (WHERE t.status = 'Complete')`,
           'complete_tasks',
         )
-        .where('"t"."user_id" = :uid')
+        .where(myTasks('t'))
         .setParameters(params)
         .getRawOne<{
           all_tasks: string;
@@ -120,17 +125,15 @@ export class TaskStatsService {
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
 
-      // Fetch completed tasks within the date range
-      const tasks = await this.taskInstanceRepository.find({
-        where: {
-          user: { user_id },
-          status: 'Complete',
-          updatedAt: Between(start, end),
-        },
-        order: {
-          updatedAt: 'ASC',
-        },
-      });
+      // Fetch my completed tasks within the date range
+      const tasks = await this.taskInstanceRepository
+        .createQueryBuilder('t')
+        .select(['t.id', 't.updatedAt'])
+        .where(myTasks('t'), { uid: user_id })
+        .andWhere(`t.status = 'Complete'`)
+        .andWhere('t.updatedAt BETWEEN :start AND :end', { start, end })
+        .orderBy('t.updatedAt', 'ASC')
+        .getMany();
 
       // Initialize a map for all dates in the range with 0 counts
       const dateMap = new Map<string, { completed: number; day: string }>();
@@ -230,38 +233,29 @@ export class TaskStatsService {
         59,
       );
 
-      // Fetch projects with their completed tasks for the target month
-      const projects = await this.projectsRepository
-        .createQueryBuilder('project')
-        .leftJoin(
-          'project.taskInstances',
-          'task',
-          'task.status = :status AND task.updatedAt BETWEEN :startOfMonth AND :endOfMonth',
-          {
-            status: 'Complete',
-            startOfMonth,
-            endOfMonth,
-          },
-        )
-        .where('project.user_id = :user_id', { user_id })
-        .andWhere('project.createdAt <= :endOfMonth', { endOfMonth })
-        .andWhere(
-          '(project.deletedAt IS NULL OR project.deletedAt >= :startOfMonth)',
-          { startOfMonth },
-        )
-        .select('project.id', 'id')
-        .addSelect('project.title', 'title')
-        .addSelect('project.color', 'color')
-        .addSelect('COUNT(task.id)', 'value')
-        .groupBy('project.id')
-        .addGroupBy('project.title')
-        .addGroupBy('project.color')
-        .orderBy('project.id', 'ASC')
-        .getRawMany<{
-          title: string | null;
-          color: string | null;
-          value: string;
-        }>();
+      // My completed tasks this month per project: projects I own or am a
+      // member of (not deleted, created by the month's end), labelled with
+      // the project title. Owner or member of a live project = may see them.
+      const projects: {
+        title: string | null;
+        color: string | null;
+        value: number;
+      }[] = await this.projectsRepository.query(
+        `SELECT p."id", p."title", p."color", count(t."id")::int AS "value"
+           FROM "project_entity" p
+           LEFT JOIN "task_instance_entity" t
+             ON t."project_id" = p."project_id" AND t."deletedAt" IS NULL
+            AND t."status" = 'Complete'
+            AND t."updatedAt" BETWEEN $2 AND $3
+            AND COALESCE(t."assignee_id", t."user_id") = $1
+          WHERE p."deletedAt" IS NULL AND p."createdAt" <= $3
+            AND (p."user_id" = $1 OR EXISTS (
+              SELECT 1 FROM "project_members" m
+               WHERE m."project_id" = p."project_id" AND m."user_id" = $1))
+          GROUP BY p."id", p."title", p."color"
+          ORDER BY p."id" ASC`,
+        [user_id, startOfMonth, endOfMonth],
+      );
 
       const distributionData = projects.map((row) => ({
         title: row.title || 'Untitled Project',
@@ -318,7 +312,7 @@ export class TaskStatsService {
       // Fetch all completed tasks for the user in the target month
       const completedTasks = await this.taskInstanceRepository
         .createQueryBuilder('task')
-        .where('task.user_id = :user_id', { user_id })
+        .where(myTasks('task'), { uid: user_id })
         .andWhere('task.status = :status', { status: 'Complete' })
         .andWhere('task.updatedAt BETWEEN :startOfMonth AND :endOfMonth', {
           startOfMonth,

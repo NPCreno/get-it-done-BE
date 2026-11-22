@@ -139,7 +139,9 @@ describe('authorization (two users)', () => {
         .patch(`/api/tasks/${bTask}`)
         .set(bearer(A))
         .send({ title: 'hacked' });
-      expect(upd.body.status).toBe('error');
+      // FEAT-09a: a stranger gets the same 404 as a missing task.
+      expect(upd.status).toBe(404);
+      expect(upd.body.message).toBe('Task not found');
       const st = await request(server())
         .patch(`/api/tasks/update-task-status/${bTask}/status/Complete`)
         .set(bearer(A));
@@ -217,10 +219,12 @@ describe('authorization (two users)', () => {
     });
 
     it('reads: tasks by project, per-user analytics, notifications clear', async () => {
+      // FEAT-09a: a stranger gets 404 (was an empty list), like chat.
       const byProj = await request(server())
         .get(`/api/tasks/getTasksByProj/${bProject}`)
         .set(bearer(A));
-      expect(byProj.body).toEqual([]);
+      expect(byProj.status).toBe(404);
+      expect(byProj.body.message).toBe('Project not found');
       for (const path of [
         `getTasksByUser/${B.user_id}`,
         `getDashboardData/${B.user_id}`,
@@ -322,7 +326,8 @@ describe('authorization (two users)', () => {
           isRecurring: false,
           project_id: bProject,
         });
-      expect(t.body.status).toBe('error');
+      expect(t.status).toBe(404);
+      expect(t.body.message).toBe('Project not found');
       expect(
         await rowCount(
           'SELECT count(*) FROM task_instance_entity WHERE project_id = $1',
@@ -341,7 +346,8 @@ describe('authorization (two users)', () => {
         .post('/api/tasks/createSubTask')
         .set(bearer(A))
         .send({ task_id: bTask, title: 'sneaky sub', status: 'Pending' });
-      expect(s.body.status).toBe('error');
+      expect(s.status).toBe(404);
+      expect(s.body.message).toBe('Task not found');
       expect(
         await rowCount(
           "SELECT count(*) FROM task_sub_instance_entity WHERE title = 'sneaky sub'",

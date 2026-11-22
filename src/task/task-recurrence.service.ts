@@ -1,13 +1,19 @@
 import {
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { TaskInstanceEntity } from './models/taskInstance.entity';
 import { TaskTemplateEntity } from './models/taskTemplate.entity';
+import {
+  DELETE_FORBIDDEN,
+  rethrowAccess,
+  TASK_NOT_FOUND,
+} from './task-access.service';
+import { TaskAssignService } from './task-assign.service';
 
 @Injectable()
 export class TaskRecurrenceService {
@@ -16,6 +22,7 @@ export class TaskRecurrenceService {
   constructor(
     @InjectRepository(TaskInstanceEntity)
     private readonly taskInstanceRepository: Repository<TaskInstanceEntity>,
+    private readonly assign: TaskAssignService,
   ) {}
 
   async deleteRecurringTasks(
@@ -41,7 +48,7 @@ export class TaskRecurrenceService {
       // Get the template with required fields in a single query
       const template = await queryRunner.manager.findOne(TaskTemplateEntity, {
         where: { taskTemplate_id },
-        select: ['id', 'taskTemplate_id', 'user_id'],
+        select: ['id', 'taskTemplate_id', 'user_id', 'project_id'],
       });
 
       if (!template) {
@@ -50,8 +57,25 @@ export class TaskRecurrenceService {
         );
       }
 
+      // FEAT-09a: the template's creator or the project owner. A member gets
+      // 403, a stranger the same 404 as a missing task.
       if (template.user_id !== tokenUserId) {
-        throw new UnauthorizedException('Access denied: Not your data.');
+        const [p]: { owner_id: string; is_member: boolean }[] =
+          template.project_id
+            ? await queryRunner.manager.query(
+                `SELECT p."user_id" AS "owner_id",
+                        (p."deletedAt" IS NULL AND EXISTS (
+                          SELECT 1 FROM "project_members" m
+                           WHERE m."project_id" = p."project_id"
+                             AND m."user_id" = $2)) AS "is_member"
+                   FROM "project_entity" p WHERE p."project_id" = $1`,
+                [template.project_id, tokenUserId],
+              )
+            : [];
+        if (p?.owner_id !== tokenUserId) {
+          if (p?.is_member) throw new ForbiddenException(DELETE_FORBIDDEN);
+          throw new NotFoundException(TASK_NOT_FOUND);
+        }
       }
 
       this.logger.debug(
@@ -120,6 +144,7 @@ export class TaskRecurrenceService {
 
       // Commit the transaction
       await queryRunner.commitTransaction();
+      this.assign.tasksChanged(template.project_id, tokenUserId);
 
       const keptCount = allTasks.length - deletedInstances.length;
       return {
@@ -140,6 +165,7 @@ export class TaskRecurrenceService {
           this.logger.error('Failed to rollback transaction', rollbackError);
         }
       }
+      rethrowAccess(error);
 
       return {
         status: 'error',

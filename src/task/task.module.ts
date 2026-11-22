@@ -16,6 +16,9 @@ import { ProjectEntity } from 'src/projects/models/projects.entity';
 import { UserEntity } from 'src/user/models/user.entity';
 import { TaskGeneratorService } from './taskGenerator.service';
 import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
+import { ChatModule } from 'src/chat/chat.module';
+import { TaskAccessService } from './task-access.service';
+import { TaskAssignService } from './task-assign.service';
 
 @Module({
   imports: [
@@ -28,8 +31,12 @@ import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
     ]),
     AuthModule,
     UserModule,
+    // FEAT-09a: ChatAccessService.assertCanChat is "owner or member".
+    ChatModule,
   ],
   providers: [
+    TaskAccessService,
+    TaskAssignService,
     TaskService,
     TaskQueryService,
     SubTaskService,
@@ -41,6 +48,8 @@ import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
   ],
   controllers: [TaskController],
   exports: [
+    TaskAccessService,
+    TaskAssignService,
     TaskService,
     TaskQueryService,
     SubTaskService,

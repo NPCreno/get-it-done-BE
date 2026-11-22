@@ -1,7 +1,7 @@
 import {
+  ForbiddenException,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, Repository } from 'typeorm';
@@ -10,25 +10,31 @@ import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
 import { UserEntity } from 'src/user/models/user.entity';
 import { CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
 import { newTaskSubInstanceId } from './task-ids';
+import {
+  rethrowAccess,
+  SUBTASK_DELETE_FORBIDDEN,
+  SUBTASK_NOT_FOUND,
+  TaskAccessService,
+} from './task-access.service';
+import { TaskAssignService } from './task-assign.service';
 
 @Injectable()
 export class SubTaskService {
   constructor(
-    @InjectRepository(TaskInstanceEntity)
-    private readonly taskInstanceRepository: Repository<TaskInstanceEntity>,
     @InjectRepository(TaskSubInstanceEntity)
     private readonly taskSubInstanceRepository: Repository<TaskSubInstanceEntity>,
+    private readonly access: TaskAccessService,
+    private readonly assign: TaskAssignService,
   ) {}
 
+  /** FEAT-09a: anyone who can edit the parent task may add sub-tasks. */
   private async validateParentTask(
     taskId: string,
     userId: string,
   ): Promise<boolean> {
     try {
-      const parentTask = await this.taskInstanceRepository.findOne({
-        where: { task_id: taskId, user: { user_id: userId } },
-      });
-      return !!parentTask;
+      await this.access.assertCanUseTask(taskId, userId);
+      return true;
     } catch {
       return false;
     }
@@ -144,16 +150,12 @@ export class SubTaskService {
     error?: any;
   }> {
     try {
-      // Verify the parent task exists and belongs to the user
-      const parentTask = await this.taskInstanceRepository.findOne({
-        where: { task_id: createDto.task_id, user: { user_id: userId } },
-      });
-
-      if (!parentTask) {
-        throw new NotFoundException(
-          `Task with ID ${createDto.task_id} not found or access denied`,
-        );
-      }
+      // FEAT-09a D1: the parent's creator, the project owner or a member.
+      // The sub-task's user_id is the caller.
+      const parentTask = await this.access.assertCanUseTask(
+        createDto.task_id,
+        userId,
+      );
 
       // REF-14b: uuid id, no "is it free" lookup (unique constraint guards)
       const taskSubInstanceId = newTaskSubInstanceId();
@@ -170,6 +172,7 @@ export class SubTaskService {
 
       const savedSubInstance =
         await this.taskSubInstanceRepository.save(subInstance);
+      this.assign.tasksChanged(parentTask.project_id, userId);
 
       return {
         status: 'success',
@@ -177,6 +180,7 @@ export class SubTaskService {
         data: savedSubInstance,
       };
     } catch (error: any) {
+      rethrowAccess(error);
       console.error('Error creating task sub-instance:', error);
       return {
         status: 'error',
@@ -210,14 +214,23 @@ export class SubTaskService {
           },
         },
       });
-      if (!subTask)
-        throw new NotFoundException(
-          `SubTask with ID ${taskSubInstance_id} not found`,
-        );
-      if (tokenUserId !== subTask.user.user_id) {
-        throw new UnauthorizedException('Access denied: Not your data.');
-      }
+      const taskId = subTask?.instance?.task_id;
+      if (!subTask || !taskId) throw new NotFoundException(SUBTASK_NOT_FOUND);
+      // FEAT-09a: the project owner, the parent's creator or the sub-task's
+      // creator. A stranger gets the same 404 as a missing sub-task.
+      const parent = await this.access
+        .assertCanUseTask(taskId, tokenUserId)
+        .catch(() => {
+          throw new NotFoundException(SUBTASK_NOT_FOUND);
+        });
+      if (
+        !parent.isProjectOwner &&
+        !parent.isCreator &&
+        subTask.user?.user_id !== tokenUserId
+      )
+        throw new ForbiddenException(SUBTASK_DELETE_FORBIDDEN);
       await this.taskSubInstanceRepository.softDelete({ taskSubInstance_id });
+      this.assign.tasksChanged(parent.project_id, tokenUserId);
 
       const deletedSubTask = await this.taskSubInstanceRepository.findOne({
         where: { taskSubInstance_id },
@@ -230,6 +243,7 @@ export class SubTaskService {
         data: deletedSubTask,
       };
     } catch (error: any) {
+      rethrowAccess(error);
       return {
         status: 'error',
         message: 'Failed to delete task',

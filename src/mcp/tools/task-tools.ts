@@ -34,7 +34,10 @@ const projectId = z
   .max(100)
   .describe('A project id (project_id) from list_projects.');
 
-/** The caller's task as a safe shape, or 404 "Task not found". */
+/**
+ * A task the caller may work on (theirs, or in a project they own or are a
+ * member of, FEAT-09a) as a safe shape, or 404 "Task not found".
+ */
 async function ownTask(
   deps: McpDeps,
   userId: string,
@@ -50,7 +53,7 @@ export const listTasks = defineTool({
   name: 'list_tasks',
   title: 'List tasks',
   description:
-    'Lists your tasks (not deleted), soonest due first, with sub-task counts. All filters are optional and combine.',
+    "Lists tasks you're responsible for (yours, or assigned to you in shared projects), not deleted, soonest due first, with sub-task counts. With project_id: every task in that project (yours or shared with you). All filters are optional and combine.",
   input: z
     .object({
       status: TaskStatus.optional().describe('Only tasks with this status.'),
@@ -102,7 +105,8 @@ export const listTasks = defineTool({
 export const getTask = defineTool({
   name: 'get_task',
   title: 'Get a task',
-  description: 'Gets one of your tasks with its sub-tasks.',
+  description:
+    'Gets a task you can work on (yours, or in a project you own or that is shared with you) with its sub-tasks.',
   input: z.object({ task_id: taskId }).strict(),
   output: z.object({ task: TaskOut, subtasks: z.array(SubtaskOut) }),
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -198,7 +202,7 @@ export const createTask = defineTool({
   name: 'create_task',
   title: 'Create a task',
   description:
-    'Creates a task for you, or a recurring series (its tasks for the current month are created right away). Validated with the same rules as the website.',
+    'Creates a task, or a recurring series (its tasks for the current month are created right away), optionally in a project you own or that is shared with you. Validated with the same rules as the website.',
   input: createTaskInput,
   output: z.object({
     task: TaskOut.optional(),
@@ -211,7 +215,8 @@ export const createTask = defineTool({
   },
   run: async (a, { userId, deps }) => {
     const dto = await toDto(CreateTaskDto, createTaskBody(a));
-    if (dto.project_id) await ownProject(deps, userId, dto.project_id);
+    if (dto.project_id)
+      await deps.taskAccess.assertCanUseProject(dto.project_id, userId);
     const res = unwrap(await deps.tasks.createTask(dto, userId));
     if (dto.isRecurring) {
       const t = res.data as TaskTemplateEntity;
@@ -245,7 +250,7 @@ export const updateTask = defineTool({
   name: 'update_task',
   title: 'Update a task',
   description:
-    'Changes fields of one of your tasks. Only the fields you pass change; null clears description, due_date or project_id. Use set_task_status for the status.',
+    'Changes fields of a task you can work on (yours, or in a project shared with you). Only the fields you pass change; null clears description, due_date or project_id. Moving a task (project_id) is for its creator only and clears its assignee. Use set_task_status for the status.',
   input: z
     .object({
       task_id: taskId,
@@ -316,7 +321,7 @@ export const setTaskStatus = defineTool({
   name: 'set_task_status',
   title: 'Set a task status',
   description:
-    'Sets the status of one of your tasks. Completing a task counts toward awards and notifications, exactly as on the website.',
+    'Sets the status of a task you can work on (yours, or in a project shared with you). Completing a task counts toward the awards of the person responsible for it (its assignee, else its creator), exactly as on the website.',
   input: z
     .object({ task_id: taskId, status: TaskStatus.describe('The new status.') })
     .strict(),
@@ -341,7 +346,8 @@ export const setTaskStatus = defineTool({
 export const addSubtask = defineTool({
   name: 'add_subtask',
   title: 'Add a sub-task',
-  description: 'Adds a sub-task (Pending) to one of your tasks.',
+  description:
+    'Adds a sub-task (Pending) to a task you can work on (yours, or in a project shared with you).',
   input: z
     .object({
       task_id: taskId,
@@ -393,7 +399,8 @@ async function ownSubtask(deps: McpDeps, userId: string, id: string) {
 export const setSubtaskStatus = defineTool({
   name: 'set_subtask_status',
   title: 'Set a sub-task status',
-  description: 'Sets the status of one of your sub-tasks.',
+  description:
+    'Sets the status of a sub-task of a task you can work on (yours, or in a project shared with you).',
   input: z
     .object({
       subtask_id: subtaskId,
@@ -426,7 +433,7 @@ export const deleteTask = defineTool({
   name: 'delete_task',
   title: 'Delete a task',
   description:
-    'Deletes one of your tasks (a soft delete: it disappears from lists and can be restored by support).',
+    "Deletes a task (a soft delete: it disappears from lists and can be restored by support). In a shared project only its owner or the task's creator may delete it.",
   input: z.object({ task_id: taskId }).strict(),
   output: Deleted.extend({ task_id: z.string() }),
   annotations: {
@@ -448,7 +455,8 @@ export const deleteTask = defineTool({
 export const deleteSubtask = defineTool({
   name: 'delete_subtask',
   title: 'Delete a sub-task',
-  description: 'Deletes one of your sub-tasks (a soft delete).',
+  description:
+    "Deletes a sub-task (a soft delete). In a shared project: the project owner, the task's creator or the sub-task's creator.",
   input: z.object({ subtask_id: subtaskId }).strict(),
   output: Deleted.extend({ subtask_id: z.string() }),
   annotations: {

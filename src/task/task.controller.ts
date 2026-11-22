@@ -29,6 +29,9 @@ import { AuthUserId } from 'src/auth/decorators/auth-user-id.decorator';
 import { ParseArrayPipe } from '@nestjs/common';
 import { TaskSubInstanceEntity } from './models/taskSubInstance.entity';
 import { CreateTaskSubInstanceDto } from './dto/create-task-subInstance-dto';
+import { SetAssigneeDto } from './dto/set-assignee-dto';
+import { TaskAssignService } from './task-assign.service';
+import { TaskInstanceResponse } from './interfaces/taskInstanceResponse';
 @Controller('api/tasks')
 export class TaskController {
   constructor(
@@ -39,6 +42,7 @@ export class TaskController {
     private taskStatsService: TaskStatsService,
     private taskStreakService: TaskStreakService,
     private taskRecurrenceService: TaskRecurrenceService,
+    private taskAssignService: TaskAssignService,
   ) {}
 
   @UseGuards(AuthorizeGuard)
@@ -152,6 +156,25 @@ export class TaskController {
     error?: any;
   }> {
     return this.taskService.updateOne(task_id, updateTaskDto, userId);
+  }
+
+  /**
+   * FEAT-09a: set or clear the assignee (the project owner or a member). The
+   * task must be in a project; anyone who can edit it may assign it.
+   */
+  @UseGuards(AuthorizeGuard)
+  @Patch(':task_id/assignee')
+  async setAssignee(
+    @Param('task_id') task_id: string,
+    @Body() dto: SetAssigneeDto,
+    @AuthUserId() userId: string,
+  ): Promise<{ status: 'success'; data: TaskInstanceResponse }> {
+    const data = await this.taskAssignService.setAssignee(
+      task_id,
+      dto.assignee_id,
+      userId,
+    );
+    return { status: 'success', data };
   }
 
   @UseGuards(AuthorizeGuard)
