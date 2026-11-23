@@ -31,10 +31,9 @@ export class UserController {
   @RateLimit('signup')
   @Post('create')
   async create(@Body() userDto: CreateUserDto): Promise<{
-    status: string;
+    status: 'success';
     message: string;
-    data?: UserCleanupResponse | null;
-    error?: any;
+    data: UserCleanupResponse;
   }> {
     return this.userService.createUser(userDto);
   }

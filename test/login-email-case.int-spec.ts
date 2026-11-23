@@ -65,10 +65,9 @@ describe('login by email ignores case (BUG-01)', () => {
       email: 'CASE@TEST.DEV',
       password,
     });
-    expect(res.body).toMatchObject({
-      status: 'error',
-      message: 'Email already exists.',
-    });
+    // BUG-07: a real 409, one message for email and username alike.
+    expect(res.status).toBe(409);
+    expect(res.body.message).toBe('That email or username is already taken.');
   });
 
   it('usernames stay case-sensitive', async () => {

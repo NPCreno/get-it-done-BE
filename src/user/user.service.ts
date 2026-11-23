@@ -4,6 +4,7 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -20,19 +21,29 @@ import { UserCleanupResponse } from './models/userCleanupResponse';
 import { User } from './models/user.interface';
 import { newId } from 'src/common/ids';
 
+/** BUG-07: one message for a duplicate email or username. */
+export const SIGNUP_TAKEN_MESSAGE = 'That email or username is already taken.';
+export const SIGNUP_FAILED_MESSAGE = 'Failed to create account.';
+
 @Injectable()
 export class UserService {
+  private readonly logger = new Logger(UserService.name);
+
   constructor(
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     private readonly authService: AuthService,
   ) {}
 
+  /**
+   * BUG-07: a duplicate email or username is a 409 with one message (it does
+   * not say which one exists); any other failure is a 500 without database
+   * text. Logs carry no email, username or Postgres detail.
+   */
   async createUser(userDto: CreateUserDto): Promise<{
-    status: string;
+    status: 'success';
     message: string;
-    data?: UserCleanupResponse | null;
-    error?: any;
+    data: UserCleanupResponse;
   }> {
     try {
       // Ensure password is a primitive string
@@ -71,32 +82,18 @@ export class UserService {
         message: 'User created successfully',
         data: userWithoutPassword,
       };
-    } catch (error: any) {
-      console.error('Error creating user:', error);
-
-      if (error.code === '23505') {
-        // Postgres unique violation
-        const detail = error.detail || '';
-        let message = 'Duplicate entry.';
-
-        if (detail.includes('username')) {
-          message = 'Username already exists.';
-        } else if (detail.includes('email')) {
-          message = 'Email already exists.';
-        }
-
-        return {
-          status: 'error',
-          message,
-          error: { message },
-        };
+    } catch (error: unknown) {
+      const code = (error as { code?: unknown } | null)?.code;
+      if (code === '23505') {
+        // Postgres unique violation. Its detail holds the email: never log it.
+        this.logger.warn('signup duplicate');
+        throw new ConflictException(SIGNUP_TAKEN_MESSAGE);
       }
-
-      return {
-        status: 'error',
-        message: 'Failed to create user.',
-        error: { message: error.message || 'Internal server error' },
-      };
+      this.logger.error(
+        'signup failed',
+        typeof code === 'string' ? code : 'no code',
+      );
+      throw new InternalServerErrorException(SIGNUP_FAILED_MESSAGE);
     }
   }
 

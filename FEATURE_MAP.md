@@ -7,7 +7,7 @@ Endpoint → implementing chain. All routes are under `/api`. "Guarded" means `A
 - `POST /api/auth/logout` → `AuthController.logout` → `AuthService.logout` (revokes the token family, always 204).
 
 ## User
-- `POST /api/user/create` → `UserController.create` → `UserService.createUser`
+- `POST /api/user/create` → `UserController.create` → `UserService.createUser` → 201 `{status:'success', message:'User created successfully', data}` (no password). A duplicate email (case-insensitive) or username → 409 `That email or username is already taken.` (one message for both, BUG-07); any other failure → 500 `Failed to create account.`, never database text. Logs: `signup duplicate` / `signup failed <pg code>`, never the email, username or Postgres detail.
 - `POST /api/user/loginEmail` (email matched case-insensitively and trimmed: `lower(email) = normalizeEmail(input)`, BUG-01) → `UserController.loginEmail` → `UserService.loginEmail` → `AuthService.generateAccessToken` + `generateRefreshToken`. IP from `getClientIp(req)`.
 - `POST /api/user/loginUsername` → same chain through `UserService.loginUsername`
 - Guarded: `GET get/:id`, `GET getAll`, `DELETE :id`, `DELETE :id/hard`, `PATCH update/:user_id`. `get/:id` allows only the token owner or an admin.
