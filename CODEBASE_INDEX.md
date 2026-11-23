@@ -83,7 +83,7 @@ One line per source file. Paths are relative to the repo root.
 - `mcp-server.factory.ts` — `McpServerFactory` (one `McpServer` per request), `ALL_TOOLS`, `MCP_INSTRUCTIONS`
 - `pat-verifier.ts` — `PatVerifier` (`OAuthTokenVerifier`); `mcp-token-verifier.ts` — FEAT-07c `McpTokenVerifier` (the `/mcp` verifier: `gid_pat_` → `PatVerifier`, `gid_oat_` → `OAuthGrantsService`)
 - `mcp-tool.ts` — `defineTool`, `McpDeps`, result/error helpers, call logging; `mcp-shapes.ts` — zod output schemas and safe mappers; `mcp-validate.ts` — `toDto` (REST DTO rules); `mcp-errors.ts` — `toolErrorMessage`, `unwrap`; `mcp-origin.ts` — `parseAllowedOrigins`, `originAllowed`, `mcpOriginCheck`
-- `tools/account-tools.ts`, `tools/task-tools.ts`, `tools/project-tools.ts`, `tools/chat-tools.ts` — the 21 tools
+- `tools/account-tools.ts`, `tools/task-tools.ts`, `tools/project-tools.ts`, `tools/chat-tools.ts` — the 23 tools; `tools/assignee.ts` — FEAT-07e assignee input, `pickAssignee` / `resolveAssignee` (owner and members only), `checkCreateAssignee`
 - `pat-verifier.spec.ts`, `mcp-units.spec.ts`; `../../test/mcp.int-spec.ts`, `mcp-helpers.ts`; user docs `../../docs/MCP.md`
 
 ## oauth (`src/oauth/`) — FEAT-07c OAuth for MCP connectors

@@ -6,6 +6,7 @@ import { UpdateTaskDto } from 'src/task/dto/update-task-dto';
 import { CreateTaskSubInstanceDto } from 'src/task/dto/create-task-subInstance-dto';
 import type { TaskTemplateEntity } from 'src/task/models/taskTemplate.entity';
 import type { TaskInstanceEntity } from 'src/task/models/taskInstance.entity';
+import { ASSIGN_NEEDS_PROJECT } from 'src/task/task-access.service';
 import {
   SubtaskOut,
   TaskOut,
@@ -18,6 +19,11 @@ import {
 } from '../mcp-shapes';
 import { unwrap } from '../mcp-errors';
 import { toDto } from '../mcp-validate';
+import {
+  assigneeInput,
+  checkCreateAssignee,
+  resolveAssignee,
+} from './assignee';
 import {
   dateInput,
   defineTool,
@@ -166,6 +172,11 @@ const createTaskInput = z
     end_date: dateInput
       .optional()
       .describe('Recurring only: last day of the series (optional).'),
+    assignee: assigneeInput
+      .optional()
+      .describe(
+        'Optional: who is responsible, a username from list_project_members or "me". Needs project_id; not for recurring tasks.',
+      ),
   })
   .strict();
 
@@ -202,7 +213,7 @@ export const createTask = defineTool({
   name: 'create_task',
   title: 'Create a task',
   description:
-    'Creates a task, or a recurring series (its tasks for the current month are created right away), optionally in a project you own or that is shared with you. Validated with the same rules as the website.',
+    'Creates a task, or a recurring series (its tasks for the current month are created right away), optionally in a project you own or that is shared with you, and optionally assigned to a project member (assignee). Validated with the same rules as the website.',
   input: createTaskInput,
   output: z.object({
     task: TaskOut.optional(),
@@ -214,9 +225,15 @@ export const createTask = defineTool({
     openWorldHint: false,
   },
   run: async (a, { userId, deps }) => {
+    checkCreateAssignee(a);
     const dto = await toDto(CreateTaskDto, createTaskBody(a));
     if (dto.project_id)
       await deps.taskAccess.assertCanUseProject(dto.project_id, userId);
+    // Resolved before the create, so an unknown username creates nothing.
+    const assigneeId =
+      a.assignee !== undefined && dto.project_id
+        ? await resolveAssignee(deps, userId, dto.project_id, a.assignee)
+        : null;
     const res = unwrap(await deps.tasks.createTask(dto, userId));
     if (dto.isRecurring) {
       const t = res.data as TaskTemplateEntity;
@@ -235,8 +252,15 @@ export const createTask = defineTool({
       };
     }
     const created = res.data as TaskInstanceEntity;
+    // Same path as the website's assign: notification and `tasks` event.
+    if (assigneeId !== null)
+      await deps.taskAssign.setAssignee(created.task_id, assigneeId, userId);
     const { out } = await ownTask(deps, userId, created.task_id);
-    return { summary: `Created task "${out.title}".`, data: { task: out } };
+    const to = out.assignee_username ? ` for ${out.assignee_username}` : '';
+    return {
+      summary: `Created task "${out.title}"${to}.`,
+      data: { task: out },
+    };
   },
 });
 
@@ -338,6 +362,48 @@ export const setTaskStatus = defineTool({
     const { out } = await ownTask(deps, userId, a.task_id);
     return {
       summary: `Task "${out.title}" is now ${out.status}.`,
+      data: { task: out },
+    };
+  },
+});
+
+export const assignTask = defineTool({
+  name: 'assign_task',
+  title: 'Assign a task',
+  description:
+    'Sets or clears who is responsible for a task in a project you own or that is shared with you. assignee is a username from list_project_members (the owner or a member), "me", or null to unassign. The assignee gets a notification, as on the website.',
+  input: z
+    .object({
+      task_id: taskId,
+      assignee: assigneeInput
+        .nullable()
+        .describe(
+          'A username from list_project_members, "me", or null to unassign.',
+        ),
+    })
+    .strict(),
+  output: z.object({ task: TaskOut }),
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  run: async (a, { userId, deps }) => {
+    const { out: before } = await ownTask(deps, userId, a.task_id);
+    if (!before.project_id) throw new BadRequestException(ASSIGN_NEEDS_PROJECT);
+    const assigneeId = await resolveAssignee(
+      deps,
+      userId,
+      before.project_id,
+      a.assignee,
+    );
+    await deps.taskAssign.setAssignee(a.task_id, assigneeId, userId);
+    const { out } = await ownTask(deps, userId, a.task_id);
+    return {
+      summary: out.assignee_username
+        ? `Assigned "${out.title}" to ${out.assignee_username}.`
+        : `Unassigned "${out.title}".`,
       data: { task: out },
     };
   },
@@ -481,6 +547,7 @@ export const TASK_TOOLS = [
   createTask,
   updateTask,
   setTaskStatus,
+  assignTask,
   addSubtask,
   setSubtaskStatus,
   deleteTask,

@@ -28,7 +28,7 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `notifications` — SSE stream, notification creation on task completion
 - `tokens` — FEAT-07a personal access tokens (`/api/tokens`, website JWT): list, create, revoke; `verify`/`touch` for the MCP verifier
 - `oauth` — FEAT-07c OAuth for MCP connectors: metadata, DCR, consent API (website JWT), token (PKCE, rotating refresh tokens), revoke, connected apps, daily cleanup
-- `mcp` — FEAT-07a MCP server: 21 tools over the same services as the REST routes
+- `mcp` — FEAT-07a MCP server: 23 tools over the same services as the REST routes (FEAT-07e adds `list_project_members` and `assign_task`; assigning, also `create_task`'s `assignee`, goes through `TaskAssignService.setAssignee`)
 - `chat` — FEAT-05: project sharing by username (`project_members`), project chat messages (`chat_messages`), WebSocket rooms; FEAT-08a unread counts (`chat_reads`) with a `chat` event on the notifications SSE stream
 
 ## Key files
@@ -144,6 +144,7 @@ Postgres 17 runs in Docker (`docker-compose.dev.yml`, database only; the app run
 - Local quirk (developer's Windows machine): something in the network stack rewrites loopback HTTP responses whose URL contains `/mcp` or whose request has `MCP-Protocol-Version` (adds `transfer-encoding: chunked`, drops Content-Length), so JSON GETs of `/.well-known/oauth-protected-resource/mcp` fail to parse there. A bare Node server shows the same; production and CI are unaffected. `test/oauth.int-spec.ts` reads that path over HTTP only when `CI=true`
 - Tools (`src/mcp/tools/*.ts`, `defineTool` in `mcp-tool.ts`): strict zod input with `.describe()` on every field (a unit spec enforces it), never a user id; `userId` comes from `ctx.http.authInfo.extra`. Output is a text summary + compact JSON + `structuredContent` with an `outputSchema`; safe shapes only (`mcp-shapes.ts`). Writes run the REST DTOs' class-validator rules (`toDto`) and call the same services. Ownership is checked first, so a foreign and a missing item give the same 404 label. Errors (`mcp-errors.ts`): safe 404 label, 401/403 "Not allowed", 400 message passed through, anything else "Something went wrong" (logged in full). One log line per call: tool, token prefix, user, ms, ok/error; never arguments or results
 - Nullable output fields render as `type: ["string","null"]` (zod 4 always collapses them); the Inspector's 56 "schema portability" warnings are exactly these, all in output schemas. Input schemas have none. Claude Code connects fine
+- Assigning (FEAT-07e, `tools/assignee.ts`): `assignee` is a username, `"me"` or (assign_task) `null`. A username resolves only among the project's owner and members (`ChatMembersService.list`, never a user lookup); anyone else is the same 400 `Assignee must be a member of this project.`. Then `TaskAssignService.setAssignee` (same transaction, notification and `tasks` event as the website). `create_task` with `assignee` needs `project_id` (`ASSIGN_NEEDS_PROJECT`) and refuses a recurring task (`Recurring tasks start unassigned.`); the username is resolved before the create. `list_project_members` returns `user_id` and `username` only
 - Deletes are soft and `destructiveHint: true`; hard-delete and admin routes are never exposed. User docs: `docs/MCP.md`
 
 ## Environment

@@ -3,7 +3,7 @@
  * Postgres: discovery, DCR, the consent API, the token endpoint (PKCE, code
  * reuse, refresh rotation and its retry grace), revocation, /mcp with OAuth
  * access tokens, rate limits, the cleanup cron, and the SDK's own OAuth
- * client provider connecting and listing the 21 tools.
+ * client provider connecting and listing the 23 tools.
  */
 import { API_TEST_DB, BASE_URL } from './int-env';
 import { INestApplication } from '@nestjs/common';
@@ -471,7 +471,7 @@ describe('OAuth for MCP connectors (FEAT-07c)', () => {
       const client = await connectMcp(base, tokens.access_token);
       try {
         const { tools } = await client.listTools();
-        expect(tools).toHaveLength(21);
+        expect(tools).toHaveLength(23);
         const me = await client.callTool({
           name: 'get_profile',
           arguments: {},
@@ -857,7 +857,7 @@ describe('OAuth for MCP connectors (FEAT-07c)', () => {
       }
     }
 
-    it('discovers, registers, signs in through the consent API and lists 21 tools', async () => {
+    it('discovers, registers, signs in through the consent API and lists 23 tools', async () => {
       const provider = new TestProvider();
       const url = new URL(`${base}/mcp`);
       // See MCP_PATHS_OVER_TCP: locally, read the identical root document,
@@ -925,7 +925,7 @@ describe('OAuth for MCP connectors (FEAT-07c)', () => {
       );
       try {
         const { tools } = await second.listTools();
-        expect(tools).toHaveLength(21);
+        expect(tools).toHaveLength(23);
       } finally {
         await second.close();
       }

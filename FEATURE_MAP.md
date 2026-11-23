@@ -96,9 +96,10 @@ Auth: personal access token (`Bearer gid_pat_…`) or OAuth access token (`Beare
 | `mark_notification_read` | idempotent | `NotificationsService.markRead` |
 | `list_tasks` (`status?`, `project_id?`, `due_from?`, `due_to?`, `search?`, `include_completed?`, `limit?`) | read-only | `TaskQueryService.listOwnTasks` (FEAT-09a: responsible + accessible; with `project_id` every task of that project), `subtaskCounts` |
 | `get_task` | read-only | `TaskQueryService.findOwnTask` (any task the caller may work on), `subtasksOf` |
-| `create_task` (+ recurrence) | write | `CreateTaskDto` rules → `TaskService.createTask` |
+| `create_task` (+ recurrence, optional `assignee`) | write | `CreateTaskDto` rules → `TaskService.createTask`, then `TaskAssignService.setAssignee` when `assignee` is set (needs `project_id`, not recurring) |
 | `update_task` (`project_id` null clears) | idempotent | `UpdateTaskDto` rules → `TaskService.updateOne`, `TaskService.setProject` |
 | `set_task_status` | idempotent | `TaskStatusService.updateTaskStatus` (awards, `task.completed`) |
+| `assign_task` (`assignee`: username, `"me"` or null) (FEAT-07e) | idempotent | username resolved among the owner and members (`ChatMembersService.list`) → `TaskAssignService.setAssignee` (`assignment` notification, `tasks` event); not a member 400, no project 400 |
 | `add_subtask` | write | `CreateTaskSubInstanceDto` rules → `SubTaskService.createTaskSubInstance` |
 | `set_subtask_status` | idempotent | `TaskStatusService.updateSubTaskStatus` |
 | `delete_task`, `delete_subtask` | destructive (soft) | `TaskService.softDeleteOne`, `SubTaskService.softDeleteSubTask` |
@@ -106,4 +107,5 @@ Auth: personal access token (`Bearer gid_pat_…`) or OAuth access token (`Beare
 | `create_project`, `update_project` (color = palette label) | write / idempotent | `CreateProjectDto`/`UpdateProjectDto` rules → `ProjectsService` |
 | `delete_project` | destructive (soft) | `ProjectsService.softDeleteOne` |
 | `list_shared_projects`, `list_chat_messages` (limit ≤ 50), `get_chat_unread` | read-only | `ChatMembersService.sharedWith`, `ChatMessagesService.list` (`assertCanChat`), `ChatUnreadService.unread` |
+| `list_project_members` (FEAT-07e) | read-only | `ChatMembersService.list` (`assertCanChat`: owner or member, else `Project not found`) → `{owner, members}` with `user_id`, `username` only |
 

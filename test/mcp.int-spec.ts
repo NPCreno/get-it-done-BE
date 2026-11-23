@@ -24,8 +24,8 @@ import {
   rawInitialize,
 } from './mcp-helpers';
 
-const q = (sql: string, params: unknown[] = []) =>
-  queryDb(BASE_URL, API_TEST_DB, sql, params);
+const q = <T = any>(sql: string, params: unknown[] = []) =>
+  queryDb<T>(BASE_URL, API_TEST_DB, sql, params);
 const settle = (ms = 900) => new Promise((r) => setTimeout(r, ms));
 
 const TOOL_NAMES = [
@@ -38,6 +38,7 @@ const TOOL_NAMES = [
   'create_task',
   'update_task',
   'set_task_status',
+  'assign_task',
   'add_subtask',
   'set_subtask_status',
   'delete_task',
@@ -48,6 +49,7 @@ const TOOL_NAMES = [
   'update_project',
   'delete_project',
   'list_shared_projects',
+  'list_project_members',
   'list_chat_messages',
   'get_chat_unread',
 ].sort();
@@ -99,8 +101,9 @@ describe('MCP endpoint (FEAT-07a)', () => {
       }
     });
 
-    it('tools/list returns exactly the 21 tools with their annotations', async () => {
+    it('tools/list returns exactly the 23 tools with their annotations', async () => {
       const { tools } = await mcpA.listTools();
+      expect(tools).toHaveLength(23);
       expect(tools.map((t) => t.name).sort()).toEqual(TOOL_NAMES);
       const by = Object.fromEntries(tools.map((t) => [t.name, t]));
       for (const n of ['delete_task', 'delete_subtask', 'delete_project'])
@@ -572,5 +575,201 @@ describe('MCP rate limit (FEAT-07a)', () => {
     expect(blocked.status).toBe(429);
     expect(Number(blocked.headers.get('retry-after'))).toBeGreaterThan(0);
     expect((await hit(two.token)).status).toBe(200);
+  });
+});
+
+describe('MCP assigning (FEAT-07e)', () => {
+  let app: INestApplication;
+  let base: string;
+  let A: TestUser; // owner
+  let B: TestUser; // member
+  let C: TestUser; // outsider
+  let mcpA: Client;
+  let mcpB: Client;
+  let mcpC: Client;
+  let P: string;
+
+  const assignments = async (u: TestUser) =>
+    (
+      await request(app.getHttpServer())
+        .get('/api/notifications')
+        .set(bearer(u))
+    ).body.data.items.filter((n: { type: string }) => n.type === 'assignment');
+  const assigneeOf = async (taskId: string) =>
+    (
+      await q<{ assignee_id: string | null }>(
+        'SELECT "assignee_id" FROM "task_instance_entity" WHERE "task_id" = $1',
+        [taskId],
+      )
+    )[0].assignee_id;
+  const newTask = async (
+    client: Client,
+    title: string,
+    extra: Record<string, unknown> = { project_id: P },
+  ) => {
+    const r = await call(client, 'create_task', { title, ...extra });
+    expect(r.isError).toBe(false);
+    return r.data.task.task_id as string;
+  };
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    base = await listen(app);
+    A = await signupAndLogin(app, 'asga');
+    B = await signupAndLogin(app, 'asgb');
+    C = await signupAndLogin(app, 'asgc');
+    P = await createProject(app, A, 'Assign here');
+    await addMember(app, A, P, B.username).expect(201);
+    mcpA = await connectMcp(base, (await createPat(app, A)).token);
+    mcpB = await connectMcp(base, (await createPat(app, B)).token);
+    mcpC = await connectMcp(base, (await createPat(app, C)).token);
+  }, 60000);
+
+  afterAll(async () => {
+    await mcpA?.close();
+    await mcpB?.close();
+    await mcpC?.close();
+    await app?.close();
+  });
+
+  it('1: list_project_members shows the owner and members, usernames only', async () => {
+    const r = await call(mcpA, 'list_project_members', { project_id: P });
+    expect(r.isError).toBe(false);
+    expect(r.data).toEqual({
+      owner: { user_id: A.user_id, username: A.username },
+      members: [{ user_id: B.user_id, username: B.username }],
+    });
+    expect(JSON.stringify(r.data)).not.toMatch(/fullname|email|Test asg/);
+    expect(r.text).toContain(`Owner ${A.username}, 1 member(s).`);
+  });
+
+  it('2: assign_task to a member sets the assignee and notifies them once', async () => {
+    const t = await newTask(mcpA, 'Write the docs');
+    const before = (await assignments(B)).length;
+    const r = await call(mcpA, 'assign_task', {
+      task_id: t,
+      assignee: B.username,
+    });
+    expect(r.isError).toBe(false);
+    expect(r.data.task.assignee_username).toBe(B.username);
+    expect(r.text).toContain(`Assigned "Write the docs" to ${B.username}.`);
+    expect(await assigneeOf(t)).toBe(B.user_id);
+    await settle(200);
+    expect((await assignments(B)).length).toBe(before + 1);
+    // idempotent: the same assignee again sends nothing new
+    await call(mcpA, 'assign_task', { task_id: t, assignee: B.username });
+    expect((await assignments(B)).length).toBe(before + 1);
+    // null unassigns
+    const un = await call(mcpA, 'assign_task', { task_id: t, assignee: null });
+    expect(un.isError).toBe(false);
+    expect(un.data.task.assignee_username).toBeNull();
+    expect(un.text).toBe(
+      `Unassigned "Write the docs".\n${JSON.stringify(un.data)}`,
+    );
+    expect(await assigneeOf(t)).toBeNull();
+  });
+
+  it('3: a user outside the project is the not-a-member error, nothing changes', async () => {
+    const t = await newTask(mcpA, 'Stay with A');
+    for (const assignee of [C.username, 'nobody_here']) {
+      const r = await call(mcpA, 'assign_task', { task_id: t, assignee });
+      expect(r).toMatchObject({
+        isError: true,
+        text: 'Assignee must be a member of this project.',
+      });
+    }
+    expect(await assigneeOf(t)).toBeNull();
+    expect(await assignments(C)).toHaveLength(0);
+  });
+
+  it('4: a member assigns the owner\'s task to "me"', async () => {
+    const t = await newTask(mcpA, 'B takes this');
+    const r = await call(mcpB, 'assign_task', { task_id: t, assignee: 'me' });
+    expect(r.isError).toBe(false);
+    expect(r.data.task.assignee_username).toBe(B.username);
+    expect(await assigneeOf(t)).toBe(B.user_id);
+    // and the member may hand it to the owner by username
+    const back = await call(mcpB, 'assign_task', {
+      task_id: t,
+      assignee: A.username,
+    });
+    expect(back.data.task.assignee_username).toBe(A.username);
+  });
+
+  it('5: a non-member cannot list the members or assign', async () => {
+    expect(
+      await call(mcpC, 'list_project_members', { project_id: P }),
+    ).toMatchObject({ isError: true, text: 'Project not found' });
+    const t = await newTask(mcpA, 'Not for C');
+    expect(
+      await call(mcpC, 'assign_task', { task_id: t, assignee: 'me' }),
+    ).toMatchObject({ isError: true, text: 'Task not found' });
+    expect(await assigneeOf(t)).toBeNull();
+  });
+
+  it('6: a task without a project cannot be assigned', async () => {
+    const t = await newTask(mcpA, 'Personal', {});
+    expect(
+      await call(mcpA, 'assign_task', { task_id: t, assignee: 'me' }),
+    ).toMatchObject({
+      isError: true,
+      text: 'Only a task in a project can be assigned.',
+    });
+    expect(
+      await call(mcpA, 'create_task', { title: 'No project', assignee: 'me' }),
+    ).toMatchObject({
+      isError: true,
+      text: 'Only a task in a project can be assigned.',
+    });
+  });
+
+  it('7: create_task with an assignee creates and assigns, one notification', async () => {
+    const before = (await assignments(B)).length;
+    const r = await call(mcpA, 'create_task', {
+      title: 'Born assigned',
+      project_id: P,
+      assignee: B.username,
+    });
+    expect(r.isError).toBe(false);
+    expect(r.data.task.assignee_username).toBe(B.username);
+    expect(r.text).toContain(`Created task "Born assigned" for ${B.username}.`);
+    await settle(200);
+    const after = await assignments(B);
+    expect(after.length).toBe(before + 1);
+    expect(after[0].message).toContain('Born assigned');
+  });
+
+  it('create_task: an unknown assignee or a recurring task creates nothing', async () => {
+    const count = async () =>
+      (
+        await q<{ c: number }>(
+          'SELECT count(*)::int AS c FROM "task_instance_entity" WHERE "title" = $1',
+          ['Never made'],
+        )
+      )[0].c;
+    expect(
+      await call(mcpA, 'create_task', {
+        title: 'Never made',
+        project_id: P,
+        assignee: C.username,
+      }),
+    ).toMatchObject({
+      isError: true,
+      text: 'Assignee must be a member of this project.',
+    });
+    expect(
+      await call(mcpA, 'create_task', {
+        title: 'Never made',
+        project_id: P,
+        assignee: 'me',
+        is_recurring: true,
+        repeat_every: 'Day',
+        start_date: '2026-11-20',
+      }),
+    ).toMatchObject({
+      isError: true,
+      text: 'Recurring tasks start unassigned.',
+    });
+    expect(await count()).toBe(0);
   });
 });
