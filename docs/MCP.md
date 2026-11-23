@@ -82,13 +82,15 @@ Every tool acts only on your own data, plus the chat of projects shared with you
 | `list_notifications`, `mark_notification_read` | Your notifications |
 | `list_tasks` | Tasks you're responsible for (yours, or assigned to you in shared projects), filtered by status, project, due dates, title text; up to 100. With a project: every task in that project |
 | `get_task` | One task with its sub-tasks (yours, or in a project you own or that is shared with you) |
-| `create_task` | A task or a recurring series (same rules as the website) |
+| `create_task` | A task or a recurring series (same rules as the website); a task in a project can be assigned right away (`assignee`) |
 | `update_task` | Title, description, due date, priority, project |
 | `set_task_status` | Pending, Complete or Overdue (completing counts toward awards, as on the website) |
+| `assign_task` | Assign a task in a shared project to its owner or a member (by username, or `me`), or unassign it (`null`). They get a notification, as on the website |
 | `add_subtask`, `set_subtask_status` | Sub-tasks |
 | `list_projects`, `get_project` | Projects with task counts |
 | `create_project`, `update_project` | Projects; colors are the website's palette (Lavender, Mint, Peach, Sky, Lemon, Rose, Mauve, Baby Blue, Coral, Seafoam) |
 | `delete_task`, `delete_subtask`, `delete_project` | Deletes. Your client asks you first. Deletes are soft: the item disappears from lists but is kept, and support can restore it |
+| `list_project_members` | The owner and members of a project (username only): who its tasks can be assigned to |
 | `list_shared_projects`, `list_chat_messages`, `get_chat_unread` | Read the chat of projects you own or that are shared with you (sending messages is not supported) |
 
 ## Limits and errors

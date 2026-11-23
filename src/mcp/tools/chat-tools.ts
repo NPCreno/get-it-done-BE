@@ -27,6 +27,40 @@ export const listSharedProjects = defineTool({
   },
 });
 
+const Person = z.object({ user_id: z.string(), username: z.string() });
+
+export const listProjectMembers = defineTool({
+  name: 'list_project_members',
+  title: 'List project members',
+  description:
+    'Lists the owner and members of a project you own or that is shared with you: the people its tasks can be assigned to (use their username with assign_task or create_task).',
+  input: z
+    .object({
+      project_id: z
+        .string()
+        .min(1)
+        .max(100)
+        .describe('The project id (project_id).'),
+    })
+    .strict(),
+  output: z.object({ owner: Person, members: z.array(Person) }),
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  run: async (a, { userId, deps }) => {
+    const people = await deps.chatMembers.list(a.project_id, userId);
+    // Only id and username: never the full name or anything else.
+    const person = (p: { user_id: string; username: string }) => ({
+      user_id: p.user_id,
+      username: p.username,
+    });
+    const owner = person(people.owner);
+    const members = people.members.map(person);
+    return {
+      summary: `Owner ${owner.username}, ${members.length} member(s).`,
+      data: { owner, members },
+    };
+  },
+});
+
 export const listChatMessages = defineTool({
   name: 'list_chat_messages',
   title: 'List chat messages',
@@ -86,4 +120,9 @@ export const getChatUnread = defineTool({
   },
 });
 
-export const CHAT_TOOLS = [listSharedProjects, listChatMessages, getChatUnread];
+export const CHAT_TOOLS = [
+  listSharedProjects,
+  listProjectMembers,
+  listChatMessages,
+  getChatUnread,
+];

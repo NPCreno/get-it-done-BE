@@ -31,7 +31,7 @@ One line per source file. Paths are relative to the repo root.
 - `Interfaces/authenticatedRequest.ts`, `Interfaces/tokenPayload.ts` — request and token payload types
 
 ## user (`src/user/`)
-- `user.module.ts`, `user.controller.ts`, `user.service.ts` — signup, login, profile CRUD
+- `user.module.ts`, `user.controller.ts`, `user.service.ts` — signup, login, profile CRUD; `user-signup.spec.ts` — BUG-07 duplicate signup 409, no database text or email in answers and logs
 - `models/user.entity.ts` — `UserEntity`
 - `models/user.interface.ts`, `models/userCleanupResponse.ts` — user types and sanitized response
 - `dto/create-user-dto.ts`, `dto/update-user-dto.ts` — request payloads
@@ -83,7 +83,7 @@ One line per source file. Paths are relative to the repo root.
 - `mcp-server.factory.ts` — `McpServerFactory` (one `McpServer` per request), `ALL_TOOLS`, `MCP_INSTRUCTIONS`
 - `pat-verifier.ts` — `PatVerifier` (`OAuthTokenVerifier`); `mcp-token-verifier.ts` — FEAT-07c `McpTokenVerifier` (the `/mcp` verifier: `gid_pat_` → `PatVerifier`, `gid_oat_` → `OAuthGrantsService`)
 - `mcp-tool.ts` — `defineTool`, `McpDeps`, result/error helpers, call logging; `mcp-shapes.ts` — zod output schemas and safe mappers; `mcp-validate.ts` — `toDto` (REST DTO rules); `mcp-errors.ts` — `toolErrorMessage`, `unwrap`; `mcp-origin.ts` — `parseAllowedOrigins`, `originAllowed`, `mcpOriginCheck`
-- `tools/account-tools.ts`, `tools/task-tools.ts`, `tools/project-tools.ts`, `tools/chat-tools.ts` — the 21 tools
+- `tools/account-tools.ts`, `tools/task-tools.ts`, `tools/project-tools.ts`, `tools/chat-tools.ts` — the 23 tools; `tools/assignee.ts` — FEAT-07e assignee input, `pickAssignee` / `resolveAssignee` (owner and members only), `checkCreateAssignee`
 - `pat-verifier.spec.ts`, `mcp-units.spec.ts`; `../../test/mcp.int-spec.ts`, `mcp-helpers.ts`; user docs `../../docs/MCP.md`
 
 ## oauth (`src/oauth/`) — FEAT-07c OAuth for MCP connectors
@@ -110,7 +110,7 @@ One line per source file. Paths are relative to the repo root.
 - `../app.setup.ts` — `configureApp()` (helmet, CORS, global ValidationPipe, `WsAdapter`)
 - `../auth/token-user.ts` — `toTokenUser()` allowlist; `../auth/decorators/auth-user-id.decorator.ts` — `@AuthUserId()`; `../auth/decorators/current-user.decorator.ts` — `@CurrentUser()`; `../auth/guards/self-param.guard.ts` — `SelfParam()` (the one id comparison); `../auth/guards/admin-only.guard.ts`; `../common/controller-identity.spec.ts` — scans controllers
 - `../auth/rehash-passwords.ts`, `../migrations/1762900000000-HashPlaintextPasswords.ts`, `../../scripts/rehash-plaintext-passwords.ts`, `../../scripts/export-contract.ts`
-- `../../test/` — `int-env.ts`, `int-db.ts`, `int-app.ts`, `int-auth.ts`, `authorization.int-spec.ts`, `api-contract.int-spec.ts`, `password-migration.int-spec.ts`, `catchup-migration.int-spec.ts`, `login-email-case.int-spec.ts` (BUG-01), `uuid-ids.int-spec.ts` (REF-14b), `fixtures/responses/`
+- `../../test/` — `int-env.ts`, `int-db.ts`, `int-app.ts`, `int-auth.ts`, `authorization.int-spec.ts`, `api-contract.int-spec.ts`, `password-migration.int-spec.ts`, `catchup-migration.int-spec.ts`, `login-email-case.int-spec.ts` (BUG-01), `signup.int-spec.ts` (BUG-07 duplicate signup 409), `uuid-ids.int-spec.ts` (REF-14b), `fixtures/responses/`
 
 ## Root config
 - `package.json`, `tsconfig.json`, `nest-cli.json`, `codegraph.json`

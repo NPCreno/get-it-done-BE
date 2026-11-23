@@ -17,7 +17,14 @@ import {
   unwrap,
 } from './mcp-errors';
 import { originAllowed, parseAllowedOrigins } from './mcp-origin';
-import { ALL_TOOLS } from './mcp-server.factory';
+import { ALL_TOOLS, MCP_INSTRUCTIONS } from './mcp-server.factory';
+import {
+  checkCreateAssignee,
+  pickAssignee,
+  RECURRING_STARTS_UNASSIGNED,
+  resolveAssignee,
+} from './tools/assignee';
+import type { McpDeps } from './mcp-tool';
 
 describe('create_task input -> CreateTaskDto (FEAT-07a)', () => {
   it('maps a plain task with defaults and passes the REST rules', async () => {
@@ -170,11 +177,18 @@ describe('MCP Origin check (FEAT-07a)', () => {
 });
 
 describe('MCP tool set (FEAT-07a)', () => {
-  it('has the 21 planned tools with the right hints', () => {
+  it('has the 23 planned tools with the right hints', () => {
     const specs = ALL_TOOLS.map((t) => t.spec);
-    expect(specs).toHaveLength(21);
+    expect(specs).toHaveLength(23);
     const names = specs.map((s) => s.name);
-    expect(new Set(names).size).toBe(21);
+    expect(new Set(names).size).toBe(23);
+    // FEAT-07e order
+    expect(names.indexOf('list_project_members')).toBe(
+      names.indexOf('list_shared_projects') + 1,
+    );
+    expect(names.indexOf('assign_task')).toBe(
+      names.indexOf('set_task_status') + 1,
+    );
     const readOnly = specs
       .filter((s) => s.annotations.readOnlyHint)
       .map((s) => s.name)
@@ -189,6 +203,7 @@ describe('MCP tool set (FEAT-07a)', () => {
         'get_dashboard',
         'list_notifications',
         'list_shared_projects',
+        'list_project_members',
         'list_chat_messages',
         'get_chat_unread',
       ].sort(),
@@ -220,5 +235,101 @@ describe('MCP tool set (FEAT-07a)', () => {
       from: '2026-11-20T00:00:00.000Z',
       to: '2026-11-20T23:59:59.999Z',
     });
+  });
+});
+
+describe('assigning through MCP (FEAT-07e)', () => {
+  const people = {
+    owner: { user_id: 'user-owner', username: 'olivia', fullname: 'O' },
+    members: [
+      { user_id: 'user-bob', username: 'bob', fullname: 'B' },
+      { user_id: 'user-cat', username: 'cat_9', fullname: 'C' },
+    ],
+  };
+  const spec = (name: string) => {
+    const t = ALL_TOOLS.find((x) => x.spec.name === name);
+    if (!t) throw new Error(`no tool ${name}`);
+    return t.spec;
+  };
+
+  it('the new input schemas are strict', () => {
+    const assign = spec('assign_task').input;
+    expect(assign.safeParse({ task_id: 't', assignee: 'bob' }).success).toBe(
+      true,
+    );
+    expect(assign.safeParse({ task_id: 't', assignee: null }).success).toBe(
+      true,
+    );
+    // assignee is required (null unassigns), unknown keys are refused
+    expect(assign.safeParse({ task_id: 't' }).success).toBe(false);
+    expect(
+      assign.safeParse({ task_id: 't', assignee: 'bob', assignee_id: 'x' })
+        .success,
+    ).toBe(false);
+    const members = spec('list_project_members').input;
+    expect(members.safeParse({ project_id: 'PRJ-1' }).success).toBe(true);
+    expect(
+      members.safeParse({ project_id: 'PRJ-1', user_id: 'u' }).success,
+    ).toBe(false);
+    const create = spec('create_task').input;
+    expect(
+      create.safeParse({ title: 'ok ok', project_id: 'P', assignee: 'bob' })
+        .success,
+    ).toBe(true);
+    expect(spec('assign_task').annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+    });
+  });
+
+  it('a username resolves only among the owner and members', () => {
+    expect(pickAssignee(people, 'olivia', 'user-bob')).toBe('user-owner');
+    expect(pickAssignee(people, 'cat_9', 'user-owner')).toBe('user-cat');
+    for (const outsider of ['dave', 'Bob', 'user-bob', 'B', ''])
+      expect(() => pickAssignee(people, outsider, 'user-owner')).toThrow(
+        new BadRequestException('Assignee must be a member of this project.'),
+      );
+  });
+
+  it('"me" is the caller and null unassigns, without listing anyone', async () => {
+    const list = jest.fn();
+    const deps = { chatMembers: { list } } as unknown as McpDeps;
+    expect(pickAssignee(people, 'me', 'user-bob')).toBe('user-bob');
+    await expect(resolveAssignee(deps, 'user-bob', 'P', 'me')).resolves.toBe(
+      'user-bob',
+    );
+    await expect(resolveAssignee(deps, 'user-bob', 'P', null)).resolves.toBe(
+      null,
+    );
+    expect(list).not.toHaveBeenCalled();
+    list.mockResolvedValue(people);
+    await expect(
+      resolveAssignee(deps, 'user-owner', 'PRJ-9', 'bob'),
+    ).resolves.toBe('user-bob');
+    expect(list).toHaveBeenCalledWith('PRJ-9', 'user-owner');
+  });
+
+  it('create_task refuses an assignee without a project or on a recurring task', () => {
+    expect(() => checkCreateAssignee({ assignee: 'bob' })).toThrow(
+      new BadRequestException('Only a task in a project can be assigned.'),
+    );
+    expect(() =>
+      checkCreateAssignee({
+        assignee: 'bob',
+        project_id: 'P',
+        is_recurring: true,
+      }),
+    ).toThrow(new BadRequestException(RECURRING_STARTS_UNASSIGNED));
+    expect(() =>
+      checkCreateAssignee({ assignee: 'me', project_id: 'P' }),
+    ).not.toThrow();
+    expect(() => checkCreateAssignee({ is_recurring: true })).not.toThrow();
+  });
+
+  it('the instructions say how to assign', () => {
+    expect(MCP_INSTRUCTIONS).toContain(
+      'To assign a task, find usernames with list_project_members, then call assign_task.',
+    );
   });
 });

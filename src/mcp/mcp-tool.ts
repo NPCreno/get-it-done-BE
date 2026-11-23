@@ -9,6 +9,7 @@ import type {
 import * as z from 'zod/v4';
 import type { TaskService } from 'src/task/task.service';
 import type { TaskAccessService } from 'src/task/task-access.service';
+import type { TaskAssignService } from 'src/task/task-assign.service';
 import type { TaskQueryService } from 'src/task/task-query.service';
 import type { SubTaskService } from 'src/task/subtask.service';
 import type { TaskStatusService } from 'src/task/task-status.service';
@@ -26,6 +27,7 @@ import { toolErrorMessage } from './mcp-errors';
 export interface McpDeps {
   tasks: TaskService;
   taskAccess: TaskAccessService;
+  taskAssign: TaskAssignService;
   taskQuery: TaskQueryService;
   subtasks: SubTaskService;
   taskStatus: TaskStatusService;
