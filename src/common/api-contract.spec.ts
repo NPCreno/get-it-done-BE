@@ -112,6 +112,13 @@ describe('API contract', () => {
     ]);
   });
 
+  it('pomodoroStyles is exported and UpdateUserDto uses exactly that list (FEAT-10a)', () => {
+    expect(API_CONTRACT.pomodoroStyles).toEqual(['dial', 'ticket', 'horizon']);
+    expect(constraint(UpdateUserDto, 'pomodoroStyle', 'isIn')).toEqual([
+      ...API_CONTRACT.pomodoroStyles,
+    ]);
+  });
+
   it('chat DTOs use the contract limits', () => {
     expect(constraint(SendMessageDto, 'body', 'maxLength')).toBe(
       L.chatMessageMax,

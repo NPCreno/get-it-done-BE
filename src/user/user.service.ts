@@ -74,8 +74,13 @@ export class UserService {
       // Save the new user with the hashed password
       const savedUser = await this.userRepository.save(newUser);
 
-      // Remove password from the returned object
-      const { password: _, ...userWithoutPassword } = savedUser;
+      // Remove password and the internal identityChangedAt (save() returns
+      // columns with a database default) from the returned object.
+      const {
+        password: _,
+        identityChangedAt: __,
+        ...userWithoutPassword
+      } = savedUser;
 
       return {
         status: 'success',
@@ -172,7 +177,12 @@ export class UserService {
     user_id: string,
     updateUserDto: UpdateUserDto,
   ): Promise<UserCleanupResponse> {
-    const user = await this.userRepository.findOne({ where: { user_id } });
+    // identityChangedAt is select: false, so ask for it here.
+    const user = await this.userRepository
+      .createQueryBuilder('u')
+      .addSelect('u.identityChangedAt')
+      .where('u.user_id = :user_id', { user_id })
+      .getOne();
     if (!user) {
       throw new NotFoundException(`User with ID ${user_id} not found`);
     }
@@ -188,6 +198,8 @@ export class UserService {
     if (updateUserDto.theme !== undefined) changes.theme = updateUserDto.theme;
     if (updateUserDto.soundFx !== undefined)
       changes.soundFx = updateUserDto.soundFx;
+    if (updateUserDto.pomodoroStyle !== undefined)
+      changes.pomodoroStyle = updateUserDto.pomodoroStyle;
 
     const nameChanged =
       changes.fullname !== undefined && changes.fullname !== user.fullname;
@@ -195,12 +207,16 @@ export class UserService {
       changes.username !== undefined && changes.username !== user.username;
     const passwordChanged = updateUserDto.password !== undefined;
 
-    if (nameChanged || usernameChanged || passwordChanged) {
+    // The rule reads identityChangedAt, never updatedAt: a preference save
+    // (theme, soundFx, pomodoroStyle) must not lock the name (FEAT-10a).
+    const identityChanged = nameChanged || usernameChanged || passwordChanged;
+    if (identityChanged) {
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      if (user.updatedAt && user.updatedAt > sixMonthsAgo) {
+      const last = user.identityChangedAt;
+      if (last && last > sixMonthsAgo) {
         throw new BadRequestException(
-          `You can only update name, username, or password once every 6 months. Last update: ${user.updatedAt.toISOString()}`,
+          `You can only update name, username, or password once every 6 months. Last update: ${last.toISOString()}`,
         );
       }
     }
@@ -210,7 +226,14 @@ export class UserService {
 
     if (Object.keys(changes).length > 0) {
       try {
-        await this.userRepository.update({ user_id }, changes);
+        // The database clock, like updatedAt, the column default and the
+        // migration backfill.
+        await this.userRepository.update(
+          { user_id },
+          identityChanged
+            ? { ...changes, identityChangedAt: () => 'now()' }
+            : changes,
+        );
       } catch (error: any) {
         if (error?.code === '23505') {
           throw new ConflictException('Username already exists.');

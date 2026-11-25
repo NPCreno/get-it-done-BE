@@ -22,7 +22,7 @@ Two gates. Website JWTs pass `AuthorizeGuard` on the REST routes. Personal acces
 ## API contract
 - Canonical source: `src/common/api-contract.ts`, exported to `docs/api-contract.json` (`pnpm contract:export`), mirrored by the FE `src/app/contracts/`. Contract tests compare the JSON with the constant and the DTO metadata with the constant.
 - Shapes: timestamps are ISO strings. Heatmap and trend `date` are `YYYY-MM-DD`; trend `day` is a short weekday. Analytics counts are integers. `enableNotifications` and `soundFx` are the strings `'true'` / `'false'`.
-- Nullability as sent: project `title`/`description`/`color`/`colorLabel` and task `description` may be null. Task and sub-task `title` are NOT NULL. User `theme`, `enableNotifications`, `soundFx`, `role`, `status` may be null (key always present).
+- Nullability as sent: project `title`/`description`/`color`/`colorLabel` and task `description` may be null. Task and sub-task `title` are NOT NULL. User `theme`, `enableNotifications`, `soundFx`, `pomodoroStyle` (FEAT-10a), `role`, `status` may be null (key always present).
 - Envelope endpoints return `{status, message, data}`. Raw endpoints: `getTasksByProj`, `user/get/:id`, `user/getAll`, `projects/getAll`. Empty lists are `status: 'success'` with `[]`.
 - Validation: global `ValidationPipe` (whitelist, transform). Dates arrive as ISO strings and are converted by `@Type(() => Date)`. Weekly recurrence needs one or more unique weekday names.
 - Authorization: create endpoints derive the owner from the token (`@AuthUserId()`); a foreign `project_id` or parent task is refused with the same message as a missing one. Admin checks read the JWT `role` claim, so a demotion applies at the next refresh (at most the access TTL).

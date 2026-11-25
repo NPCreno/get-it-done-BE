@@ -1,7 +1,9 @@
 import 'reflect-metadata';
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
-import { getMetadataStorage } from 'class-validator';
+import { getMetadataStorage, validateSync } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
+import { UpdateUserDto } from '../user/dto/update-user-dto';
 import { ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { RouteParamtypes } from '@nestjs/common/enums/route-paramtypes.enum';
 import { AuthController } from '../auth/auth.controller';
@@ -117,4 +119,25 @@ describe('@Body() DTOs', () => {
       expect(missing).toEqual([]);
     });
   }
+});
+
+describe('UpdateUserDto pomodoroStyle (FEAT-10a)', () => {
+  const errors = (body: Record<string, unknown>) =>
+    validateSync(plainToInstance(UpdateUserDto, body), {
+      whitelist: true,
+      forbidUnknownValues: true,
+    }).map((e) => e.property);
+
+  it.each(['dial', 'ticket', 'horizon'])('accepts %s', (v) => {
+    expect(errors({ pomodoroStyle: v })).toEqual([]);
+  });
+
+  it.each([['Dial'], [''], [null], ['clock'], [1]])('rejects %p', (v) => {
+    expect(errors({ pomodoroStyle: v })).toEqual(['pomodoroStyle']);
+  });
+
+  it('leaving it out stays valid', () => {
+    expect(errors({})).toEqual([]);
+    expect(errors({ theme: 'dark' })).toEqual([]);
+  });
 });

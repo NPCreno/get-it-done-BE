@@ -20,6 +20,8 @@ export const API_CONTRACT = {
     'Sunday',
   ],
   themes: ['light', 'dark'],
+  // FEAT-10a: Pomodoro timer style; null on the user = never chosen (FE shows dial)
+  pomodoroStyles: ['dial', 'ticket', 'horizon'],
   booleanStrings: ['true', 'false'],
   notificationTypes: [
     'achievement',

@@ -47,7 +47,7 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `src/main.ts` — CORS (`FRONTEND_URL`, default `http://localhost:3000`), listens on `PORT` (default 8000)
 
 ## Entities (16)
-- `UserEntity` (table `users`)
+- `UserEntity` (table `users`) — preferences `enableNotifications`, `theme`, `soundFx`, FEAT-10a `pomodoroStyle` (`dial|ticket|horizon|null`; null = never chosen, the FE shows dial). `identityChangedAt` (FEAT-10a, `select: false`, never in a response): the last name, username or password change; the six-month rule in `UserService.updateOne` reads it, never `updatedAt` (every preference save moves `updatedAt`)
 - `AuthTokenEntity` (`src/auth/models/auth.entity.ts`, `user_id` FK CASCADE since REF-14c) — refresh token records: sha256 hash, `family_id`, `remember_me`, `revoked_at`, `replaced_by_token_id`, `replay_ciphertext`, nullable `ip_address`
 - `ProjectEntity`
 - `TaskTemplateEntity` — recurring task definitions
@@ -67,6 +67,10 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - Responsible = `COALESCE(assignee_id, user_id)`. "My tasks", every dashboard stat, the streak and MCP `list_tasks` use `myTasks()` from `task-scope.ts` (responsible AND accessible); write the expression exactly that way (index `idx_task_responsible`). Completions credit the responsible person
 - After the commit, task writes on a project task emit `tasks.changed` → SSE `event: tasks` `{project_id}`; an assignment to someone else inserts an `assignment` notification in the same transaction
 - Migration `1763600000000-SharedTasks`: the column, `FK_task_assignee`, `idx_task_assignee` (partial), `idx_task_responsible` (expression; both `synchronize: false` on the entity), `'assignment'` in `notifications_type_enum` (stays on down)
+
+## Pomodoro style (FEAT-10a)
+- `PATCH /api/user/update/:user_id {pomodoroStyle}`: `@IsIn(API_CONTRACT.pomodoroStyles)`, optional but never null (`@ValidateIf`, not `@IsOptional`). Saved as a preference; it does not touch `identityChangedAt`
+- Migration `1763700000000-PomodoroStyle`: nullable `pomodoroStyle` varchar (no CHECK; the DTO is the boundary), and `identityChangedAt timestamp NOT NULL DEFAULT now()`, backfilled from `updatedAt` only when up() adds the column (nobody's lock moves on release day). A name, username or password change sets it with the database's `now()`
 
 ## Ids
 Business ids (`user_id`, `project_id`, `task_id`, `taskTemplate_id`, `taskSubInstance_id`, `notif_id`) come from `newId(prefix)` (`src/common/ids.ts`, REF-14b): `<prefix>-<uuid v4>` with the prefixes `user`, `PRJ`, `task`, `generatedTask` (recurring instances), `TMP`, `subTask`, `notif`. No "is it free" lookup; the unique constraint is the final guard. Older rows keep the old formats (`user-123456789`, `TMP-<ms>-<n>`, ...), so ids are opaque: never parse a prefix or format. Chat messages and personal access tokens use a bare `randomUUID()`.

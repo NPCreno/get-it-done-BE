@@ -5,6 +5,7 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import { API_CONTRACT } from 'src/common/api-contract';
 
@@ -43,4 +44,9 @@ export class UpdateUserDto {
   @IsOptional()
   @IsIn([...API_CONTRACT.booleanStrings])
   soundFx?: string;
+
+  /** FEAT-10a. Optional, but never null: null is not a style (IsOptional would let it through). */
+  @ValidateIf((_o, v) => v !== undefined)
+  @IsIn([...API_CONTRACT.pomodoroStyles])
+  pomodoroStyle?: string;
 }
