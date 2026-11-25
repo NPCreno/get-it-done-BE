@@ -32,6 +32,11 @@
     "light",
     "dark"
   ],
+  "pomodoroStyles": [
+    "dial",
+    "ticket",
+    "horizon"
+  ],
   "booleanStrings": [
     "true",
     "false"

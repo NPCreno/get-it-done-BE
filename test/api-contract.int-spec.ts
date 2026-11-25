@@ -237,7 +237,7 @@ describe('api contract (integration)', () => {
     it('password change is hashed, login works with the new one, old one fails', async () => {
       const u = await signupAndLogin(app, 'pw');
       await q(
-        'UPDATE users SET "updatedAt" = now() - interval \'1 year\' WHERE user_id = $1',
+        'UPDATE users SET "identityChangedAt" = now() - interval \'1 year\' WHERE user_id = $1',
         [u.user_id],
       );
       const res = await request(server())
@@ -268,7 +268,7 @@ describe('api contract (integration)', () => {
     it('duplicate username on update -> 409', async () => {
       const u = await signupAndLogin(app, 'dup');
       await q(
-        'UPDATE users SET "updatedAt" = now() - interval \'1 year\' WHERE user_id = $1',
+        'UPDATE users SET "identityChangedAt" = now() - interval \'1 year\' WHERE user_id = $1',
         [u.user_id],
       );
       const res = await request(server())

@@ -46,6 +46,10 @@ export class UserEntity {
   @Column({ nullable: true })
   soundFx!: string;
 
+  /** FEAT-10a: 'dial' | 'ticket' | 'horizon'; null = never chosen. */
+  @Column({ nullable: true })
+  pomodoroStyle!: string;
+
   //role & permissions
   @Column()
   tier!: string;
@@ -62,6 +66,15 @@ export class UserEntity {
 
   @UpdateDateColumn({ type: 'timestamp' })
   updatedAt!: Date;
+
+  /**
+   * Last name, username or password change: the six-month rule reads this,
+   * not updatedAt, which every preference save moves (FEAT-10a). Hidden from
+   * entity reads so API responses do not change; UserService.updateOne
+   * selects it explicitly.
+   */
+  @Column({ type: 'timestamp', default: () => 'now()', select: false })
+  identityChangedAt!: Date;
 
   @DeleteDateColumn({ type: 'timestamp', nullable: true })
   deletedAt!: Date;
