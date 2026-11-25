@@ -214,8 +214,19 @@ describe('notifications API (RT-01)', () => {
     const text = s.chunks.join('');
     s.close();
     expect(text).toMatch(/event: notification/);
-    expect(text).toMatch(/id: notif-\d+/);
-    const data = JSON.parse(/data: (\{.*\})/.exec(text)![1]);
+    // Ids are `notif-<uuid v4>` (newId, REF-14b). Check every notification
+    // frame's id in full: an unanchored `notif-\d+` passed only when some
+    // uuid happened to start with a digit.
+    const uuid =
+      /^notif-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const ids = [...text.matchAll(/^id: (notif-.*)$/gm)].map((m) => m[1]);
+    expect(ids.length).toBeGreaterThan(0);
+    for (const id of ids) expect(id).toMatch(uuid);
+    const data = JSON.parse(/data: (\{.*\})/.exec(text)![1]) as Record<
+      string,
+      unknown
+    >;
+    expect(data.notif_id).toMatch(uuid);
     expect(Object.keys(data).sort()).toEqual([
       'actionType',
       'createdAt',
