@@ -1,4 +1,8 @@
-/** SEC-09: auth rate limiting (real default limits) and helmet headers. */
+/**
+ * SEC-09: auth rate limiting (real default limits) and helmet headers.
+ * BUG-08: login allows 30/min per attested IP; the per-account lockout is in
+ * login-lockout.int-spec.ts.
+ */
 import './int-env';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -56,7 +60,7 @@ describe('rate limiting and helmet (SEC-09)', () => {
   });
 
   it('T1: login buckets are shared by loginEmail and loginUsername', async () => {
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 30; i++) {
       const r = await login(
         app,
         '198.51.100.10',
@@ -70,13 +74,13 @@ describe('rate limiting and helmet (SEC-09)', () => {
   });
 
   it('T2: a different attested IP is unaffected', async () => {
-    for (let i = 0; i < 11; i++) await login(app, '198.51.100.20', i);
+    for (let i = 0; i < 31; i++) await login(app, '198.51.100.20', i);
     const other = await login(app, '198.51.100.21', 1);
     expect(other.status).not.toBe(429);
   });
 
-  it('T3: the identifier is limited across IPs; no identifier never trips it', async () => {
-    for (let i = 0; i < 10; i++) {
+  it('T3: the account lock holds across IPs; no identifier never trips it', async () => {
+    for (let i = 0; i < 5; i++) {
       const r = await post(
         app,
         '/api/user/loginUsername',
@@ -92,6 +96,9 @@ describe('rate limiting and helmet (SEC-09)', () => {
       attested('198.51.100.99'),
     );
     expect(blocked.status).toBe(429);
+    expect(blocked.body.message).toMatch(
+      /^Too many failed attempts for this account/,
+    );
     const none = await post(
       app,
       '/api/user/loginUsername',
@@ -102,7 +109,7 @@ describe('rate limiting and helmet (SEC-09)', () => {
   });
 
   it('T4: attested IPv6 addresses in one /64 share a bucket', async () => {
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 30; i++) {
       const r = await login(app, `2001:db8:aaaa:1::${i + 1}`, i);
       expect(r.status).not.toBe(429);
     }
@@ -111,7 +118,7 @@ describe('rate limiting and helmet (SEC-09)', () => {
   });
 
   it('T5: spoofed headers without the secret hit the global unattested cap', async () => {
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 60; i++) {
       const r = await post(
         app,
         '/api/user/loginUsername',
@@ -123,7 +130,7 @@ describe('rate limiting and helmet (SEC-09)', () => {
     const capped = await post(
       app,
       '/api/user/loginUsername',
-      { username: 'spoof31', password: 'wrong-pass1' },
+      { username: 'spoof61', password: 'wrong-pass1' },
       { 'X-Client-IP': '9.9.9.200', 'X-Real-IP': '8.8.8.200' },
     );
     expect(capped.status).toBe(429);
@@ -188,7 +195,7 @@ describe('rate limiting and helmet (SEC-09)', () => {
   });
 
   it('T7: a 429 has a numeric Retry-After and no per-throttler headers', async () => {
-    for (let i = 0; i < 10; i++) await login(app, '198.51.100.50', i);
+    for (let i = 0; i < 30; i++) await login(app, '198.51.100.50', i);
     const r = await login(app, '198.51.100.50', 77);
     expect(r.status).toBe(429);
     expect(r.headers['retry-after']).toMatch(/^\d+$/);
@@ -207,7 +214,7 @@ describe('rate limiting and helmet (SEC-09)', () => {
   it('T8: helmet headers on 200, 401, 429 and the CORS preflight', async () => {
     const ok = await request(server(app)).get('/');
     const unauth = await request(server(app)).get('/api/user/getAll');
-    for (let i = 0; i < 10; i++) await login(app, '198.51.100.60', i);
+    for (let i = 0; i < 30; i++) await login(app, '198.51.100.60', i);
     const limited = await login(app, '198.51.100.60', 88);
     expect(unauth.status).toBe(401);
     expect(limited.status).toBe(429);
@@ -242,7 +249,7 @@ describe('rate limiting and helmet (SEC-09)', () => {
 });
 
 describe('limits override (SEC-09 T10)', () => {
-  it('the default test app has high limits; real defaults 429 at 11', async () => {
+  it('the default test app has high limits; real defaults 429 at 31', async () => {
     process.env.INTERNAL_API_SECRET = SECRET;
     const high = await createTestApp();
     try {
@@ -256,7 +263,7 @@ describe('limits override (SEC-09 T10)', () => {
     const real = await createTestApp({});
     try {
       let last = 0;
-      for (let i = 0; i < 11; i++)
+      for (let i = 0; i < 31; i++)
         last = (await login(real, '198.51.100.70', i)).status;
       expect(last).toBe(429);
     } finally {

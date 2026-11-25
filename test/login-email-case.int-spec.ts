@@ -1,4 +1,4 @@
-/** BUG-01: login by email ignores case and surrounding spaces; the identifier bucket does too. */
+/** BUG-01: login by email ignores case and surrounding spaces; the account lock (BUG-08) does too. */
 import './int-env';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -78,20 +78,20 @@ describe('login by email ignores case (BUG-01)', () => {
   });
 });
 
-describe('the identifier bucket folds email case (BUG-01)', () => {
+describe('the account lock folds email case (BUG-01, BUG-08)', () => {
   let app: INestApplication;
   beforeAll(async () => {
     process.env.INTERNAL_API_SECRET = SECRET;
-    // Real defaults, with the per-identifier limit lowered to 5. Every try
-    // comes from a different attested IP, so only the identifier bucket counts.
-    app = await createTestApp({ 'login-identifier-15m': { limit: 5 } });
+    // Real defaults. Every try comes from a different attested IP, so only
+    // the per-account lock counts.
+    app = await createTestApp({});
   }, 60000);
   afterAll(async () => {
     await app?.close();
     delete process.env.INTERNAL_API_SECRET;
   });
 
-  it('five wrong tries across mixed capitals exhaust one bucket', async () => {
+  it('five wrong tries across mixed capitals lock one account', async () => {
     const spellings = [
       'victim@example.com',
       'Victim@Example.com',
@@ -114,7 +114,7 @@ describe('the identifier bucket folds email case (BUG-01)', () => {
       .set({ 'X-Internal-Secret': SECRET, 'X-Client-IP': '198.51.100.99' })
       .send({ email: 'Victim@example.COM', password: 'wrong-pass1' });
     expect(blocked.status).toBe(429);
-    // a different email is a different bucket
+    // a different email is a different account
     const other = await request(app.getHttpServer())
       .post('/api/user/loginEmail')
       .set({ 'X-Internal-Secret': SECRET, 'X-Client-IP': '198.51.100.98' })

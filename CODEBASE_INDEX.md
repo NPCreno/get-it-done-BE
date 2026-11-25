@@ -22,7 +22,7 @@ One line per source file. Paths are relative to the repo root.
 - `../migrations/1763400000000-TemplateAndTokenForeignKeys.ts` — REF-14c: `FK_task_template_user`, `FK_task_template_project`, `FK_auth_token_user` (all CASCADE); `test/template-token-fks.int-spec.ts`
 - `streak.ts` — pure `computeStreak` (count and run start); `test/award-once*.int-spec.ts`, `test/jest-global-tz.ts` (TZ=UTC for jest)
 - `client-ip.ts` — `getClientIp(req)` for audit records
-- `rate-limit/` — `ip.ts`, `client-key.ts`, `identifier-key.ts`, `rate-limits.ts` (throttler table), `rate-limit.decorator.ts`, `auth-throttler.guard.ts`, `rate-limit-config.module.ts` (SEC-09)
+- `rate-limit/` — `ip.ts`, `client-key.ts`, `identifier-key.ts`, `rate-limits.ts` (throttler table), `rate-limit.decorator.ts`, `auth-throttler.guard.ts`, `rate-limit-config.module.ts` (SEC-09); `login-attempts.service.ts` (per-account login lockout) and `login-locked.filter.ts` (its 429 + `Retry-After`) (BUG-08)
 - `../user/identifier.ts` — shared email-like test and `normalizeEmail` (trim + lower-case, BUG-01) used by signup, login lookup and rate limiting
 - `guards/authorize.guard.ts` — Bearer JWT guard
 - `verify-access-token.ts` — `verifyAccessToken()`, the access-token check shared by `AuthorizeGuard` and the chat gateway

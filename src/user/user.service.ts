@@ -20,6 +20,8 @@ import { AuthService, TokenPair } from 'src/auth/auth.service';
 import { UserCleanupResponse } from './models/userCleanupResponse';
 import { User } from './models/user.interface';
 import { newId } from 'src/common/ids';
+import { identifierKey } from 'src/auth/rate-limit/identifier-key';
+import { LoginAttemptsService } from 'src/auth/rate-limit/login-attempts.service';
 
 /** BUG-07: one message for a duplicate email or username. */
 export const SIGNUP_TAKEN_MESSAGE = 'That email or username is already taken.';
@@ -33,6 +35,7 @@ export class UserService {
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     private readonly authService: AuthService,
+    private readonly loginAttempts: LoginAttemptsService,
   ) {}
 
   /**
@@ -255,9 +258,21 @@ export class UserService {
     return toTokenUser(userEntity);
   }
 
+  /**
+   * BUG-08: an unknown email or username is the same 401 as a wrong password,
+   * so the answer never says whether an account exists.
+   */
   async validateUser(emailOrUsername: string, password: string): Promise<User> {
     // Get user with password for validation
-    const user = await this.findByEmailOrUsername(emailOrUsername, true);
+    let user: User | UserEntity;
+    try {
+      user = await this.findByEmailOrUsername(emailOrUsername, true);
+    } catch (e) {
+      if (e instanceof NotFoundException) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
+      throw e;
+    }
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -325,16 +340,7 @@ export class UserService {
       throw new Error('Email and password are required.');
     }
 
-    try {
-      const validatedUser = await this.validateUser(email, password);
-      return await this.issueSession(
-        validatedUser,
-        credentials?.ipAddress,
-        credentials?.rememberMe,
-      );
-    } catch {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+    return this.login(email, password, identifierKey({ email }), credentials);
   }
 
   async loginUsername(credentials: {
@@ -354,12 +360,44 @@ export class UserService {
       throw new Error('Username and password are required.');
     }
 
+    return this.login(
+      username,
+      password,
+      identifierKey({ username }),
+      credentials,
+    );
+  }
+
+  /**
+   * BUG-08: the lock is checked before the lookup and the password check, so
+   * a locked account gets 429 even with the right password. The attempt is
+   * counted as a failure up front (synchronously, before any await), so
+   * parallel guesses cannot all pass the check before one is recorded; a
+   * success clears the count, a wrong password or unknown account keeps it.
+   * key is null only for an identifier the DTO would already reject.
+   */
+  private async login(
+    identifier: string,
+    password: string,
+    key: string | null,
+    opts: { ipAddress?: string | null; rememberMe?: boolean },
+  ) {
+    if (key) {
+      this.loginAttempts.assertNotLocked(key);
+      this.loginAttempts.recordFailure(key);
+    }
+    let validatedUser: User;
     try {
-      const validatedUser = await this.validateUser(username, password);
+      validatedUser = await this.validateUser(identifier, password);
+    } catch {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    if (key) this.loginAttempts.clear(key);
+    try {
       return await this.issueSession(
         validatedUser,
-        credentials?.ipAddress,
-        credentials?.rememberMe,
+        opts.ipAddress,
+        opts.rememberMe,
       );
     } catch {
       throw new UnauthorizedException('Invalid credentials');

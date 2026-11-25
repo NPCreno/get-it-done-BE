@@ -55,11 +55,7 @@ describe('throttler config (U4)', () => {
       buildThrottlers({})
         .filter((t) => !t.skipIf!(ctx(group, attested())))
         .map((t) => t.name);
-    expect(running('login')).toEqual([
-      'login-client-1m',
-      'login-client-1h',
-      'login-identifier-15m',
-    ]);
+    expect(running('login')).toEqual(['login-client-1m', 'login-client-1h']);
     expect(running('refresh')).toEqual(['refresh-client-1m']);
     expect(running('logout')).toEqual(['logout-client-1m']);
     expect(running('signup')).toEqual(['signup-client-1h', 'signup-client-1d']);
@@ -76,6 +72,32 @@ describe('throttler config (U4)', () => {
       'oauth-token-global-1m',
     ]);
     expect(running('oauthAuthorize')).toEqual(['oauth-authorize-user-1m']);
+  });
+
+  it('login throttlers are backstops: new limits, no identifier or per-socket limit (BUG-08)', () => {
+    const names = THROTTLER_DEFS.map((d) => d.name);
+    expect(names).not.toContain('login-identifier-15m');
+    expect(names).not.toContain('login-xri-1m');
+    const login = THROTTLER_DEFS.filter((d) => d.groups.includes('login'));
+    expect(
+      login.map((d) => [d.name, d.runsFor, d.tracker, d.limit, d.ttl]),
+    ).toEqual([
+      ['login-client-1m', 'attested', 'client', 30, 60_000],
+      ['login-client-1h', 'attested', 'client', 100, 3_600_000],
+      ['login-unattested-1m', 'unattested', 'unattested', 60, 60_000],
+      ['bff-noip-1m', 'noip', 'bff-noip', 300, 60_000],
+    ]);
+    // an unattested login runs only the one site-wide bucket
+    const unattested = {
+      headers: { 'x-real-ip': '9.9.9.9' },
+      body: { username: 'u' },
+      socket: { remoteAddress: '10.0.0.1' },
+    } as unknown as Request;
+    expect(
+      buildThrottlers({})
+        .filter((t) => !t.skipIf!(ctx('login', unattested)))
+        .map((t) => t.name),
+    ).toEqual(['login-unattested-1m']);
   });
 
   it('the OAuth token throttler keys on a well-formed posted client_id only (FEAT-07c)', () => {

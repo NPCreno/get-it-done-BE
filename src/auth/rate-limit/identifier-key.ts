@@ -2,13 +2,13 @@ import { createHash } from 'crypto';
 import { isEmailLike, normalizeEmail } from '../../user/identifier';
 
 /**
- * Bucket key for the login identifier, exactly as the lookup sees it,
- * namespaced by the field findByEmailOrUsername will use. An email is
- * normalized the same way the lookup normalizes it (normalizeEmail: trimmed,
- * lower-cased), so capitalizations of one email share one bucket (BUG-01). A
- * username is looked up exactly, so it is hashed as sent: no case folding, no
- * trimming. Null (throttler skipped) when there is no usable identifier; the
- * guard runs before the ValidationPipe, so this checks defensively.
+ * Login lockout key (BUG-08, LoginAttemptsService) for the identifier,
+ * exactly as the lookup sees it, namespaced by the field findByEmailOrUsername
+ * will use. An email is normalized the same way the lookup normalizes it
+ * (normalizeEmail: trimmed, lower-cased), so capitalizations of one email share
+ * one key (BUG-01). A username is looked up exactly, so it is hashed as sent:
+ * no case folding, no trimming. Null (not tracked) when there is no usable
+ * identifier, which the login DTOs already reject; checked defensively.
  */
 export function identifierKey(body: unknown): string | null {
   if (typeof body !== 'object' || body === null) return null;

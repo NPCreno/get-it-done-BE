@@ -20,6 +20,9 @@ export interface ClientKey {
  * callers normally fall back to the socket address, which is Render's proxy:
  * they share buckets. A caller that sends its own X-Real-IP picks its bucket,
  * so for unattested traffic the per-group global cap is the real limit.
+ * Login therefore has no per-socket limit at all (BUG-08): it was a site-wide
+ * one on Render. Logins are limited per account (LoginAttemptsService), per
+ * attested IP, and by the unattested global cap.
  * Attested BFF traffic (login, signup, refresh) is unaffected.
  */
 export function clientKey(req: Request): ClientKey {
