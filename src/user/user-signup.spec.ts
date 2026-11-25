@@ -7,6 +7,7 @@ import {
 import { of } from 'rxjs';
 import { Repository } from 'typeorm';
 import { AuthService } from 'src/auth/auth.service';
+import { LoginAttemptsService } from 'src/auth/rate-limit/login-attempts.service';
 import { UserEntity } from './models/user.entity';
 import {
   SIGNUP_FAILED_MESSAGE,
@@ -31,7 +32,7 @@ function serviceThatFailsWith(error: unknown) {
   const auth = {
     hashPassword: () => of('$2b$12$hash'),
   } as unknown as AuthService;
-  return new UserService(repo, auth);
+  return new UserService(repo, auth, new LoginAttemptsService());
 }
 
 /** Every argument any logger method received, as one string. */

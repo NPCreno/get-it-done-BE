@@ -8,6 +8,7 @@ import {
   Param,
   NotFoundException,
   UseGuards,
+  UseFilters,
   Req,
 } from '@nestjs/common';
 import { Request } from 'express';
@@ -22,6 +23,7 @@ import { AuthorizeGuard } from 'src/auth/guards/authorize.guard';
 import { AdminOnlyGuard } from 'src/auth/guards/admin-only.guard';
 import { SelfParam } from 'src/auth/guards/self-param.guard';
 import { RateLimit } from 'src/auth/rate-limit/rate-limit.decorator';
+import { LoginLockedFilter } from 'src/auth/rate-limit/login-locked.filter';
 import { AuthUserId } from 'src/auth/decorators/auth-user-id.decorator';
 
 @Controller('api/user')
@@ -39,6 +41,7 @@ export class UserController {
   }
 
   @RateLimit('login')
+  @UseFilters(LoginLockedFilter)
   @Post('loginEmail')
   async loginEmail(
     @Body() credentials: LoginEmailDto,
@@ -57,6 +60,7 @@ export class UserController {
   }
 
   @RateLimit('login')
+  @UseFilters(LoginLockedFilter)
   @Post('loginUsername')
   async loginUsername(
     @Body() credentials: LoginUsernameDto,

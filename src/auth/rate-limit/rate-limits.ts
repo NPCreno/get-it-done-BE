@@ -3,7 +3,6 @@ import { ExecutionContext } from '@nestjs/common';
 import { Request } from 'express';
 import { ThrottlerOptions } from '@nestjs/throttler';
 import { clientKey, ClientKey } from './client-key';
-import { identifierKey } from './identifier-key';
 import { RATE_LIMIT_GROUP, RateLimitGroup } from './rate-limit.decorator';
 import { API_CONTRACT } from '../../common/api-contract';
 import { isClientId } from '../../oauth/oauth-format';
@@ -25,25 +24,23 @@ const DAY = 24 * HOUR;
 export interface ThrottlerDef {
   name: string;
   groups: RateLimitGroup[];
-  tracker: string; // 'client' | 'identifier' | 'user' | 'pat' | 'oauthClient' | a constant bucket name
-  runsFor:
-    | 'attested'
-    | 'unattested'
-    | 'noip'
-    | 'identifier'
-    | 'user'
-    | 'always';
+  tracker: string; // 'client' | 'user' | 'pat' | 'oauthClient' | a constant bucket name
+  runsFor: 'attested' | 'unattested' | 'noip' | 'user' | 'always';
   limit: number;
   ttl: number;
 }
 
 export const THROTTLER_DEFS: ThrottlerDef[] = [
+  // BUG-08: login throttlers are backstops only. The main login limit is the
+  // per-account lockout (LoginAttemptsService: failed attempts only, so one
+  // account's failures never block another). Per attested IP: 30/min and
+  // 100/h, enough for several people behind one IP, still a brake on a sweep.
   {
     name: 'login-client-1m',
     groups: ['login'],
     tracker: 'client',
     runsFor: 'attested',
-    limit: 10,
+    limit: 30,
     ttl: MIN,
   },
   {
@@ -51,31 +48,18 @@ export const THROTTLER_DEFS: ThrottlerDef[] = [
     groups: ['login'],
     tracker: 'client',
     runsFor: 'attested',
-    limit: 50,
+    limit: 100,
     ttl: HOUR,
   },
-  {
-    name: 'login-identifier-15m',
-    groups: ['login'],
-    tracker: 'identifier',
-    runsFor: 'identifier',
-    limit: 10,
-    ttl: 15 * MIN,
-  },
+  // Unattested logins (no INTERNAL_API_SECRET, STATUS U2) share one site-wide
+  // bucket. There is no per-socket login limit: on Render the socket is the
+  // shared proxy, so it was a site-wide 5/min (BUG-08).
   {
     name: 'login-unattested-1m',
     groups: ['login'],
     tracker: 'unattested',
     runsFor: 'unattested',
-    limit: 30,
-    ttl: MIN,
-  },
-  {
-    name: 'login-xri-1m',
-    groups: ['login'],
-    tracker: 'client',
-    runsFor: 'unattested',
-    limit: 5,
+    limit: 60,
     ttl: MIN,
   },
   {
@@ -276,8 +260,6 @@ function skipIfFor(def: ThrottlerDef) {
         return kind !== 'unattested';
       case 'noip':
         return kind !== 'bff-noip';
-      case 'identifier':
-        return identifierKey(req.body) === null;
       case 'user':
       case 'always':
         return false;
@@ -288,7 +270,6 @@ function skipIfFor(def: ThrottlerDef) {
 function trackerFor(def: ThrottlerDef) {
   return (req: Record<string, any>): string => {
     if (def.tracker === 'client') return keyOf(req as Request).key;
-    if (def.tracker === 'identifier') return identifierKey(req.body) ?? '';
     if (def.tracker === 'user') return `user:${userOf(req)}`;
     if (def.tracker === 'pat') return `pat:${patOf(req)}`;
     if (def.tracker === 'oauthClient') return `oauth:${oauthClientOf(req)}`;
