@@ -49,4 +49,9 @@ export class UpdateUserDto {
   @ValidateIf((_o, v) => v !== undefined)
   @IsIn([...API_CONTRACT.pomodoroStyles])
   pomodoroStyle?: string;
+
+  /** RD-1a: the theme family. theme stays the mode (light, dark, system). */
+  @IsOptional()
+  @IsIn([...API_CONTRACT.appThemes])
+  appTheme?: string;
 }

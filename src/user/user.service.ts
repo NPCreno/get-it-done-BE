@@ -203,6 +203,8 @@ export class UserService {
       changes.soundFx = updateUserDto.soundFx;
     if (updateUserDto.pomodoroStyle !== undefined)
       changes.pomodoroStyle = updateUserDto.pomodoroStyle;
+    if (updateUserDto.appTheme !== undefined)
+      changes.appTheme = updateUserDto.appTheme;
 
     const nameChanged =
       changes.fullname !== undefined && changes.fullname !== user.fullname;
@@ -211,7 +213,8 @@ export class UserService {
     const passwordChanged = updateUserDto.password !== undefined;
 
     // The rule reads identityChangedAt, never updatedAt: a preference save
-    // (theme, soundFx, pomodoroStyle) must not lock the name (FEAT-10a).
+    // (theme, soundFx, pomodoroStyle, appTheme) must not lock the name
+    // (FEAT-10a).
     const identityChanged = nameChanged || usernameChanged || passwordChanged;
     if (identityChanged) {
       const sixMonthsAgo = new Date();

@@ -19,7 +19,10 @@ export const API_CONTRACT = {
     'Saturday',
     'Sunday',
   ],
-  themes: ['light', 'dark'],
+  // The mode. RD-1a adds 'system' (follow the device); null on the user = never chosen
+  themes: ['light', 'dark', 'system'],
+  // RD-1a: the theme family; null on the user = classic
+  appThemes: ['classic', 'calm', 'field'],
   // FEAT-10a: Pomodoro timer style; null on the user = never chosen (FE shows dial)
   pomodoroStyles: ['dial', 'ticket', 'horizon'],
   booleanStrings: ['true', 'false'],

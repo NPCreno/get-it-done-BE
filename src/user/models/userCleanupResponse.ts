@@ -6,6 +6,7 @@ export interface UserCleanupResponse {
   tier: string;
   theme?: string | null;
   pomodoroStyle?: string | null;
+  appTheme?: string | null;
   role: string;
   status: string;
   createdAt: Date;

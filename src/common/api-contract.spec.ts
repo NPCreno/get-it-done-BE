@@ -119,6 +119,17 @@ describe('API contract', () => {
     ]);
   });
 
+  it('themes gains system; appThemes is exported; UpdateUserDto uses exactly those lists (RD-1a)', () => {
+    expect(API_CONTRACT.themes).toEqual(['light', 'dark', 'system']);
+    expect(API_CONTRACT.appThemes).toEqual(['classic', 'calm', 'field']);
+    expect(constraint(UpdateUserDto, 'theme', 'isIn')).toEqual([
+      ...API_CONTRACT.themes,
+    ]);
+    expect(constraint(UpdateUserDto, 'appTheme', 'isIn')).toEqual([
+      ...API_CONTRACT.appThemes,
+    ]);
+  });
+
   it('chat DTOs use the contract limits', () => {
     expect(constraint(SendMessageDto, 'body', 'maxLength')).toBe(
       L.chatMessageMax,

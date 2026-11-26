@@ -30,7 +30,13 @@
   ],
   "themes": [
     "light",
-    "dark"
+    "dark",
+    "system"
+  ],
+  "appThemes": [
+    "classic",
+    "calm",
+    "field"
   ],
   "pomodoroStyles": [
     "dial",

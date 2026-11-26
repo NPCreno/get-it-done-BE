@@ -47,7 +47,7 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 - `src/main.ts` — CORS (`FRONTEND_URL`, default `http://localhost:3000`), listens on `PORT` (default 8000)
 
 ## Entities (16)
-- `UserEntity` (table `users`) — preferences `enableNotifications`, `theme`, `soundFx`, FEAT-10a `pomodoroStyle` (`dial|ticket|horizon|null`; null = never chosen, the FE shows dial). `identityChangedAt` (FEAT-10a, `select: false`, never in a response): the last name, username or password change; the six-month rule in `UserService.updateOne` reads it, never `updatedAt` (every preference save moves `updatedAt`)
+- `UserEntity` (table `users`) — preferences `enableNotifications`, `theme` (the mode: `light|dark|system|null`, RD-1a adds `system`), `soundFx`, FEAT-10a `pomodoroStyle` (`dial|ticket|horizon|null`; null = never chosen, the FE shows dial), RD-1a `appTheme` (the theme family: `classic|calm|field|null`; null = classic). `identityChangedAt` (FEAT-10a, `select: false`, never in a response): the last name, username or password change; the six-month rule in `UserService.updateOne` reads it, never `updatedAt` (every preference save moves `updatedAt`)
 - `AuthTokenEntity` (`src/auth/models/auth.entity.ts`, `user_id` FK CASCADE since REF-14c) — refresh token records: sha256 hash, `family_id`, `remember_me`, `revoked_at`, `replaced_by_token_id`, `replay_ciphertext`, nullable `ip_address`
 - `ProjectEntity`
 - `TaskTemplateEntity` — recurring task definitions
@@ -71,6 +71,11 @@ Render, a free Node web service (not Docker), auto-deploys `master`. Build: `npm
 ## Pomodoro style (FEAT-10a)
 - `PATCH /api/user/update/:user_id {pomodoroStyle}`: `@IsIn(API_CONTRACT.pomodoroStyles)`, optional but never null (`@ValidateIf`, not `@IsOptional`). Saved as a preference; it does not touch `identityChangedAt`
 - Migration `1763700000000-PomodoroStyle`: nullable `pomodoroStyle` varchar (no CHECK; the DTO is the boundary), and `identityChangedAt timestamp NOT NULL DEFAULT now()`, backfilled from `updatedAt` only when up() adds the column (nobody's lock moves on release day). A name, username or password change sets it with the database's `now()`
+
+## Appearance (RD-1a)
+- Two preferences: `theme` is the mode (`API_CONTRACT.themes` = `light|dark|system`), `appTheme` the theme family (`API_CONTRACT.appThemes` = `classic|calm|field`; null = classic). Both in `GET /api/user/get/:id` and the update response (key always present)
+- `PATCH /api/user/update/:user_id {theme?, appTheme?}`: `@IsOptional() @IsIn(...)`, so an unknown value is 400 and an explicit `null` is accepted (resets to never chosen / classic). Saved as preferences; they do not touch `identityChangedAt`. Not in the JWT (`toTokenUser`); MCP `get_profile`'s `theme` is a free string
+- Migration `1763800000000-AppTheme`: nullable `appTheme` varchar (no CHECK; the DTO is the boundary), no backfill. `system` needed no schema change (`theme` is a plain varchar)
 
 ## Ids
 Business ids (`user_id`, `project_id`, `task_id`, `taskTemplate_id`, `taskSubInstance_id`, `notif_id`) come from `newId(prefix)` (`src/common/ids.ts`, REF-14b): `<prefix>-<uuid v4>` with the prefixes `user`, `PRJ`, `task`, `generatedTask` (recurring instances), `TMP`, `subTask`, `notif`. No "is it free" lookup; the unique constraint is the final guard. Older rows keep the old formats (`user-123456789`, `TMP-<ms>-<n>`, ...), so ids are opaque: never parse a prefix or format. Chat messages and personal access tokens use a bare `randomUUID()`.
