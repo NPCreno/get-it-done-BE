@@ -141,3 +141,33 @@ describe('UpdateUserDto pomodoroStyle (FEAT-10a)', () => {
     expect(errors({ theme: 'dark' })).toEqual([]);
   });
 });
+
+describe('UpdateUserDto theme and appTheme (RD-1a)', () => {
+  const errors = (body: Record<string, unknown>) =>
+    validateSync(plainToInstance(UpdateUserDto, body), {
+      whitelist: true,
+      forbidUnknownValues: true,
+    }).map((e) => e.property);
+
+  it.each(['light', 'dark', 'system'])('theme accepts %s', (v) => {
+    expect(errors({ theme: v })).toEqual([]);
+  });
+
+  it.each(['classic', 'calm', 'field'])('appTheme accepts %s', (v) => {
+    expect(errors({ appTheme: v })).toEqual([]);
+  });
+
+  it.each([['Calm'], [''], ['ink'], [1]])('appTheme rejects %p', (v) => {
+    expect(errors({ appTheme: v })).toEqual(['appTheme']);
+  });
+
+  it('leaving appTheme out stays valid', () => {
+    expect(errors({})).toEqual([]);
+    expect(errors({ theme: 'system' })).toEqual([]);
+  });
+
+  it('theme and appTheme together', () => {
+    expect(errors({ theme: 'system', appTheme: 'field' })).toEqual([]);
+    expect(errors({ theme: 'System', appTheme: 'field' })).toEqual(['theme']);
+  });
+});

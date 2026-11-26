@@ -36,6 +36,7 @@ One line per source file. Paths are relative to the repo root.
 - `models/user.interface.ts`, `models/userCleanupResponse.ts` — user types and sanitized response
 - `dto/create-user-dto.ts`, `dto/update-user-dto.ts` — request payloads
 - FEAT-10a: `../migrations/1763700000000-PomodoroStyle.ts` (`pomodoroStyle`, `identityChangedAt` + backfill); `../../test/pomodoro-style.int-spec.ts`, `pomodoro-style-migration.int-spec.ts`
+- RD-1a: `../migrations/1763800000000-AppTheme.ts` (nullable `appTheme`); `../../test/app-theme.int-spec.ts`, `app-theme-migration.int-spec.ts`
 
 ## projects (`src/projects/`)
 - `projects.module.ts`, `projects.controller.ts`, `projects.service.ts` — project CRUD

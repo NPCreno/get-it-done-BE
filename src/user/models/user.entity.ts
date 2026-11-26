@@ -50,6 +50,10 @@ export class UserEntity {
   @Column({ nullable: true })
   pomodoroStyle!: string;
 
+  /** RD-1a: 'classic' | 'calm' | 'field'; null = classic. theme is the mode. */
+  @Column({ nullable: true })
+  appTheme!: string;
+
   //role & permissions
   @Column()
   tier!: string;
