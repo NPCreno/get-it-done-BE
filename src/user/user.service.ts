@@ -23,6 +23,17 @@ import { newId } from 'src/common/ids';
 import { identifierKey } from 'src/auth/rate-limit/identifier-key';
 import { LoginAttemptsService } from 'src/auth/rate-limit/login-attempts.service';
 
+/**
+ * RD-3a: the login response is the token pair plus the two display
+ * preferences, so the FE login route can set its appearance cookie. Nothing
+ * else about the user is added. The refresh response stays a bare TokenPair.
+ */
+export type LoginAppearance = {
+  theme: string | null;
+  appTheme: string | null;
+};
+export type LoginResponseData = TokenPair & { appearance: LoginAppearance };
+
 /** BUG-07: one message for a duplicate email or username. */
 export const SIGNUP_TAKEN_MESSAGE = 'That email or username is already taken.';
 export const SIGNUP_FAILED_MESSAGE = 'Failed to create account.';
@@ -266,7 +277,14 @@ export class UserService {
    * so the answer never says whether an account exists.
    */
   async validateUser(emailOrUsername: string, password: string): Promise<User> {
-    // Get user with password for validation
+    return this.toUser(await this.checkCredentials(emailOrUsername, password));
+  }
+
+  /** The matched entity (password hash included): callers must not return it. */
+  private async checkCredentials(
+    emailOrUsername: string,
+    password: string,
+  ): Promise<UserEntity> {
     let user: User | UserEntity;
     try {
       user = await this.findByEmailOrUsername(emailOrUsername, true);
@@ -289,8 +307,7 @@ export class UserService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Return sanitized user without password
-    return this.toUser(user);
+    return user;
   }
 
   async findByEmailOrUsername(
@@ -334,7 +351,7 @@ export class UserService {
   }): Promise<{
     status: string;
     message: string;
-    data?: TokenPair;
+    data?: LoginResponseData;
     error?: any;
   }> {
     const { email, password } = credentials;
@@ -354,7 +371,7 @@ export class UserService {
   }): Promise<{
     status: string;
     message: string;
-    data?: TokenPair;
+    data?: LoginResponseData;
     error?: any;
   }> {
     const { username, password } = credentials;
@@ -389,16 +406,18 @@ export class UserService {
       this.loginAttempts.assertNotLocked(key);
       this.loginAttempts.recordFailure(key);
     }
-    let validatedUser: User;
+    let entity: UserEntity;
     try {
-      validatedUser = await this.validateUser(identifier, password);
+      entity = await this.checkCredentials(identifier, password);
     } catch {
       throw new UnauthorizedException('Invalid credentials');
     }
     if (key) this.loginAttempts.clear(key);
     try {
       return await this.issueSession(
-        validatedUser,
+        this.toUser(entity),
+        // RD-3a: from the row already loaded; no second query.
+        { theme: entity.theme ?? null, appTheme: entity.appTheme ?? null },
         opts.ipAddress,
         opts.rememberMe,
       );
@@ -407,12 +426,21 @@ export class UserService {
     }
   }
 
-  /** Login: new token family, lifetimes reported from the signed tokens. */
+  /**
+   * Login: new token family, lifetimes reported from the signed tokens, and
+   * the user's display preferences (RD-3a).
+   */
   private async issueSession(
     user: User,
+    appearance: LoginAppearance,
     ip: string | null | undefined,
     rememberMe?: boolean,
-  ) {
+  ): Promise<{
+    status: string;
+    message: string;
+    data: LoginResponseData;
+    error: null;
+  }> {
     const access = this.authService.generateAccessToken(user);
     const refresh = await this.authService.generateRefreshToken(user, {
       ip,
@@ -421,7 +449,7 @@ export class UserService {
     return {
       status: 'success',
       message: 'Login successful',
-      data: this.authService.buildPair(access, refresh),
+      data: { ...this.authService.buildPair(access, refresh), appearance },
       error: null,
     };
   }

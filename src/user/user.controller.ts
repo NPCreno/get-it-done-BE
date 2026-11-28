@@ -12,9 +12,8 @@ import {
   Req,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { UserService } from './user.service';
+import { LoginResponseData, UserService } from './user.service';
 import { getClientIp } from 'src/auth/client-ip';
-import { TokenPair } from 'src/auth/auth.service';
 import { UserCleanupResponse } from './models/userCleanupResponse';
 import { CreateUserDto } from './dto/create-user-dto';
 import { UpdateUserDto } from './dto/update-user-dto';
@@ -49,7 +48,7 @@ export class UserController {
   ): Promise<{
     status: string;
     message: string;
-    data?: TokenPair;
+    data?: LoginResponseData;
     error?: any;
   }> {
     const authenticatedUser = await this.userService.loginEmail({
@@ -68,7 +67,7 @@ export class UserController {
   ): Promise<{
     status: string;
     message: string;
-    data?: TokenPair;
+    data?: LoginResponseData;
     error?: any;
   }> {
     const authenticatedUser = await this.userService.loginUsername({
